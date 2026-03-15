@@ -63,7 +63,7 @@ spec:
       containers:
         - name: master
           image: ghcr.io/jabberwocky238/luna-edge:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["master"]
           envFrom:
             - configMapRef:

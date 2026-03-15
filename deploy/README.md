@@ -132,6 +132,7 @@ kubectl delete ingress,configmap,secret,service,serviceaccount,role,rolebinding,
 
 ```bash
 kubectl get ns luna-edge -o json > luna-edge-ns.json
+nano luna-edge-ns.json
 ```
 
 编辑 `luna-edge-ns.json`，把下面这段改成空数组：

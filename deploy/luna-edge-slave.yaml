@@ -172,7 +172,7 @@ spec:
       containers:
         - name: slave
           image: ghcr.io/jabberwocky238/luna-edge:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command: ["slave"]
           envFrom:
             - configMapRef:
