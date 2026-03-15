@@ -99,6 +99,56 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh mode default
 ```
 
+## 手动清除 Namespace
+
+正常清理顺序：
+
+```bash
+./run.sh down nginxtest
+./run.sh down slave
+./run.sh down master
+./run.sh down ns
+```
+
+如果 `luna-edge` namespace 卡在 `Terminating`，先看里面还有没有残留对象：
+
+```bash
+kubectl get all -n luna-edge
+kubectl get ingress,configmap,secret,serviceaccount,role,rolebinding -n luna-edge
+```
+
+如果还有残留，先删干净：
+
+```bash
+kubectl delete ingress,configmap,secret,service,serviceaccount,role,rolebinding,deploy,ds -n luna-edge --all
+```
+
+如果对象已经没了，但 namespace 还是不退出，就把 finalizer 清掉：
+
+```bash
+kubectl get ns luna-edge -o json > luna-edge-ns.json
+```
+
+编辑 `luna-edge-ns.json`，把下面这段改成空数组：
+
+```json
+"spec": {
+  "finalizers": []
+}
+```
+
+然后执行：
+
+```bash
+kubectl replace --raw "/api/v1/namespaces/luna-edge/finalize" -f ./luna-edge-ns.json
+```
+
+最后确认：
+
+```bash
+kubectl get ns luna-edge
+```
+
 ## 如何替换现有 Ingress
 
 这里默认说的是 `k3s` 自带 `Traefik` 的情况，而且默认你的集群刚启动、还没进入生产。

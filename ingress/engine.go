@@ -83,7 +83,7 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 			WriteTimeout:      defaultWriteTimeout,
 			IdleTimeout:       defaultIdleTimeout,
 		}
-		tlsEngine, err := NewTLSEngine(engine.tlsResolver, tlsServer)
+		tlsEngine, err := NewTLSEngine(engine.tlsResolver, tlsServer, engine.k8sBridge)
 		if err != nil {
 			return nil, err
 		}
@@ -99,6 +99,9 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 			return nil, err
 		}
 		engine.k8sBridge = bridge
+		if engine.tlsEngine != nil {
+			engine.tlsEngine.SetK8sBridge(bridge)
+		}
 	}
 
 	return engine, nil
@@ -157,14 +160,29 @@ func (e *Engine) Stop(ctx context.Context) error {
 
 // Route 根据请求 Host 和 Path 查找上游。
 func (e *Engine) Route(ctx context.Context, host, requestPath string) (*RouteResult, error) {
+	return e.routeByKind(ctx, host, requestPath, metadata.ServiceBindingRouteKindHTTP)
+}
+
+func (e *Engine) RouteHTTPS(ctx context.Context, host, requestPath string) (*RouteResult, error) {
+	return e.routeByKind(ctx, host, requestPath, metadata.ServiceBindingRouteKindHTTPS)
+}
+
+func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind metadata.ServiceBindingRouteKind) (*RouteResult, error) {
 	hostname := normalizeHost(host)
 	if hostname == "" {
 		return nil, fmt.Errorf("host is required")
 	}
 
 	if e.k8sBridge != nil {
-		if binding, _, ok := e.k8sBridge.ResolveRequest(hostname, requestPath); ok {
-			return e.resultFromBinding(hostname, binding)
+		switch kind {
+		case metadata.ServiceBindingRouteKindHTTPS:
+			if resolved, ok := e.k8sBridge.ResolveHTTPS(hostname, requestPath); ok {
+				return e.resultFromBinding(hostname, resolved.Binding)
+			}
+		default:
+			if binding, _, ok := e.k8sBridge.ResolveRequest(hostname, requestPath); ok {
+				return e.resultFromBinding(hostname, binding)
+			}
 		}
 	}
 
@@ -189,7 +207,15 @@ func (e *Engine) Route(ctx context.Context, host, requestPath string) (*RouteRes
 }
 
 func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
-	result, err := e.Route(r.Context(), r.Host, r.URL.Path)
+	var (
+		result *RouteResult
+		err    error
+	)
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		result, err = e.RouteHTTPS(r.Context(), r.Host, r.URL.Path)
+	} else {
+		result, err = e.Route(r.Context(), r.Host, r.URL.Path)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -218,7 +244,7 @@ func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBinding) (*RouteResult, error) {
-	upstreamURL := buildUpstreamURL(binding.Protocol, binding.Address, binding.Port)
+	upstreamURL := buildUpstreamURL(string(binding.Protocol), binding.Address, binding.Port)
 	if upstreamURL == "" {
 		return nil, fmt.Errorf("service binding %q has no valid upstream", binding.ID)
 	}
@@ -227,7 +253,7 @@ func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBin
 		Target: ProxyTarget{
 			Hostname:    hostname,
 			UpstreamURL: upstreamURL,
-			Protocol:    binding.Protocol,
+			Protocol:    string(binding.Protocol),
 		},
 	}
 	e.memory.Put(binding)
@@ -256,7 +282,7 @@ func (e *Engine) resultFromReplicaBinding(hostname string, binding *enginepkg.Bi
 		Name:         binding.Name,
 		Address:      binding.Address,
 		Port:         binding.Port,
-		Protocol:     binding.Protocol,
+		Protocol:     metadata.ServiceBindingRouteKind(binding.Protocol),
 		RouteVersion: binding.RouteVersion,
 		BackendJSON:  binding.BackendJSON,
 	})

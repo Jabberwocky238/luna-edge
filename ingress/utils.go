@@ -19,7 +19,9 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -102,17 +104,43 @@ func resolveCertLRUSize(size int) int {
 }
 
 func initBridgeHandlers(bridge *K8sBridge) {
-	bridge.informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			bridge.storeIngress(obj)
-		},
-		UpdateFunc: func(_, newObj interface{}) {
-			bridge.storeIngress(newObj)
-		},
-		DeleteFunc: func(obj interface{}) {
-			bridge.deleteIngress(obj)
-		},
-	})
+	bridge.ensureIngressInformer()
+	if bridge.ingressFactory != nil {
+		bridge.ingressFactory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				bridge.storeIngress(obj)
+			},
+			UpdateFunc: func(_, newObj interface{}) {
+				bridge.storeIngress(newObj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				bridge.deleteIngress(obj)
+			},
+		})
+	}
+
+	bridge.ensureGatewayInformers()
+}
+
+func deleteByNamespaceName(obj interface{}, deleter func(namespace, name string)) {
+	switch value := obj.(type) {
+	case metav1.Object:
+		deleter(value.GetNamespace(), value.GetName())
+	case cache.DeletedFinalStateUnknown:
+		accessor, ok := value.Obj.(metav1.Object)
+		if ok && accessor != nil {
+			deleter(accessor.GetNamespace(), accessor.GetName())
+			return
+		}
+		ro, ok := value.Obj.(runtime.Object)
+		if !ok || ro == nil {
+			return
+		}
+		accessor, err := meta.Accessor(ro)
+		if err == nil {
+			deleter(accessor.GetNamespace(), accessor.GetName())
+		}
+	}
 }
 
 func cloneBinding(in *metadata.ServiceBinding) *metadata.ServiceBinding {

@@ -309,7 +309,7 @@ func TestEngineRouteUsesK8sPathMatching(t *testing.T) {
 	prefix := networkingv1.PathTypePrefix
 	className := "luna-edge"
 	bridge := NewK8sBridgeWithClient("default", className, fake.NewSimpleClientset())
-	bridge.ingresses["default/demo"] = (&networkingv1.Ingress{
+	bridge.ingresses["default/demo"] = &k8sIngressState{resource: (&networkingv1.Ingress{
 		ObjectMeta: metav1ObjectMeta("default", "demo", 1),
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
@@ -343,7 +343,7 @@ func TestEngineRouteUsesK8sPathMatching(t *testing.T) {
 				},
 			}},
 		},
-	}).DeepCopy()
+	}).DeepCopy()}
 	bridge.rebuildRoutesLocked()
 
 	engine, err := NewEngine(EngineOptions{

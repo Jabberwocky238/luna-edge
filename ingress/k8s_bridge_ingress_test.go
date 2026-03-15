@@ -16,27 +16,23 @@ func TestK8sBridgeMaterializesIngress(t *testing.T) {
 		ObjectMeta: metav1ObjectMeta("default", "demo", 3),
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: "demo.example.com",
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     "/",
-									PathType: &pathType,
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: "demo-svc",
-											Port: networkingv1.ServiceBackendPort{Number: 8080},
-										},
-									},
+			Rules: []networkingv1.IngressRule{{
+				Host: "demo.example.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "demo-svc",
+									Port: networkingv1.ServiceBackendPort{Number: 8080},
 								},
 							},
-						},
+						}},
 					},
 				},
-			},
+			}},
 		},
 	}
 

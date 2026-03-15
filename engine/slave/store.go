@@ -154,10 +154,10 @@ func (s *LocalStore) GetRouteByHostname(ctx context.Context, hostname string) (*
 		RouteVersion:        route.RouteVersion,
 		CertificateRevision: status.CertificateRevision,
 		Listener:            attachment.Listener,
-		Protocol:            route.Protocol,
+		Protocol:            string(route.Protocol),
 		UpstreamAddress:     binding.Address,
 		UpstreamPort:        binding.Port,
-		UpstreamProtocol:    binding.Protocol,
+		UpstreamProtocol:    string(binding.Protocol),
 		BackendJSON:         binding.BackendJSON,
 	}, nil
 }
@@ -176,7 +176,7 @@ func (s *LocalStore) GetBindingByHostname(ctx context.Context, hostname string) 
 		Name:         binding.Name,
 		Address:      binding.Address,
 		Port:         binding.Port,
-		Protocol:     binding.Protocol,
+		Protocol:     string(binding.Protocol),
 		RouteVersion: binding.RouteVersion,
 		BackendJSON:  binding.BackendJSON,
 	}, nil
@@ -375,7 +375,7 @@ func upsertRoute(tx *gorm.DB, route *engine.RouteRecord) error {
 		DomainID:     route.DomainID,
 		Hostname:     route.Hostname,
 		RouteVersion: route.RouteVersion,
-		Protocol:     route.Protocol,
+		Protocol:     metadata.ServiceBindingRouteKind(route.Protocol),
 		RouteJSON:    route.BackendJSON,
 		BindingID:    route.BindingID,
 	}).Error
@@ -394,7 +394,7 @@ func upsertBinding(tx *gorm.DB, binding *engine.BindingRecord) error {
 		Name:         binding.Name,
 		Address:      binding.Address,
 		Port:         binding.Port,
-		Protocol:     binding.Protocol,
+		Protocol:     metadata.ServiceBindingRouteKind(binding.Protocol),
 		RouteVersion: binding.RouteVersion,
 		BackendJSON:  binding.BackendJSON,
 	}).Error

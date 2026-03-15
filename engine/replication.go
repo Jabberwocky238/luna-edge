@@ -236,10 +236,10 @@ func (b *RepositoryProjectionBuilder) BuildRouteRecord(ctx context.Context, doma
 		Hostname:         route.Hostname,
 		BindingID:        route.BindingID,
 		RouteVersion:     route.RouteVersion,
-		Protocol:         route.Protocol,
+		Protocol:         string(route.Protocol),
 		UpstreamAddress:  binding.Address,
 		UpstreamPort:     binding.Port,
-		UpstreamProtocol: binding.Protocol,
+		UpstreamProtocol: string(binding.Protocol),
 		BackendJSON:      binding.BackendJSON,
 	}
 	status, err := b.Repo.GetDomainEndpointStatus(ctx, domainID)
@@ -273,7 +273,7 @@ func (b *RepositoryProjectionBuilder) BuildBindingRecord(ctx context.Context, do
 		Name:         binding.Name,
 		Address:      binding.Address,
 		Port:         binding.Port,
-		Protocol:     binding.Protocol,
+		Protocol:     string(binding.Protocol),
 		RouteVersion: binding.RouteVersion,
 		BackendJSON:  binding.BackendJSON,
 	}, nil

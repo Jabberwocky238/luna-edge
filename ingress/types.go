@@ -28,6 +28,8 @@ type EngineOptions struct {
 type ProxyTarget struct {
 	// Hostname 是当前请求匹配的域名。
 	Hostname string
+	// Port 是当前入口监听端口。
+	Port uint32
 	// UpstreamURL 是反向代理目标地址。
 	UpstreamURL string
 	// Protocol 是入口协议，例如 http。
@@ -40,6 +42,15 @@ type RouteResult struct {
 	Found bool
 	// Target 是匹配到的上游目标。
 	Target ProxyTarget
+}
+
+// K8sResolvedBackend 表示 bridge 对外暴露的一次 Kubernetes 路由解析结果。
+type K8sResolvedBackend struct {
+	Kind     metadata.ServiceBindingRouteKind
+	Hostname string
+	Port     uint32
+	Binding  *metadata.ServiceBinding
+	Route    *metadata.RouteProjection
 }
 
 // Middleware 定义基础 ingress 中间件能力。
