@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
 )
 
 // HTTPEngine 负责纯 HTTP 监听，并把请求转发给底层 serveHTTP。
@@ -66,4 +69,41 @@ func (e *Engine) NewHTTPHandler() http.Handler {
 		handler = e.middlewares[i](handler)
 	}
 	return handler
+}
+
+func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	var (
+		result *RouteResult
+		err    error
+	)
+	if strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		result, err = e.RouteHTTPS(r.Context(), r.Host, r.URL.Path)
+	} else {
+		result, err = e.Route(r.Context(), r.Host, r.URL.Path)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if result == nil || !result.Found {
+		http.NotFound(w, r)
+		return
+	}
+
+	targetURL, err := url.Parse(result.Target.UpstreamURL)
+	if err != nil {
+		http.Error(w, "invalid upstream url", http.StatusInternalServerError)
+		return
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Host = targetURL.Host
+	}
+	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
+		http.Error(rw, proxyErr.Error(), http.StatusBadGateway)
+	}
+	proxy.ServeHTTP(w, r)
 }

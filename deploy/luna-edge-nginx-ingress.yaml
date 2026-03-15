@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-ingress-html
+  namespace: luna-edge
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Luna Edge Ingress</title>
+      <style>
+        :root {
+          color-scheme: light;
+          --bg: #f4efe6;
+          --panel: #fff9f0;
+          --ink: #1c1917;
+          --accent: #b45309;
+          --accent-2: #7c2d12;
+        }
+        * { box-sizing: border-box; }
+        body {
+          margin: 0;
+          min-height: 100vh;
+          display: grid;
+          place-items: center;
+          background:
+            radial-gradient(circle at top left, rgba(180,83,9,0.18), transparent 32rem),
+            linear-gradient(160deg, var(--bg), #efe7db 55%, #e7dccd);
+          color: var(--ink);
+          font-family: Georgia, "Times New Roman", serif;
+        }
+        .card {
+          width: min(44rem, calc(100vw - 2rem));
+          padding: 2.5rem;
+          border: 1px solid rgba(28,25,23,0.08);
+          border-radius: 1.5rem;
+          background: rgba(255, 249, 240, 0.92);
+          box-shadow: 0 1.5rem 4rem rgba(28,25,23,0.12);
+        }
+        .eyebrow {
+          margin: 0 0 1rem;
+          font-size: 0.8rem;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: var(--accent);
+        }
+        h1 {
+          margin: 0;
+          font-size: clamp(2.4rem, 6vw, 4.8rem);
+          line-height: 0.95;
+        }
+        p {
+          margin: 1.25rem 0 0;
+          max-width: 36rem;
+          font-size: 1.05rem;
+          line-height: 1.7;
+        }
+        .badge {
+          display: inline-block;
+          margin-top: 1.5rem;
+          padding: 0.45rem 0.75rem;
+          border-radius: 999px;
+          background: var(--accent-2);
+          color: #fff7ed;
+          font-size: 0.85rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+      </style>
+    </head>
+    <body>
+      <main class="card">
+        <p class="eyebrow">Luna Edge</p>
+        <h1>Ingress Route Active</h1>
+        <p>
+          This page is served by the dedicated <strong>Ingress</strong> compatibility test workload.
+          If you can see this, the request matched the Kubernetes Ingress adaptation path instead of Gateway API.
+        </p>
+        <span class="badge">nginx-ingress</span>
+      </main>
+    </body>
+    </html>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-ingress
+  namespace: luna-edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-ingress
+  template:
+    metadata:
+      labels:
+        app: nginx-ingress
+    spec:
+      volumes:
+        - name: custom-html
+          configMap:
+            name: nginx-ingress-html
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: custom-html
+              mountPath: /usr/share/nginx/html/index.html
+              subPath: index.html
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-ingress
+  namespace: luna-edge
+spec:
+  selector:
+    app: nginx-ingress
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+  namespace: luna-edge
+spec:
+  ingressClassName: luna-edge
+  rules:
+    - host: nginx-ingress.cluster-1.app238.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-ingress
+                port:
+                  number: 80

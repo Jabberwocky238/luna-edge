@@ -25,8 +25,11 @@ mode_file_for_component() {
     default:ns)
       printf '%s\n' "${SCRIPT_DIR}/ns.yaml"
       ;;
-    default:nginxtest)
-      printf '%s\n' "${SCRIPT_DIR}/nginx-test.yaml"
+    default:ngi)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-nginx-ingress.yaml"
+      ;;
+    default:ngg)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-nginx-gateway.yaml"
       ;;
     default:master)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-master.yaml"
@@ -37,8 +40,11 @@ mode_file_for_component() {
     cilium:ns)
       printf '%s\n' "${SCRIPT_DIR}/ns.yaml"
       ;;
-    cilium:nginxtest)
-      printf '%s\n' "${SCRIPT_DIR}/nginx-test.yaml"
+    cilium:ngi)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-nginx-ingress.yaml"
+      ;;
+    cilium:ngg)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-nginx-gateway.yaml"
       ;;
     cilium:master)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-master-cilium-clustermesh.yaml"
@@ -87,8 +93,8 @@ set_mode() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./run.sh up <ns|master|slave|nginxtest>
-  ./run.sh down <ns|master|slave|nginxtest>
+  ./run.sh up <ns|master|slave|ngi|ngg>
+  ./run.sh down <ns|master|slave|ngi|ngg>
   ./run.sh mode <default|cilium>
 EOF
 }

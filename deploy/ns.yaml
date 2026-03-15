@@ -3,11 +3,32 @@ kind: Namespace
 metadata:
   name: luna-edge
 ---
-apiVersion: networking.k8s.io/v1
-kind: IngressClass
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
 metadata:
   name: luna-edge
-  annotations:
-    ingressclass.kubernetes.io/is-default-class: "true"
 spec:
   controller: luna-edge.io/ingress-controller
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: luna-edge
+  namespace: luna-edge
+spec:
+  gatewayClassName: luna-edge
+  listeners:
+    - name: web
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: websecure
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+      allowedRoutes:
+        namespaces:
+          from: Same

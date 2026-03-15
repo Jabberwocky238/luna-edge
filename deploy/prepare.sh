@@ -12,7 +12,8 @@ FILES=(
   "luna-edge-slave.yaml"
   "luna-edge-master-cilium-clustermesh.yaml"
   "luna-edge-slave-cilium-clustermesh.yaml"
-  "nginx-test.yaml"
+  "luna-edge-nginx-ingress.yaml"
+  "luna-edge-nginx-gateway.yaml"
   "run.sh"
 )
 

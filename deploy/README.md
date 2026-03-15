@@ -7,15 +7,18 @@
 - [luna-edge-slave.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-slave.yaml)
 - [luna-edge-master-cilium-clustermesh.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-master-cilium-clustermesh.yaml)
 - [luna-edge-slave-cilium-clustermesh.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-slave-cilium-clustermesh.yaml)
+- [nginx-ingress.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/nginx-ingress.yaml)
+- [nginx-gateway.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/nginx-gateway.yaml)
 
 ## 文件用途
 
 普通部署：
 
-- `ns.yaml`：只创建 `luna-edge` namespace
-- `ns.yaml`：创建 `luna-edge` namespace，并把 `luna-edge` 注册成默认 `IngressClass`
+- `ns.yaml`：创建 `luna-edge` namespace，并初始化 `GatewayClass` / `Gateway`
 - `luna-edge-master.yaml`：部署单集群 `master`
 - `luna-edge-slave.yaml`：部署单集群 `slave` DaemonSet 和本地入口资源
+- `nginx-ingress.yaml`：使用标准 `Ingress` 验证兼容性
+- `nginx-gateway.yaml`：使用 `HTTPRoute` 验证 Gateway API 适配性
 
 Cilium ClusterMesh：
 
@@ -43,7 +46,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh up ns
 ./run.sh up master
 ./run.sh up slave
-./run.sh up nginxtest
+./run.sh up ngi
+./run.sh up ngg
 ```
 
 需要替换的值：
@@ -68,7 +72,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh mode cilium
 ./run.sh up ns
 ./run.sh up master
-./run.sh up nginxtest
+./run.sh up ngi
+./run.sh up ngg
 ```
 
 每个边缘集群：
@@ -77,7 +82,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh mode cilium
 ./run.sh up ns
 ./run.sh up slave
-./run.sh up nginxtest
+./run.sh up ngi
+./run.sh up ngg
 ```
 
 边缘集群里必须改的值：
@@ -104,7 +110,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 正常清理顺序：
 
 ```bash
-./run.sh down nginxtest
+./run.sh down ngg
+./run.sh down ngi
 ./run.sh down slave
 ./run.sh down master
 ./run.sh down ns
