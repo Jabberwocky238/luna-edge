@@ -28,11 +28,17 @@ Cilium ClusterMesh：
 
 ## 普通部署
 
-先部署：
+先准备部署文件：
 
 ```bash
-kubectl apply -f deploy/luna-edge-master.yaml
-kubectl apply -f deploy/luna-edge-slave.yaml
+bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
+```
+
+准备完成后，在 `deploy/` 目录执行：
+
+```bash
+./run.sh up master
+./run.sh up slave
 ```
 
 需要替换的值：
@@ -45,16 +51,24 @@ kubectl apply -f deploy/luna-edge-slave.yaml
 
 ## Cilium ClusterMesh 部署
 
+同样先准备部署文件：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
+```
+
 核心集群：
 
 ```bash
-kubectl apply -f deploy/luna-edge-master-cilium-clustermesh.yaml
+./run.sh mode cilium
+./run.sh up master
 ```
 
 每个边缘集群：
 
 ```bash
-kubectl apply -f deploy/luna-edge-slave-cilium-clustermesh.yaml
+./run.sh mode cilium
+./run.sh up slave
 ```
 
 边缘集群里必须改的值：
@@ -69,6 +83,12 @@ kubectl apply -f deploy/luna-edge-slave-cilium-clustermesh.yaml
 - 集群之间网络已经通过 Cilium ClusterMesh 打通
 - 边缘集群可以直接访问核心集群中的 `master`
 - 证书仍然由核心集群 `master` 通过复制 RPC 提供
+
+如果你要切回默认单集群模式：
+
+```bash
+./run.sh mode default
+```
 
 ## 如何替换现有 Ingress
 

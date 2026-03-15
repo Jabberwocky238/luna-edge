@@ -6,6 +6,12 @@ Luna Edge is a unified edge system for domain-facing traffic. It puts DNS, ingre
 
 ## What It Does
 
+先准备部署文件：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
+```
+
 For one hostname, Luna Edge can manage:
 
 - DNS publishing
