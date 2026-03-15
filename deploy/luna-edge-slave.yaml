@@ -54,7 +54,7 @@ metadata:
   name: luna-edge
   namespace: luna-edge
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: luna-slave
   ports:
@@ -87,6 +87,8 @@ spec:
       labels:
         app: luna-slave
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: luna-edge-slave
       initContainers:
         - name: prepare-geoip-mmdb

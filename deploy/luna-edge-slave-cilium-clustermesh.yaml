@@ -55,8 +55,7 @@ metadata:
   name: luna-edge
   namespace: luna-edge
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
+  type: ClusterIP
   selector:
     app: luna-slave
     luna-edge.io/cluster: cluster-a
@@ -92,6 +91,8 @@ spec:
         app: luna-slave
         luna-edge.io/cluster: cluster-a
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: luna-edge-slave
       initContainers:
         - name: prepare-geoip-mmdb

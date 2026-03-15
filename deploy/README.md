@@ -55,7 +55,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 - 镜像地址
 - Postgres DSN
 - S3 endpoint / region / access key / secret key
-- `Service/luna-edge` 的类型
 - `hostPath` 挂载路径
 
 ## Cilium ClusterMesh 部署
@@ -90,7 +89,6 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 
 - `LUNA_CLUSTER_NAME`
 - `LUNA_MASTER_ADDRESS`
-- `Service/luna-edge` 的类型
 - `hostPath` / 调度约束
 
 前提假设：
@@ -205,6 +203,9 @@ spec:
 
 - 当前 `slave` 仍然只 watch 一个 namespace。
 - 默认部署会同时开启 DNS、HTTP 和 HTTPS 入口。
+- `slave` DaemonSet 现在使用 `hostNetwork: true`，会直接占用宿主机 `:53` / `:80` / `:443`。
+- 这意味着不再依赖 k3s 默认 `servicelb`、`traefik` 或其他 `LoadBalancer` 实现，宿主机可以直接访问这些端口。
+- 如果节点上已经有别的进程占用了 `53/80/443`，`slave` Pod 会因为端口冲突而无法启动。
 - `slave` 的 ingress 监听固定就是 `:80` / `:443`，并且固定开启 k8s ingress bridge；部署层不再暴露这些开关。
 - `slave` 默认把整个 `/var/lib/luna` 挂到宿主机 `/data/luna-edge`。
 - 代码里固定使用 `/var/lib/luna/meta.db` 和 `/var/lib/luna/certs`，外部只需要配置 `LUNA_CACHE_ROOT` 这个根目录。
