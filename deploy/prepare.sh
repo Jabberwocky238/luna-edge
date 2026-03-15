@@ -28,3 +28,7 @@ done
 echo "download dir: ${TARGET_DIR}"
 echo "mode file: ${MODE_FILE}"
 echo "current mode: $(cat "${MODE_FILE}")"
+
+chmod +x "${TARGET_DIR}/run.sh"
+bash "${TARGET_DIR}/run.sh" up ns
+echo "prepare complete"

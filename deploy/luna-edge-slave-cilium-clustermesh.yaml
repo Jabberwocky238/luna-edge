@@ -105,6 +105,9 @@ spec:
         - name: prepare-geoip-mmdb
           image: curlimages/curl:8.12.1
           imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command:
             - sh
             - -ec
