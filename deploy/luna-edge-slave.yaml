@@ -195,8 +195,15 @@ spec:
               containerPort: 80
             - name: https
               containerPort: 443
+          startupProbe:
+            tcpSocket:
+              host: 127.0.0.1
+              port: 50050
+            periodSeconds: 5
+            failureThreshold: 24
           readinessProbe:
             httpGet:
+              host: 127.0.0.1
               path: /healthz
               port: 50050
             initialDelaySeconds: 2
@@ -204,6 +211,7 @@ spec:
             failureThreshold: 2
           livenessProbe:
             tcpSocket:
+              host: 127.0.0.1
               port: 50050
             initialDelaySeconds: 5
             periodSeconds: 10
