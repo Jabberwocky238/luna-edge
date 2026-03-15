@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TARGET_DIR="${PWD}"
 MODE_DIR="${HOME}/.luna-edge"
 MODE_FILE="${MODE_DIR}/mode"
 BASE_URL="${LUNA_EDGE_DEPLOY_BASE_URL:-https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy}"
@@ -21,8 +21,9 @@ fi
 
 for file in "${FILES[@]}"; do
   echo "downloading ${file}"
-  curl -fsSL "${BASE_URL}/${file}" -o "${SCRIPT_DIR}/${file}"
+  curl -fsSL "${BASE_URL}/${file}" -o "${TARGET_DIR}/${file}"
 done
 
+echo "download dir: ${TARGET_DIR}"
 echo "mode file: ${MODE_FILE}"
 echo "current mode: $(cat "${MODE_FILE}")"
