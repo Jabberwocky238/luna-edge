@@ -14,16 +14,16 @@
 
 普通部署：
 
-- `ns.yaml`：创建 `luna-edge` namespace，并初始化 `GatewayClass` / `Gateway`
+- `ns.yaml`：创建 `luna-edge` namespace，并初始化集群级 `GatewayClass`
 - `luna-edge-master.yaml`：部署单集群 `master`
-- `luna-edge-slave.yaml`：部署单集群 `slave` DaemonSet 和本地入口资源
+- `luna-edge-slave.yaml`：部署单集群 `slave` DaemonSet、本地入口资源以及命名空间内 `Gateway`
 - `nginx-ingress.yaml`：使用标准 `Ingress` 验证兼容性
 - `nginx-gateway.yaml`：使用 `HTTPRoute` 验证 Gateway API 适配性
 
 Cilium ClusterMesh：
 
 - `luna-edge-master-cilium-clustermesh.yaml`：部署核心集群 `master`
-- `luna-edge-slave-cilium-clustermesh.yaml`：部署边缘集群 `slave` DaemonSet
+- `luna-edge-slave-cilium-clustermesh.yaml`：部署边缘集群 `slave` DaemonSet 和命名空间内 `Gateway`
 
 当前推荐拓扑是：
 

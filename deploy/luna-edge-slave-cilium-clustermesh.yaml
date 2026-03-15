@@ -19,6 +19,59 @@ data:
   LUNA_INGRESS_K8S_NAMESPACE: "luna-edge"
   LUNA_INGRESS_K8S_CLASS: "luna-edge"
   LUNA_CACHE_ROOT: "/var/lib/luna"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: luna-edge-bootstrap-tls
+  namespace: luna-edge
+type: kubernetes.io/tls
+stringData:
+  tls.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBhTCCASugAwIBAgIRAIxQw7rO0xC0lY3m2Y0m5QowCgYIKoZIzj0EAwIwJDEiMCAG
+    A1UEAwwZbHVuYS1lZGdlLWJvb3RzdHJhcC1jZXJ0MB4XDTI2MDMxNTAwMDAwMFoXDTM2
+    MDMxMjAwMDAwMFowJDEiMCAGA1UEAwwZbHVuYS1lZGdlLWJvb3RzdHJhcC1jZXJ0MFkw
+    EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7hWwA0lE0Q0H6mY5lYv2s5m2M4x0k4Y0l5YB
+    q8QW7v4mB1lqv2QmM2XQX6x2H9KqQm+9Q0sP8x0XQm8v8nYv8M7c1aNTMFEwHQYDVR0O
+    BBYEFGv7f+5L2h0fQkE6k4lN6x5q0X9eMB8GA1UdIwQYMBaAFGv7f+5L2h0fQkE6k4lN
+    6x5q0X9eMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSAAwRQIhAIXm1hM0s5aK
+    8Ytq8nA6Wl0Jz9S8wYvR4j2cT5mYhJxLAiB4e4Y4jLQm0K2n9mX7V8q9mH3p6j8M4Y5J
+    7l2k6v0Q4g==
+    -----END CERTIFICATE-----
+  tls.key: |
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIJ7x2jVw6dT7u7GgqQm4q1m3R4s8p6n1k0v2x9y4l7S2oAoGCCqGSM49
+    AwEHoUQDQgAE7hWwA0lE0Q0H6mY5lYv2s5m2M4x0k4Y0l5YBq8QW7v4mB1lqv2Qm
+    M2XQX6x2H9KqQm+9Q0sP8x0XQm8v8nYv8A==
+    -----END EC PRIVATE KEY-----
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: luna-edge
+  namespace: luna-edge
+spec:
+  gatewayClassName: luna-edge
+  listeners:
+    - name: web
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: websecure
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: luna-edge-bootstrap-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
