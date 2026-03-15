@@ -13,6 +13,7 @@
 普通部署：
 
 - `ns.yaml`：只创建 `luna-edge` namespace
+- `ns.yaml`：创建 `luna-edge` namespace，并把 `luna-edge` 注册成默认 `IngressClass`
 - `luna-edge-master.yaml`：部署单集群 `master`
 - `luna-edge-slave.yaml`：部署单集群 `slave` DaemonSet 和本地入口资源
 
@@ -42,6 +43,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh up ns
 ./run.sh up master
 ./run.sh up slave
+./run.sh up nginxtest
 ```
 
 需要替换的值：
@@ -66,6 +68,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh mode cilium
 ./run.sh up ns
 ./run.sh up master
+./run.sh up nginxtest
 ```
 
 每个边缘集群：
@@ -74,6 +77,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 ./run.sh mode cilium
 ./run.sh up ns
 ./run.sh up slave
+./run.sh up nginxtest
 ```
 
 边缘集群里必须改的值：

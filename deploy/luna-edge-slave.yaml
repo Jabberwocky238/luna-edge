@@ -13,19 +13,11 @@ data:
   LUNA_DNS_FORWARD_TIMEOUT: "5s"
   LUNA_DNS_GEOIP_ENABLED: "1"
   LUNA_DNS_GEOIP_MMDB_PATH: "/var/lib/luna/geoip/GeoLite2-City.mmdb"
-  GEOIP_CITY_MMDB_URL: "https://github.com/P3TERX/GeoLite.mmdb/releases/download/2026.02.10/GeoLite2-City.mmdb"
+  GEOIP_CITY_MMDB_URL: "https://github.com/P3TERX/GeoLite.mmdb/releases/download/2026.03.13/GeoLite2-City.mmdb"
   LUNA_HEALTH_LISTEN: ":50050"
   LUNA_INGRESS_K8S_NAMESPACE: "luna-edge"
   LUNA_INGRESS_K8S_CLASS: "luna-edge"
   LUNA_CACHE_ROOT: "/var/lib/luna"
----
-apiVersion: networking.k8s.io/v1
-kind: IngressClass
-metadata:
-  name: luna-edge
-spec:
-  controller: luna-edge.io/ingress-controller
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:

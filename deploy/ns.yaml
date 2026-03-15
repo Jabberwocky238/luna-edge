@@ -2,3 +2,12 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: luna-edge
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: luna-edge
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: luna-edge.io/ingress-controller
