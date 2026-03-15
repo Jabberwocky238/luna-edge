@@ -1,0 +1,172 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: luna-edge
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: luna-edge-slave-config
+  namespace: luna-edge
+data:
+  LUNA_MASTER_ADDRESS: "luna-master.luna-edge.svc.cluster.local:50051"
+  LUNA_RETRY_MIN_BACKOFF: "1s"
+  LUNA_RETRY_MAX_BACKOFF: "30s"
+  LUNA_DNS_LISTEN: ":53"
+  LUNA_DNS_FORWARD_ENABLED: "0"
+  LUNA_DNS_FORWARD_SERVERS: "1.1.1.1:53"
+  LUNA_DNS_FORWARD_TIMEOUT: "5s"
+  LUNA_DNS_GEOIP_ENABLED: "1"
+  LUNA_DNS_GEOIP_MMDB_PATH: "/var/lib/luna/geoip/GeoLite2-City.mmdb"
+  GEOIP_CITY_MMDB_URL: "https://github.com/P3TERX/GeoLite.mmdb/releases/download/2026.02.10/GeoLite2-City.mmdb"
+  LUNA_HEALTH_LISTEN: ":50050"
+  LUNA_INGRESS_K8S_NAMESPACE: "luna-edge"
+  LUNA_INGRESS_K8S_CLASS: "luna-edge"
+  LUNA_CACHE_ROOT: "/var/lib/luna"
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: luna-edge
+spec:
+  controller: luna-edge.io/ingress-controller
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: luna-edge-slave
+  namespace: luna-edge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: luna-edge-slave
+  namespace: luna-edge
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: luna-edge-slave
+  namespace: luna-edge
+subjects:
+  - kind: ServiceAccount
+    name: luna-edge-slave
+    namespace: luna-edge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: luna-edge-slave
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: luna-edge
+  namespace: luna-edge
+spec:
+  type: LoadBalancer
+  selector:
+    app: luna-slave
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: 53
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: 53
+      protocol: TCP
+    - name: http
+      port: 80
+      targetPort: 80
+    - name: https
+      port: 443
+      targetPort: 443
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: luna-slave
+  namespace: luna-edge
+spec:
+  selector:
+    matchLabels:
+      app: luna-slave
+  template:
+    metadata:
+      labels:
+        app: luna-slave
+    spec:
+      serviceAccountName: luna-edge-slave
+      initContainers:
+        - name: prepare-geoip-mmdb
+          image: curlimages/curl:8.12.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -ec
+            - |
+              mkdir -p /var/lib/luna/geoip
+              if [ -s /var/lib/luna/geoip/GeoLite2-City.mmdb ]; then
+                exit 0
+              fi
+              curl -fsSL "${GEOIP_CITY_MMDB_URL}" -o /var/lib/luna/geoip/GeoLite2-City.mmdb.tmp
+              mv /var/lib/luna/geoip/GeoLite2-City.mmdb.tmp /var/lib/luna/geoip/GeoLite2-City.mmdb
+          env:
+            - name: GEOIP_CITY_MMDB_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: luna-edge-slave-config
+                  key: GEOIP_CITY_MMDB_URL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/luna
+      containers:
+        - name: slave
+          image: ghcr.io/jabberwocky238/luna-edge:latest
+          imagePullPolicy: IfNotPresent
+          command: ["slave"]
+          envFrom:
+            - configMapRef:
+                name: luna-edge-slave-config
+          env:
+            - name: LUNA_NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: health
+              containerPort: 50050
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 50050
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            tcpSocket:
+              port: 50050
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/luna
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/luna-edge
+            type: DirectoryOrCreate

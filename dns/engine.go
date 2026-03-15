@@ -1,0 +1,299 @@
+package dns
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strconv"
+	"strings"
+	"sync"
+
+	"github.com/jabberwocky238/luna-edge/geoip"
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
+	mdns "github.com/miekg/dns"
+)
+
+// Engine 负责连接 repository 和 DNS 操作层。
+//
+// 它承担两类职责：
+// - 查询解析：把 repository 中的 DNS 物化数据解析成查询结果
+// - 记录操作：把 add/mod/del 这类操作落到 repository
+type Engine struct {
+	store     *dnsMemoryStore
+	forwarder *Forwarder
+	geoLookup geoip.IPLookup
+	geoCloser func() error
+	udpServer *mdns.Server
+	tcpServer *mdns.Server
+	mu        sync.Mutex
+}
+
+type EngineOptions struct {
+	Forwarder     ForwarderConfig
+	GeoIPEnabled  bool
+	GeoIPMMDBPath string
+}
+
+// NewEngine 创建一个 DNS 执行引擎。
+func NewEngine(opts EngineOptions) *Engine {
+	forwarderCfg := opts.Forwarder
+	if len(forwarderCfg.Servers) == 0 && forwarderCfg.Timeout == 0 && !forwarderCfg.Enabled {
+		forwarderCfg = DefaultForwarderConfig()
+	}
+	engine := &Engine{
+		store:     newDNSMemoryStore(),
+		forwarder: NewForwarder(forwarderCfg),
+	}
+	engine.initGeoIP(opts)
+	return engine
+}
+
+func (e *Engine) RefreshQuestion(fqdn, recordType string) {
+	if e == nil || e.store == nil {
+		return
+	}
+	e.store.RefreshQuestion(fqdn, recordType)
+}
+
+func (e *Engine) RefreshAll() {
+	if e == nil || e.store == nil {
+		return
+	}
+	e.store.Clear()
+}
+
+func (e *Engine) RestoreRecords(records []metadata.DNSRecord) {
+	if e == nil || e.store == nil {
+		return
+	}
+	e.store.Restore(records)
+}
+
+// Listen 启动 DNS 监听。
+//
+// 它会同时启动 UDP 和 TCP 两个 DNS 服务端，并把查询转发到 Engine.Resolve。
+func (e *Engine) Listen(listenAddr string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.udpServer != nil || e.tcpServer != nil {
+		return fmt.Errorf("dns engine is already listening")
+	}
+	if strings.TrimSpace(listenAddr) == "" {
+		return fmt.Errorf("listen address is required")
+	}
+
+	handler := mdns.HandlerFunc(func(w mdns.ResponseWriter, r *mdns.Msg) {
+		e.serveDNS(w, r)
+	})
+
+	e.udpServer = &mdns.Server{
+		Addr:    listenAddr,
+		Net:     "udp",
+		Handler: handler,
+	}
+	e.tcpServer = &mdns.Server{
+		Addr:    listenAddr,
+		Net:     "tcp",
+		Handler: handler,
+	}
+
+	go func() {
+		_ = e.udpServer.ListenAndServe()
+	}()
+	go func() {
+		_ = e.tcpServer.ListenAndServe()
+	}()
+
+	return nil
+}
+
+// Stop 停止已经启动的 DNS 监听。
+func (e *Engine) Stop() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	var errs []string
+	if e.udpServer != nil {
+		if err := e.udpServer.Shutdown(); err != nil {
+			errs = append(errs, err.Error())
+		}
+		e.udpServer = nil
+	}
+	if e.tcpServer != nil {
+		if err := e.tcpServer.Shutdown(); err != nil {
+			errs = append(errs, err.Error())
+		}
+		e.tcpServer = nil
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("dns stop failed: %s", strings.Join(errs, "; "))
+	}
+	if e.geoCloser != nil {
+		if err := e.geoCloser(); err != nil {
+			return err
+		}
+		e.geoCloser = nil
+		e.geoLookup = nil
+	}
+	return nil
+}
+
+func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
+	resp := new(mdns.Msg)
+	resp.SetReply(req)
+
+	if len(req.Question) == 0 {
+		_ = w.WriteMsg(resp)
+		return
+	}
+
+	for _, q := range req.Question {
+		recordType := mdns.TypeToString[q.Qtype]
+		result, err := e.Resolve(context.Background(), q.Name, recordType)
+		if err != nil {
+			resp.Rcode = mdns.RcodeServerFailure
+			_ = w.WriteMsg(resp)
+			return
+		}
+		if !result.Found {
+			continue
+		}
+		e.applyGeoSort(w.RemoteAddr(), result.Records)
+		for _, record := range result.Records {
+			rr, err := toRR(record)
+			if err != nil {
+				resp.Rcode = mdns.RcodeServerFailure
+				_ = w.WriteMsg(resp)
+				return
+			}
+			resp.Answer = append(resp.Answer, rr...)
+		}
+	}
+
+	if len(resp.Answer) == 0 {
+		if forwarded, err := e.forward(req); err == nil && forwarded != nil {
+			_ = w.WriteMsg(forwarded)
+			return
+		}
+		resp.Rcode = mdns.RcodeNameError
+	}
+	_ = w.WriteMsg(resp)
+}
+
+func (e *Engine) forward(req *mdns.Msg) (*mdns.Msg, error) {
+	e.mu.Lock()
+	forwarder := e.forwarder
+	e.mu.Unlock()
+	return forwarder.Forward(context.Background(), req)
+}
+
+func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {
+	header := mdns.RR_Header{
+		Name:   normalizeFQDN(record.FQDN),
+		Rrtype: mdns.StringToType[normalizeRecordType(record.RecordType)],
+		Class:  mdns.ClassINET,
+		Ttl:    record.TTLSeconds,
+	}
+
+	values := splitValues(record.ValuesJSON)
+	rrs := make([]mdns.RR, 0, len(values))
+	for _, value := range values {
+		var rr mdns.RR
+		switch normalizeRecordType(record.RecordType) {
+		case "A":
+			ip := net.ParseIP(value).To4()
+			if ip == nil {
+				return nil, fmt.Errorf("invalid A record value %q", value)
+			}
+			rr = &mdns.A{Hdr: header, A: ip}
+		case "AAAA":
+			ip := net.ParseIP(value)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid AAAA record value %q", value)
+			}
+			rr = &mdns.AAAA{Hdr: header, AAAA: ip}
+		case "CNAME":
+			rr = &mdns.CNAME{Hdr: header, Target: normalizeFQDN(value)}
+		case "TXT":
+			rr = &mdns.TXT{Hdr: header, Txt: []string{value}}
+		case "NS":
+			rr = &mdns.NS{Hdr: header, Ns: normalizeFQDN(value)}
+		case "MX":
+			parts := strings.SplitN(value, " ", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid MX record value %q", value)
+			}
+			preference, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				return nil, fmt.Errorf("invalid MX preference %q", parts[0])
+			}
+			rr = &mdns.MX{Hdr: header, Preference: uint16(preference), Mx: normalizeFQDN(parts[1])}
+		case "SRV":
+			parts := strings.Fields(value)
+			if len(parts) != 4 {
+				return nil, fmt.Errorf("invalid SRV record value %q", value)
+			}
+			priority, err := strconv.Atoi(parts[0])
+			if err != nil {
+				return nil, err
+			}
+			weight, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return nil, err
+			}
+			port, err := strconv.Atoi(parts[2])
+			if err != nil {
+				return nil, err
+			}
+			rr = &mdns.SRV{
+				Hdr:      header,
+				Priority: uint16(priority),
+				Weight:   uint16(weight),
+				Port:     uint16(port),
+				Target:   normalizeFQDN(parts[3]),
+			}
+		case "CAA":
+			parts := strings.SplitN(value, " ", 3)
+			if len(parts) != 3 {
+				return nil, fmt.Errorf("invalid CAA record value %q", value)
+			}
+			flagValue, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+			if err != nil {
+				return nil, err
+			}
+			rr = &mdns.CAA{
+				Hdr:   header,
+				Flag:  uint8(flagValue),
+				Tag:   strings.TrimSpace(parts[1]),
+				Value: strings.Trim(strings.TrimSpace(parts[2]), `"`),
+			}
+		default:
+			return nil, fmt.Errorf("unsupported record type %q", record.RecordType)
+		}
+		rrs = append(rrs, rr)
+	}
+	return rrs, nil
+}
+
+func splitValues(values string) []string {
+	raw := strings.TrimSpace(values)
+	if raw == "" {
+		return nil
+	}
+	if strings.Contains(raw, "[") {
+		raw = strings.TrimPrefix(raw, "[")
+		raw = strings.TrimSuffix(raw, "]")
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(strings.Trim(part, `"`))
+		if part == "" {
+			continue
+		}
+		out = append(out, part)
+	}
+	return out
+}

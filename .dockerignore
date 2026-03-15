@@ -1,0 +1,7 @@
+.git
+.github
+cache
+docs/traefik
+README.zh-CN.md
+
+*.mmdb

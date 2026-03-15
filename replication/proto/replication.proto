@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package luna.replication.v1;
+
+option go_package = "github.com/jabberwocky238/luna-edge/replication/replpb;replpb";
+
+import "google/protobuf/timestamp.proto";
+
+message RouteRecord {
+  string domain_id = 1;
+  string hostname = 2;
+  string binding_id = 3;
+  uint64 route_version = 4;
+  uint64 certificate_revision = 5;
+  string listener = 6;
+  string protocol = 7;
+  string upstream_address = 8;
+  uint32 upstream_port = 9;
+  string upstream_protocol = 10;
+  string backend_json = 11;
+}
+
+message BindingRecord {
+  string id = 1;
+  string domain_id = 2;
+  string hostname = 3;
+  string service_id = 4;
+  string namespace = 5;
+  string name = 6;
+  string address = 7;
+  uint32 port = 8;
+  string protocol = 9;
+  uint64 route_version = 10;
+  string backend_json = 11;
+}
+
+message CertificateRecord {
+  string id = 1;
+  string domain_id = 2;
+  string zone_id = 3;
+  string hostname = 4;
+  uint64 revision = 5;
+  string status = 6;
+  string artifact_bucket = 7;
+  string artifact_prefix = 8;
+  string sha256_crt = 9;
+  string sha256_key = 10;
+  google.protobuf.Timestamp not_before = 11;
+  google.protobuf.Timestamp not_after = 12;
+}
+
+message AssignmentRecord {
+  string id = 1;
+  string node_id = 2;
+  string domain_id = 3;
+  string hostname = 4;
+  string listener = 5;
+  string binding_id = 6;
+  uint64 desired_route_version = 7;
+  uint64 desired_certificate_revision = 8;
+  uint64 desired_dns_version = 9;
+  string state = 10;
+  string last_error = 11;
+}
+
+message VersionVector {
+  uint64 desired_route_version = 1;
+  uint64 desired_certificate_revision = 2;
+  uint64 desired_dns_version = 3;
+}
+
+message Snapshot {
+  string node_id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  VersionVector versions = 3;
+  repeated RouteRecord routes = 4;
+  repeated BindingRecord bindings = 5;
+  repeated CertificateRecord certificates = 6;
+  repeated AssignmentRecord assignments = 7;
+}
+
+message SnapshotRequest {
+  string node_id = 1;
+}
+
+message SubscriptionRequest {
+  string node_id = 1;
+  VersionVector known_versions = 2;
+}
+
+message ChangeNotification {
+  string node_id = 1;
+  VersionVector versions = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message CertificateBundleRequest {
+  string hostname = 1;
+  uint64 revision = 2;
+}
+
+message CertificateBundleResponse {
+  string hostname = 1;
+  uint64 revision = 2;
+  bytes tls_crt = 3;
+  bytes tls_key = 4;
+  bytes metadata_json = 5;
+}
+
+service ReplicationService {
+  rpc GetSnapshot(SnapshotRequest) returns (Snapshot);
+  rpc Subscribe(SubscriptionRequest) returns (stream ChangeNotification);
+  rpc FetchCertificateBundle(CertificateBundleRequest) returns (CertificateBundleResponse);
+}
