@@ -7,6 +7,7 @@ MODE_FILE="${MODE_DIR}/mode"
 BASE_URL="${LUNA_EDGE_DEPLOY_BASE_URL:-https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy}"
 
 FILES=(
+  "ns.yaml"
   "luna-edge-master.yaml"
   "luna-edge-slave.yaml"
   "luna-edge-master-cilium-clustermesh.yaml"

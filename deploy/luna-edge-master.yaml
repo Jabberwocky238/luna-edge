@@ -1,9 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: luna-edge
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: luna-edge-master-config
@@ -25,9 +20,9 @@ metadata:
   namespace: luna-edge
 type: Opaque
 stringData:
-  LUNA_POSTGRES_DSN: "postgres://luna:luna@postgres.default.svc.cluster.local:5432/luna?sslmode=disable"
-  LUNA_S3_ACCESS_KEY_ID: "replace-me"
-  LUNA_S3_SECRET_ACCESS_KEY: "replace-me"
+  LUNA_POSTGRES_DSN: "postgres://lunaedge:lunaedge@postgres.default.svc.cluster.local:5432/lunaedge?sslmode=disable"
+  LUNA_S3_ACCESS_KEY_ID: "lunaedge"
+  LUNA_S3_SECRET_ACCESS_KEY: "lunaedge"
   LUNA_S3_SESSION_TOKEN: ""
 ---
 apiVersion: v1

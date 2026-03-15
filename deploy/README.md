@@ -2,6 +2,7 @@
 
 部署文件已经拆成四份，按场景分别维护：
 
+- [ns.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/ns.yaml)
 - [luna-edge-master.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-master.yaml)
 - [luna-edge-slave.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-slave.yaml)
 - [luna-edge-master-cilium-clustermesh.yaml](/mnt/d/1-code/__trash__/luna-edge/deploy/luna-edge-master-cilium-clustermesh.yaml)
@@ -11,6 +12,7 @@
 
 普通部署：
 
+- `ns.yaml`：只创建 `luna-edge` namespace
 - `luna-edge-master.yaml`：部署单集群 `master`
 - `luna-edge-slave.yaml`：部署单集群 `slave` DaemonSet 和本地入口资源
 
@@ -37,6 +39,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 准备完成后，在 `deploy/` 目录执行：
 
 ```bash
+./run.sh up ns
 ./run.sh up master
 ./run.sh up slave
 ```
@@ -61,6 +64,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 
 ```bash
 ./run.sh mode cilium
+./run.sh up ns
 ./run.sh up master
 ```
 
@@ -68,6 +72,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 
 ```bash
 ./run.sh mode cilium
+./run.sh up ns
 ./run.sh up slave
 ```
 

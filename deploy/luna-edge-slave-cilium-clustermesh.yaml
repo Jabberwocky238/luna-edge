@@ -1,11 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: luna-edge
-  labels:
-    luna-edge.io/topology: cilium-mesh-edge
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: luna-edge-slave-config
