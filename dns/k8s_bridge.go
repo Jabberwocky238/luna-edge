@@ -148,7 +148,7 @@ func (b *K8sBridge) ensureInformer() {
 	)
 	b.factory.ForResource(dnsDomainRecordGVR).Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    b.storeObject,
-		UpdateFunc: func(_, newObj interface{}) { b.storeObject(newObj) },
+		UpdateFunc: b.updateObject,
 		DeleteFunc: b.deleteObject,
 	})
 }
@@ -166,6 +166,10 @@ func (b *K8sBridge) storeObject(obj interface{}) {
 	if onChange != nil {
 		onChange(records)
 	}
+}
+
+func (b *K8sBridge) updateObject(_old, obj interface{}) {
+	b.storeObject(obj)
 }
 
 func (b *K8sBridge) deleteObject(obj interface{}) {
