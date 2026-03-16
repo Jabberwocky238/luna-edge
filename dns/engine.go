@@ -58,11 +58,14 @@ func NewEngine(opts EngineOptions) *Engine {
 	return engine
 }
 
-func (e *Engine) RefreshQuestion(fqdn, recordType string) {
+func (e *Engine) RefreshQuestion(fqdn string, recordType metadata.DNSRecordType) {
 	if e == nil || e.store == nil {
 		return
 	}
-	e.store.RefreshQuestion(fqdn, recordType)
+	e.store.RefreshQuestion(DNSQuestion{
+		FQDN:       fqdn,
+		RecordType: recordType,
+	})
 }
 
 func (e *Engine) RefreshAll() {
@@ -85,7 +88,7 @@ func (e *Engine) RestoreRecords(records []metadata.DNSRecord) {
 
 // Listen 启动 DNS 监听。
 //
-// 它会同时启动 UDP 和 TCP 两个 DNS 服务端，并把查询转发到 Engine.Resolve。
+// 它会同时启动 UDP 和 TCP 两个 DNS 服务端，并把查询转发到 Engine.Lookup。
 func (e *Engine) Listen(listenAddr string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -201,8 +204,10 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	}
 
 	for _, q := range req.Question {
-		recordType := mdns.TypeToString[q.Qtype]
-		result, err := e.Resolve(context.Background(), q.Name, recordType)
+		result, err := e.Lookup(context.Background(), DNSQuestion{
+			FQDN:       q.Name,
+			RecordType: metadata.DNSRecordType(mdns.TypeToString[q.Qtype]),
+		})
 		if err != nil {
 			resp.Rcode = mdns.RcodeServerFailure
 			_ = w.WriteMsg(resp)
@@ -224,28 +229,16 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 			resp.Answer = append(resp.Answer, rr...)
 		}
 	}
-
 	if len(resp.Answer) == 0 {
-		if forwarded, err := e.forward(req); err == nil && forwarded != nil {
-			_ = w.WriteMsg(forwarded)
-			return
-		}
 		resp.Rcode = mdns.RcodeNameError
 	}
 	_ = w.WriteMsg(resp)
 }
 
-func (e *Engine) forward(req *mdns.Msg) (*mdns.Msg, error) {
-	e.mu.Lock()
-	forwarder := e.forwarder
-	e.mu.Unlock()
-	return forwarder.Forward(context.Background(), req)
-}
-
 func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {
 	header := mdns.RR_Header{
 		Name:   normalizeFQDN(record.FQDN),
-		Rrtype: mdns.StringToType[normalizeRecordType(record.RecordType)],
+		Rrtype: mdns.StringToType[string(normalizeRecordType(record.RecordType))],
 		Class:  mdns.ClassINET,
 		Ttl:    record.TTLSeconds,
 	}
@@ -255,25 +248,25 @@ func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {
 	for _, value := range values {
 		var rr mdns.RR
 		switch normalizeRecordType(record.RecordType) {
-		case "A":
+		case metadata.DNSTypeA:
 			ip := net.ParseIP(value).To4()
 			if ip == nil {
 				return nil, fmt.Errorf("invalid A record value %q", value)
 			}
 			rr = &mdns.A{Hdr: header, A: ip}
-		case "AAAA":
+		case metadata.DNSTypeAAAA:
 			ip := net.ParseIP(value)
 			if ip == nil {
 				return nil, fmt.Errorf("invalid AAAA record value %q", value)
 			}
 			rr = &mdns.AAAA{Hdr: header, AAAA: ip}
-		case "CNAME":
+		case metadata.DNSTypeCNAME:
 			rr = &mdns.CNAME{Hdr: header, Target: normalizeFQDN(value)}
-		case "TXT":
+		case metadata.DNSTypeTXT:
 			rr = &mdns.TXT{Hdr: header, Txt: []string{value}}
-		case "NS":
+		case metadata.DNSTypeNS:
 			rr = &mdns.NS{Hdr: header, Ns: normalizeFQDN(value)}
-		case "MX":
+		case metadata.DNSTypeMX:
 			parts := strings.SplitN(value, " ", 2)
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("invalid MX record value %q", value)
@@ -283,7 +276,7 @@ func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {
 				return nil, fmt.Errorf("invalid MX preference %q", parts[0])
 			}
 			rr = &mdns.MX{Hdr: header, Preference: uint16(preference), Mx: normalizeFQDN(parts[1])}
-		case "SRV":
+		case metadata.DNSTypeSRV:
 			parts := strings.Fields(value)
 			if len(parts) != 4 {
 				return nil, fmt.Errorf("invalid SRV record value %q", value)
@@ -307,7 +300,7 @@ func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {
 				Port:     uint16(port),
 				Target:   normalizeFQDN(parts[3]),
 			}
-		case "CAA":
+		case metadata.DNSTypeCAA:
 			parts := strings.SplitN(value, " ", 3)
 			if len(parts) != 3 {
 				return nil, fmt.Errorf("invalid CAA record value %q", value)

@@ -125,7 +125,10 @@ func loadMockDNSCRD(t *testing.T) *unstructured.Unstructured {
 func waitForRecordValue(t *testing.T, engine *Engine, hostname, recordType, expected string) {
 	t.Helper()
 	waitForCondition(t, func() bool {
-		result, err := engine.Resolve(context.Background(), hostname, recordType)
+		result, err := engine.Lookup(context.Background(), DNSQuestion{
+			FQDN:       hostname,
+			RecordType: metadata.DNSRecordType(recordType),
+		})
 		if err != nil || result == nil || !result.Found || len(result.Records) == 0 {
 			return false
 		}
@@ -137,7 +140,10 @@ func waitForRecordValue(t *testing.T, engine *Engine, hostname, recordType, expe
 func waitForNoRecord(t *testing.T, engine *Engine, hostname, recordType string) {
 	t.Helper()
 	waitForCondition(t, func() bool {
-		result, err := engine.Resolve(context.Background(), hostname, recordType)
+		result, err := engine.Lookup(context.Background(), DNSQuestion{
+			FQDN:       hostname,
+			RecordType: metadata.DNSRecordType(recordType),
+		})
 		return err == nil && result != nil && !result.Found
 	})
 }

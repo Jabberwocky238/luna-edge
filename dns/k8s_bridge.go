@@ -43,6 +43,38 @@ type k8sDNSDomainRecordState struct {
 	records []metadata.DNSRecord
 }
 
+func (b *K8sBridge) Lookup(question DNSQuestion) (*DNSAnswerSet, bool) {
+	if b == nil {
+		return &DNSAnswerSet{Question: normalizeQuestion(question)}, false
+	}
+	question = normalizeQuestion(question)
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	var records []metadata.DNSRecord
+	for _, state := range b.records {
+		for _, record := range state.records {
+			if normalizeFQDN(record.FQDN) != question.FQDN {
+				continue
+			}
+			if normalizeRecordType(record.RecordType) != question.RecordType {
+				continue
+			}
+			if !record.Enabled {
+				continue
+			}
+			records = append(records, record)
+		}
+	}
+	if len(records) == 0 {
+		return &DNSAnswerSet{Question: question}, false
+	}
+	return &DNSAnswerSet{
+		Question: question,
+		Found:    true,
+		Records:  cloneDNSRecords(records),
+	}, true
+}
+
 func NewK8sBridge(namespace string) (*K8sBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
@@ -227,8 +259,8 @@ func parseDNSDomainRecordState(obj *unstructured.Unstructured) *k8sDNSDomainReco
 		if !ok {
 			continue
 		}
-		recordType, _, _ := unstructured.NestedString(item, "type")
-		recordType = normalizeRecordType(recordType)
+		recordTypeValue, _, _ := unstructured.NestedString(item, "type")
+		recordType := normalizeRecordType(metadata.DNSRecordType(recordTypeValue))
 		if recordType == "" {
 			continue
 		}

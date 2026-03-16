@@ -47,13 +47,13 @@ func (e *Engine) AddRecord(_ context.Context, input AddRecordInput) (*ChangeEffe
 	if record.Version == 0 {
 		record.Version = 1
 	}
-	e.store.Add(record)
+	answerSet := e.store.Add(record)
 
 	return &ChangeEffect{
 		DomainID:        record.DomainID,
 		ZoneID:          record.ZoneID,
-		FQDN:            record.FQDN,
-		RecordType:      record.RecordType,
+		FQDN:            answerSet.Question.FQDN,
+		RecordType:      answerSet.Question.RecordType,
 		Action:          "add",
 		OldVersion:      0,
 		NewVersion:      record.Version,

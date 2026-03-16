@@ -35,7 +35,7 @@ func (e *Engine) DeleteRecord(_ context.Context, input DeleteRecordInput) (*Chan
 		return nil, err
 	}
 
-	deleted, err := e.store.Delete(input.DomainID, input.RecordID)
+	deleted, answerSet, err := e.store.Delete(input.DomainID, input.RecordID)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func (e *Engine) DeleteRecord(_ context.Context, input DeleteRecordInput) (*Chan
 	return &ChangeEffect{
 		DomainID:        input.DomainID,
 		ZoneID:          deleted.ZoneID,
-		FQDN:            deleted.FQDN,
-		RecordType:      deleted.RecordType,
+		FQDN:            answerSet.Question.FQDN,
+		RecordType:      answerSet.Question.RecordType,
 		Action:          "del",
 		OldVersion:      deleted.Version,
 		NewVersion:      newVersion,

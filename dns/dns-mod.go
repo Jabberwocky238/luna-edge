@@ -16,7 +16,7 @@ type ModifyRecordInput struct {
 	// FQDN 是待修改记录的完整域名。
 	FQDN string
 	// RecordType 是待修改记录的类型。
-	RecordType string
+	RecordType metadata.DNSRecordType
 	// TTLSeconds 是修改后的 TTL。
 	TTLSeconds uint32
 	// ValuesJSON 是修改后的记录值 JSON。
@@ -53,7 +53,7 @@ func (e *Engine) ModifyRecord(_ context.Context, input ModifyRecordInput) (*Chan
 		return nil, err
 	}
 
-	updated, err := e.store.Modify(input.DomainID, input.RecordID, func(record *metadata.DNSRecord) error {
+	updated, answerSet, err := e.store.Modify(input.DomainID, input.RecordID, func(record *metadata.DNSRecord) error {
 		record.FQDN = normalizeFQDN(input.FQDN)
 		record.RecordType = normalizeRecordType(input.RecordType)
 		record.TTLSeconds = input.TTLSeconds
@@ -69,8 +69,8 @@ func (e *Engine) ModifyRecord(_ context.Context, input ModifyRecordInput) (*Chan
 	return &ChangeEffect{
 		DomainID:        input.DomainID,
 		ZoneID:          updated.ZoneID,
-		FQDN:            normalizeFQDN(input.FQDN),
-		RecordType:      normalizeRecordType(input.RecordType),
+		FQDN:            answerSet.Question.FQDN,
+		RecordType:      answerSet.Question.RecordType,
 		Action:          "mod",
 		OldVersion:      updated.Version - 1,
 		NewVersion:      updated.Version,

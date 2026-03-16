@@ -40,7 +40,7 @@ func TestResolveUsesDirectDNSLookup(t *testing.T) {
 		ValuesJSON: "2001:db8::1",
 		Enabled:    true,
 	}})
-	result, err := engine.Resolve(ctx, "app.example.com", "A")
+	result, err := engine.Lookup(ctx, DNSQuestion{FQDN: "app.example.com", RecordType: metadata.DNSTypeA})
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestResolveUsesRestoredMemoryRecords(t *testing.T) {
 		ValuesJSON: "192.0.2.10",
 		Enabled:    true,
 	}})
-	result, err := engine.Resolve(ctx, "app.example.com", "A")
+	result, err := engine.Lookup(ctx, DNSQuestion{FQDN: "app.example.com", RecordType: metadata.DNSTypeA})
 	if err != nil {
 		t.Fatalf("first resolve: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestResolveUsesRestoredMemoryRecords(t *testing.T) {
 		Enabled:    true,
 	}})
 
-	result, err = engine.Resolve(ctx, "app.example.com", "A")
+	result, err = engine.Lookup(ctx, DNSQuestion{FQDN: "app.example.com", RecordType: metadata.DNSTypeA})
 	if err != nil {
 		t.Fatalf("second resolve: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	mdns "github.com/miekg/dns"
 )
 
@@ -74,4 +75,59 @@ func (f *Forwarder) Forward(ctx context.Context, req *mdns.Msg) (*mdns.Msg, erro
 		return resp, nil
 	}
 	return nil, errForwardUnavailable
+}
+
+func (f *Forwarder) Lookup(ctx context.Context, question DNSQuestion) (*DNSAnswerSet, error) {
+	question = normalizeQuestion(question)
+	req := new(mdns.Msg)
+	req.SetQuestion(question.FQDN, mdns.StringToType[string(question.RecordType)])
+	resp, err := f.Forward(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]metadata.DNSRecord, 0, len(resp.Answer))
+	for i, answer := range resp.Answer {
+		record, ok := rrToRecord(question, i, answer)
+		if !ok {
+			continue
+		}
+		records = append(records, record)
+	}
+	return &DNSAnswerSet{
+		Question: question,
+		Found:    len(records) > 0,
+		Records:  records,
+	}, nil
+}
+
+func rrToRecord(question DNSQuestion, index int, rr mdns.RR) (metadata.DNSRecord, bool) {
+	header := rr.Header()
+	record := metadata.DNSRecord{
+		ID:         fmt.Sprintf("forward:%s:%s:%d", question.FQDN, question.RecordType, index),
+		FQDN:       normalizeFQDN(header.Name),
+		RecordType: question.RecordType,
+		TTLSeconds: header.Ttl,
+		Enabled:    true,
+	}
+	switch value := rr.(type) {
+	case *mdns.A:
+		record.ValuesJSON = value.A.String()
+	case *mdns.AAAA:
+		record.ValuesJSON = value.AAAA.String()
+	case *mdns.CNAME:
+		record.ValuesJSON = normalizeFQDN(value.Target)
+	case *mdns.TXT:
+		record.ValuesJSON = strings.Join(value.Txt, ",")
+	case *mdns.NS:
+		record.ValuesJSON = normalizeFQDN(value.Ns)
+	case *mdns.MX:
+		record.ValuesJSON = fmt.Sprintf("%d %s", value.Preference, normalizeFQDN(value.Mx))
+	case *mdns.SRV:
+		record.ValuesJSON = fmt.Sprintf("%d %d %d %s", value.Priority, value.Weight, value.Port, normalizeFQDN(value.Target))
+	case *mdns.CAA:
+		record.ValuesJSON = fmt.Sprintf("%d %s %s", value.Flag, value.Tag, value.Value)
+	default:
+		return metadata.DNSRecord{}, false
+	}
+	return record, true
 }

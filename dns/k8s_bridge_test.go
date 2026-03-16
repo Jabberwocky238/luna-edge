@@ -71,7 +71,7 @@ func TestEngineMergesRepositoryAndK8sRecords(t *testing.T) {
 		Version:    1,
 	}})
 
-	repoResult, err := engine.Resolve(t.Context(), "repo.example.com", "A")
+	repoResult, err := engine.Lookup(t.Context(), DNSQuestion{FQDN: "repo.example.com", RecordType: metadata.DNSTypeA})
 	if err != nil {
 		t.Fatalf("resolve repo: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestEngineMergesRepositoryAndK8sRecords(t *testing.T) {
 		t.Fatalf("expected repo record, got %+v", repoResult)
 	}
 
-	k8sResult, err := engine.Resolve(t.Context(), "example.com", "A")
+	k8sResult, err := engine.Lookup(t.Context(), DNSQuestion{FQDN: "example.com", RecordType: metadata.DNSTypeA})
 	if err != nil {
 		t.Fatalf("resolve k8s: %v", err)
 	}
