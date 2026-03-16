@@ -78,12 +78,8 @@ func (w *Wrapper) resourceRepo(model any) (genericResourceRepository, error) {
 		return genericResourceAdapter[*metadata.DomainEndpointStatus]{repo: w.repo.DomainEndpointStatuses(), cast: castModel[*metadata.DomainEndpointStatus]}, nil
 	case *metadata.ServiceBinding:
 		return genericResourceAdapter[*metadata.ServiceBinding]{repo: w.repo.ServiceBindings(), cast: castModel[*metadata.ServiceBinding]}, nil
-	case *metadata.DNSProjection:
-		return genericResourceAdapter[*metadata.DNSProjection]{repo: w.repo.DNSProjections(), cast: castModel[*metadata.DNSProjection]}, nil
 	case *metadata.DNSRecord:
 		return genericResourceAdapter[*metadata.DNSRecord]{repo: w.repo.DNSRecords(), cast: castModel[*metadata.DNSRecord]}, nil
-	case *metadata.RouteProjection:
-		return genericResourceAdapter[*metadata.RouteProjection]{repo: w.repo.RouteProjections(), cast: castModel[*metadata.RouteProjection]}, nil
 	case *metadata.CertificateRevision:
 		return genericResourceAdapter[*metadata.CertificateRevision]{repo: w.repo.CertificateRevisions(), cast: castModel[*metadata.CertificateRevision]}, nil
 	case *metadata.ACMEOrder:

@@ -256,14 +256,6 @@ func seedMasterProjection(t *testing.T, repo repository.Repository) {
 		RouteVersion: 1,
 		BackendJSON:  `{"kind":"service"}`,
 	}))
-	mustUpsert(t, repo.RouteProjections().UpsertResource(ctx, &metadata.RouteProjection{
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		RouteVersion: 1,
-		Protocol:     "http",
-		RouteJSON:    `{"path":"/"}`,
-		BindingID:    "binding-1",
-	}))
 	mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
 		ID:                  "attach-1",
 		DomainID:            "domain-1",

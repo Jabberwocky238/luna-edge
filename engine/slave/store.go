@@ -135,26 +135,22 @@ func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.Cer
 }
 
 func (s *LocalStore) GetRouteByHostname(ctx context.Context, hostname string) (*engine.RouteRecord, error) {
-	var route metadata.RouteProjection
-	if err := s.db.WithContext(ctx).First(&route, "hostname = ?", hostname).Error; err != nil {
-		return nil, err
-	}
 	var binding metadata.ServiceBinding
-	if err := s.db.WithContext(ctx).First(&binding, "domain_id = ?", route.DomainID).Error; err != nil {
+	if err := s.db.WithContext(ctx).First(&binding, "hostname = ?", hostname).Error; err != nil {
 		return nil, err
 	}
 	var status metadata.DomainEndpointStatus
-	_ = s.db.WithContext(ctx).First(&status, "domain_endpoint_id = ?", route.DomainID).Error
+	_ = s.db.WithContext(ctx).First(&status, "domain_endpoint_id = ?", binding.DomainID).Error
 	var attachment metadata.Attachment
-	_ = s.db.WithContext(ctx).Order("updated_at desc").First(&attachment, "domain_id = ?", route.DomainID).Error
+	_ = s.db.WithContext(ctx).Order("updated_at desc").First(&attachment, "domain_id = ?", binding.DomainID).Error
 	return &engine.RouteRecord{
-		DomainID:            route.DomainID,
-		Hostname:            route.Hostname,
-		BindingID:           route.BindingID,
-		RouteVersion:        route.RouteVersion,
+		DomainID:            binding.DomainID,
+		Hostname:            binding.Hostname,
+		BindingID:           binding.ID,
+		RouteVersion:        binding.RouteVersion,
 		CertificateRevision: status.CertificateRevision,
 		Listener:            attachment.Listener,
-		Protocol:            string(route.Protocol),
+		Protocol:            string(binding.Protocol),
 		UpstreamAddress:     binding.Address,
 		UpstreamPort:        binding.Port,
 		UpstreamProtocol:    string(binding.Protocol),
@@ -215,15 +211,15 @@ func (s *LocalStore) ListAssignments(ctx context.Context, nodeID string) ([]engi
 	for _, attachment := range attachments {
 		var domain metadata.DomainEndpoint
 		_ = s.db.WithContext(ctx).First(&domain, "id = ?", attachment.DomainID).Error
-		var route metadata.RouteProjection
-		_ = s.db.WithContext(ctx).First(&route, "domain_id = ?", attachment.DomainID).Error
+		var binding metadata.ServiceBinding
+		_ = s.db.WithContext(ctx).First(&binding, "domain_id = ?", attachment.DomainID).Error
 		records = append(records, engine.AssignmentRecord{
 			ID:                         attachment.ID,
 			NodeID:                     attachment.NodeID,
 			DomainID:                   attachment.DomainID,
 			Hostname:                   domain.Hostname,
 			Listener:                   attachment.Listener,
-			BindingID:                  route.BindingID,
+			BindingID:                  binding.ID,
 			DesiredRouteVersion:        attachment.DesiredRouteVersion,
 			DesiredCertificateRevision: attachment.DesiredCertificateRevision,
 			DesiredDNSVersion:          attachment.DesiredDNSVersion,
@@ -258,12 +254,11 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	if snapshot == nil {
 		return nil
 	}
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, model := range []any{
 			&metadata.Attachment{},
 			&metadata.CertificateRevision{},
 			&metadata.ServiceBinding{},
-			&metadata.RouteProjection{},
 			&metadata.DomainEndpointStatus{},
 			&metadata.DomainEndpoint{},
 		} {
@@ -366,19 +361,12 @@ func upsertRoute(tx *gorm.DB, route *engine.RouteRecord) error {
 	}
 	if err := tx.Save(&metadata.DomainEndpoint{
 		ID:           route.DomainID,
-		Hostname:     route.Hostname,
-		StateVersion: route.RouteVersion,
-	}).Error; err != nil {
+			Hostname:     route.Hostname,
+			StateVersion: route.RouteVersion,
+		}).Error; err != nil {
 		return err
 	}
-	return tx.Save(&metadata.RouteProjection{
-		DomainID:     route.DomainID,
-		Hostname:     route.Hostname,
-		RouteVersion: route.RouteVersion,
-		Protocol:     metadata.ServiceBindingRouteKind(route.Protocol),
-		RouteJSON:    route.BackendJSON,
-		BindingID:    route.BindingID,
-	}).Error
+	return nil
 }
 
 func upsertBinding(tx *gorm.DB, binding *engine.BindingRecord) error {

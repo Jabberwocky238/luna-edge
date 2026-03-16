@@ -159,11 +159,11 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 						RouteVersion: routeVersion,
 						BackendJSON:  string(routeJSON),
 					},
-					route: &metadata.RouteProjection{
+					route: &ResolvedRoute{
 						DomainID:     bindingID,
 						Hostname:     host,
 						RouteVersion: routeVersion,
-						Protocol:     "http",
+						Protocol:     metadata.ServiceBindingRouteKindHTTP,
 						RouteJSON:    string(routeJSON),
 						BindingID:    bindingID,
 					},

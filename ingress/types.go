@@ -50,7 +50,17 @@ type K8sResolvedBackend struct {
 	Hostname string
 	Port     uint32
 	Binding  *metadata.ServiceBinding
-	Route    *metadata.RouteProjection
+	Route    *ResolvedRoute
+}
+
+// ResolvedRoute 表示 bridge 内部物化出的路由结果。
+type ResolvedRoute struct {
+	DomainID     string
+	Hostname     string
+	RouteVersion uint64
+	Protocol     metadata.ServiceBindingRouteKind
+	RouteJSON    string
+	BindingID    string
 }
 
 // Middleware 定义基础 ingress 中间件能力。

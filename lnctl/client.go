@@ -60,14 +60,6 @@ func (c *Client) DNSRecords() ResourceClient[metadata.DNSRecord] {
 	return newResourceClient(c, "dns_records", func(model metadata.DNSRecord) string { return model.ID })
 }
 
-func (c *Client) DNSProjections() ResourceClient[metadata.DNSProjection] {
-	return newResourceClient(c, "dns_projections", func(model metadata.DNSProjection) string { return model.DomainID })
-}
-
-func (c *Client) RouteProjections() ResourceClient[metadata.RouteProjection] {
-	return newResourceClient(c, "route_projections", func(model metadata.RouteProjection) string { return model.DomainID })
-}
-
 func (c *Client) CertificateRevisions() ResourceClient[metadata.CertificateRevision] {
 	return newResourceClient(c, "certificate_revisions", func(model metadata.CertificateRevision) string { return model.ID })
 }
@@ -100,10 +92,6 @@ func (c *Client) ManageResource(resource string) (AnyResourceClient, error) {
 		return managedResourceAdapter[metadata.ServiceBinding]{resourceClient: c.ServiceBindings()}, nil
 	case "dns_records":
 		return managedResourceAdapter[metadata.DNSRecord]{resourceClient: c.DNSRecords()}, nil
-	case "dns_projections":
-		return managedResourceAdapter[metadata.DNSProjection]{resourceClient: c.DNSProjections()}, nil
-	case "route_projections":
-		return managedResourceAdapter[metadata.RouteProjection]{resourceClient: c.RouteProjections()}, nil
 	case "certificate_revisions":
 		return managedResourceAdapter[metadata.CertificateRevision]{resourceClient: c.CertificateRevisions()}, nil
 	case "acme_orders":

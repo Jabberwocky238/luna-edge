@@ -223,20 +223,16 @@ func (b *RepositoryProjectionBuilder) BuildRouteRecord(ctx context.Context, doma
 	if domainID == "" {
 		return nil, fmt.Errorf("domain id is required")
 	}
-	route := &metadata.RouteProjection{}
-	if err := b.Repo.RouteProjections().GetResourceByField(ctx, route, "domain_id", domainID); err != nil {
-		return nil, err
-	}
 	binding, err := b.Repo.GetServiceBindingByDomainID(ctx, domainID)
 	if err != nil {
 		return nil, err
 	}
 	record := &RouteRecord{
 		DomainID:         domainID,
-		Hostname:         route.Hostname,
-		BindingID:        route.BindingID,
-		RouteVersion:     route.RouteVersion,
-		Protocol:         string(route.Protocol),
+		Hostname:         binding.Hostname,
+		BindingID:        binding.ID,
+		RouteVersion:     binding.RouteVersion,
+		Protocol:         string(binding.Protocol),
 		UpstreamAddress:  binding.Address,
 		UpstreamPort:     binding.Port,
 		UpstreamProtocol: string(binding.Protocol),

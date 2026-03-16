@@ -264,7 +264,7 @@ func (b *K8sBridge) newMaterializedRoute(kind metadata.ServiceBindingRouteKind, 
 			RouteVersion: 1,
 			BackendJSON:  string(raw),
 		},
-		route: &metadata.RouteProjection{
+		route: &ResolvedRoute{
 			DomainID:     bindingID,
 			Hostname:     host,
 			RouteVersion: 1,

@@ -14,8 +14,6 @@ func AllModels() []interface{} {
 		&DomainEndpointStatus{},
 		&ServiceBinding{},
 		&DNSRecord{},
-		&DNSProjection{},
-		&RouteProjection{},
 		&CertificateRevision{},
 		&ACMEOrder{},
 		&ACMEChallenge{},

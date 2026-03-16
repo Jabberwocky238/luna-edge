@@ -173,14 +173,6 @@ func seedMasterProjectionForNodes(t *testing.T, repo repository.Repository, node
 		RouteVersion: version,
 		BackendJSON:  `{"kind":"service"}`,
 	}))
-	mustUpsert(t, repo.RouteProjections().UpsertResource(ctx, &metadata.RouteProjection{
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		RouteVersion: version,
-		Protocol:     "http",
-		RouteJSON:    `{"path":"/"}`,
-		BindingID:    "binding-1",
-	}))
 	for _, nodeID := range nodeIDs {
 		mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
 			ID:                  "attach-" + nodeID,
@@ -216,14 +208,6 @@ func updateMasterBindingForNodes(t *testing.T, repo repository.Repository, nodeI
 		Protocol:     "http",
 		RouteVersion: version,
 		BackendJSON:  `{"kind":"service"}`,
-	}))
-	mustUpsert(t, repo.RouteProjections().UpsertResource(ctx, &metadata.RouteProjection{
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		RouteVersion: version,
-		Protocol:     "http",
-		RouteJSON:    `{"path":"/"}`,
-		BindingID:    "binding-1",
 	}))
 	for _, nodeID := range nodeIDs {
 		mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{

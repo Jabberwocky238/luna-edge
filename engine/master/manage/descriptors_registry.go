@@ -46,17 +46,6 @@ func init() {
 		},
 	}
 
-	descriptors["dns_projections"] = descriptor{
-		newModel: func() any { return &metadata.DNSProjection{} },
-		idField:  "domain_id",
-		afterUpsert: func(ctx context.Context, w *Wrapper, model any) error {
-			return publishAssignmentsForDomain(ctx, w, model.(*metadata.DNSProjection).DomainID)
-		},
-		afterDelete: func(ctx context.Context, w *Wrapper, model any) error {
-			return publishAssignmentsForDomain(ctx, w, model.(*metadata.DNSProjection).DomainID)
-		},
-	}
-
 	descriptors["dns_records"] = descriptor{
 		newModel: func() any { return &metadata.DNSRecord{} },
 		idField:  "id",
@@ -96,18 +85,6 @@ func init() {
 			return publishAssignmentsForNode(ctx, w, model.(*metadata.Node).ID)
 		},
 		afterDelete: noopBroadcast,
-	}
-
-	descriptors["route_projections"] = descriptor{
-		newModel: func() any { return &metadata.RouteProjection{} },
-		idField:  "domain_id",
-		afterUpsert: func(ctx context.Context, w *Wrapper, model any) error {
-			return publishRoute(ctx, w, model.(*metadata.RouteProjection).DomainID, "")
-		},
-		afterDelete: func(ctx context.Context, w *Wrapper, model any) error {
-			route := model.(*metadata.RouteProjection)
-			return publishDeleteForDomain(ctx, w, route.DomainID, nil, route.Hostname)
-		},
 	}
 
 	descriptors["service_bindings"] = descriptor{

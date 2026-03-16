@@ -151,7 +151,7 @@ func cloneBinding(in *metadata.ServiceBinding) *metadata.ServiceBinding {
 	return &out
 }
 
-func cloneRoute(in *metadata.RouteProjection) *metadata.RouteProjection {
+func cloneRoute(in *ResolvedRoute) *ResolvedRoute {
 	if in == nil {
 		return nil
 	}

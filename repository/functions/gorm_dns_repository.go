@@ -4,39 +4,20 @@ import (
 	"context"
 
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
-	"gorm.io/gorm"
 )
-
-func (r *GormRepository) DNSProjections() GenericRepository[*metadata.DNSProjection] {
-	return &gormGenericRepository[*metadata.DNSProjection]{db: r.db}
-}
 
 func (r *GormRepository) DNSRecords() GenericRepository[*metadata.DNSRecord] {
 	return &gormGenericRepository[*metadata.DNSRecord]{db: r.db}
 }
 
-func (r *GormRepository) ReplaceDNSProjection(ctx context.Context, projection *metadata.DNSProjection, records []metadata.DNSRecord) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		repo := &gormGenericRepository[*metadata.DNSProjection]{db: tx}
-		if err := repo.UpsertResource(ctx, projection); err != nil {
-			return err
-		}
-		if err := tx.Where("domain_id = ?", projection.DomainID).Delete(&metadata.DNSRecord{}).Error; err != nil {
-			return err
-		}
-		if len(records) == 0 {
-			return nil
-		}
-		return tx.Create(&records).Error
-	})
-}
-
-func (r *GormRepository) GetDNSProjection(ctx context.Context, domainID string) (*metadata.DNSProjection, error) {
-	projection := &metadata.DNSProjection{}
-	if err := r.DNSProjections().GetResourceByField(ctx, projection, "domain_id", domainID); err != nil {
-		return nil, err
+func (r *GormRepository) ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error {
+	if err := r.db.WithContext(ctx).Where("domain_id = ?", domainID).Delete(&metadata.DNSRecord{}).Error; err != nil {
+		return err
 	}
-	return projection, nil
+	if len(records) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Create(&records).Error
 }
 
 func (r *GormRepository) ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error) {

@@ -168,14 +168,6 @@ func seedMasterProjectionWithCertificate(t *testing.T, repo repository.Repositor
 		RouteVersion: 1,
 		BackendJSON:  `{"kind":"service"}`,
 	}))
-	mustUpsert(t, repo.RouteProjections().UpsertResource(ctx, &metadata.RouteProjection{
-		DomainID:     "domain-1",
-		Hostname:     bundle.Hostname,
-		RouteVersion: 1,
-		Protocol:     "http",
-		RouteJSON:    `{"path":"/"}`,
-		BindingID:    "binding-1",
-	}))
 	mustUpsert(t, repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
 		ID:             "cert-1",
 		DomainID:       "domain-1",

@@ -72,15 +72,6 @@ func TestBuildSnapshotVersionsUseMaxOfRouteCertificateAndDNSVersions(t *testing.
 	}); err != nil {
 		t.Fatalf("upsert binding: %v", err)
 	}
-	if err := repo.RouteProjections().UpsertResource(ctx, &metadata.RouteProjection{
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		RouteVersion: 5,
-		Protocol:     "http",
-		BindingID:    "binding-1",
-	}); err != nil {
-		t.Fatalf("upsert route: %v", err)
-	}
 	if err := repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
 		ID:       "cert-1",
 		DomainID: "domain-1",

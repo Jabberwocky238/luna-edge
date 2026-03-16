@@ -12,7 +12,7 @@ type SpecRepository interface {
 	GetDomainEndpointStatus(ctx context.Context, domainID string) (*metadata.DomainEndpointStatus, error)
 	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBinding, error)
 	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBinding, error)
-	ReplaceDNSProjection(ctx context.Context, projection *metadata.DNSProjection, records []metadata.DNSRecord) error
+	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
 	ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error)
 	ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error)
 	GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error)
@@ -36,9 +36,7 @@ type Repository interface {
 	DomainEndpoints() GenericRepository[*metadata.DomainEndpoint]
 	DomainEndpointStatuses() GenericRepository[*metadata.DomainEndpointStatus]
 	ServiceBindings() GenericRepository[*metadata.ServiceBinding]
-	DNSProjections() GenericRepository[*metadata.DNSProjection]
 	DNSRecords() GenericRepository[*metadata.DNSRecord]
-	RouteProjections() GenericRepository[*metadata.RouteProjection]
 	CertificateRevisions() GenericRepository[*metadata.CertificateRevision]
 	ACMEOrders() GenericRepository[*metadata.ACMEOrder]
 	ACMEChallenges() GenericRepository[*metadata.ACMEChallenge]

@@ -48,7 +48,7 @@ type K8sBridge struct {
 type k8sMaterializedRoute struct {
 	kind       metadata.ServiceBindingRouteKind
 	binding    *metadata.ServiceBinding
-	route      *metadata.RouteProjection
+	route      *ResolvedRoute
 	hostname   string
 	port       uint32
 	path       string
@@ -170,12 +170,12 @@ func (b *K8sBridge) Namespace() string {
 }
 
 // ResolveHost 兼容旧接口，等价于 HTTP `/` 命中。
-func (b *K8sBridge) ResolveHost(host string) (*metadata.ServiceBinding, *metadata.RouteProjection, bool) {
+func (b *K8sBridge) ResolveHost(host string) (*metadata.ServiceBinding, *ResolvedRoute, bool) {
 	return b.ResolveRequest(host, "/")
 }
 
 // ResolveRequest 兼容旧接口，等价于 HTTPRoute / Ingress 解析。
-func (b *K8sBridge) ResolveRequest(host, requestPath string) (*metadata.ServiceBinding, *metadata.RouteProjection, bool) {
+func (b *K8sBridge) ResolveRequest(host, requestPath string) (*metadata.ServiceBinding, *ResolvedRoute, bool) {
 	resolved, ok := b.ResolveHTTP(host, requestPath)
 	if !ok {
 		return nil, nil, false
