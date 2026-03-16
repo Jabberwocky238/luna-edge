@@ -3,10 +3,10 @@ package ingress
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 
+	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"k8s.io/client-go/dynamic"
 	dynamicinformer "k8s.io/client-go/dynamic/dynamicinformer"
@@ -67,7 +67,7 @@ const (
 // NewK8sBridge 创建监听当前命名空间 Ingress 和 Gateway API 的 bridge。
 func NewK8sBridge(namespace, ingressClass string) (*K8sBridge, error) {
 	if namespace == "" {
-		namespace = os.Getenv("POD_NAMESPACE")
+		namespace = enginepkg.POD_NAMESPACE
 	}
 	if namespace == "" {
 		namespace = "default"
@@ -98,7 +98,7 @@ func NewK8sBridgeWithClient(namespace, ingressClass string, client kubernetes.In
 // NewK8sBridgeWithClients 创建使用显式 typed/dynamic client 的 bridge。
 func NewK8sBridgeWithClients(namespace, ingressClass string, client kubernetes.Interface, dynamicClient dynamic.Interface) *K8sBridge {
 	if namespace == "" {
-		namespace = os.Getenv("POD_NAMESPACE")
+		namespace = enginepkg.POD_NAMESPACE
 	}
 	if namespace == "" {
 		namespace = "default"

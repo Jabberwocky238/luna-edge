@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jabberwocky238/luna-edge/geoip"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	mdns "github.com/miekg/dns"
 )
@@ -21,8 +20,11 @@ import (
 type Engine struct {
 	store     *dnsMemoryStore
 	forwarder *Forwarder
-	geoLookup geoip.IPLookup
-	geoCloser func() error
+	geoDriver GeoIPDriver
+	k8sBridge *K8sBridge
+	recordsMu sync.Mutex
+	baseDNS   []metadata.DNSRecord
+	k8sDNS    []metadata.DNSRecord
 	udpServer *mdns.Server
 	tcpServer *mdns.Server
 	mu        sync.Mutex
@@ -32,6 +34,13 @@ type EngineOptions struct {
 	Forwarder     ForwarderConfig
 	GeoIPEnabled  bool
 	GeoIPMMDBPath string
+	K8sEnabled    bool
+	K8sNamespace  string
+}
+
+type GeoIPDriver interface {
+	ApplyGeoSort(addr net.Addr, records []metadata.DNSRecord)
+	Close() error
 }
 
 // NewEngine 创建一个 DNS 执行引擎。
@@ -45,6 +54,7 @@ func NewEngine(opts EngineOptions) *Engine {
 		forwarder: NewForwarder(forwarderCfg),
 	}
 	engine.initGeoIP(opts)
+	engine.initK8sBridge(opts)
 	return engine
 }
 
@@ -66,7 +76,11 @@ func (e *Engine) RestoreRecords(records []metadata.DNSRecord) {
 	if e == nil || e.store == nil {
 		return
 	}
-	e.store.Restore(records)
+	e.recordsMu.Lock()
+	e.baseDNS = cloneDNSRecords(records)
+	merged := append(cloneDNSRecords(e.baseDNS), cloneDNSRecords(e.k8sDNS)...)
+	e.recordsMu.Unlock()
+	e.store.Restore(merged)
 }
 
 // Listen 启动 DNS 监听。
@@ -104,6 +118,9 @@ func (e *Engine) Listen(listenAddr string) error {
 	go func() {
 		_ = e.tcpServer.ListenAndServe()
 	}()
+	if e.k8sBridge != nil {
+		e.k8sBridge.Listen()
+	}
 
 	return nil
 }
@@ -130,14 +147,48 @@ func (e *Engine) Stop() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("dns stop failed: %s", strings.Join(errs, "; "))
 	}
-	if e.geoCloser != nil {
-		if err := e.geoCloser(); err != nil {
+	if e.k8sBridge != nil {
+		if err := e.k8sBridge.Stop(); err != nil {
 			return err
 		}
-		e.geoCloser = nil
-		e.geoLookup = nil
+		e.k8sBridge = nil
+	}
+	if e.geoDriver != nil {
+		if err := e.geoDriver.Close(); err != nil {
+			return err
+		}
+		e.geoDriver = nil
 	}
 	return nil
+}
+
+func (e *Engine) initK8sBridge(opts EngineOptions) {
+	if e == nil || !opts.K8sEnabled {
+		return
+	}
+	bridge, err := NewK8sBridge(opts.K8sNamespace)
+	if err != nil {
+		return
+	}
+	bridge.SetOnChange(func(records []metadata.DNSRecord) {
+		e.replaceK8sRecords(records)
+	})
+	if err := bridge.LoadInitial(context.Background()); err != nil {
+		_ = bridge.Stop()
+		return
+	}
+	e.k8sBridge = bridge
+}
+
+func (e *Engine) replaceK8sRecords(records []metadata.DNSRecord) {
+	if e == nil || e.store == nil {
+		return
+	}
+	e.recordsMu.Lock()
+	e.k8sDNS = cloneDNSRecords(records)
+	merged := append(cloneDNSRecords(e.baseDNS), cloneDNSRecords(e.k8sDNS)...)
+	e.recordsMu.Unlock()
+	e.store.Restore(merged)
 }
 
 func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
@@ -160,7 +211,9 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 		if !result.Found {
 			continue
 		}
-		e.applyGeoSort(w.RemoteAddr(), result.Records)
+		if e.geoDriver != nil {
+			e.geoDriver.ApplyGeoSort(w.RemoteAddr(), result.Records)
+		}
 		for _, record := range result.Records {
 			rr, err := toRR(record)
 			if err != nil {

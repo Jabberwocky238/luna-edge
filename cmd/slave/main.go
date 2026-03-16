@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+
 	slave "github.com/jabberwocky238/luna-edge/engine/slave"
 )
 
@@ -31,6 +33,8 @@ func main() {
 	flag.DurationVar(&cfg.DNSForwardTimeout, "dns-forward-timeout", envDuration("LUNA_DNS_FORWARD_TIMEOUT", 5*time.Second), "upstream dns forward timeout")
 	flag.BoolVar(&cfg.DNSGeoIPEnabled, "dns-geoip-enabled", envOr("LUNA_DNS_GEOIP_ENABLED", "0") == "1", "enable geoip distance-based sorting for A/AAAA dns records")
 	flag.StringVar(&cfg.DNSGeoIPMMDBPath, "dns-geoip-mmdb-path", envOr("LUNA_DNS_GEOIP_MMDB_PATH", ""), "path to maxmind city mmdb file for dns geoip sorting")
+	flag.BoolVar(&cfg.DNSK8sEnabled, "dns-k8s-enabled", envOr("LUNA_DNS_K8S_ENABLED", "0") == "1", "enable kubernetes DnsDomainRecord CRD bridge")
+	flag.StringVar(&cfg.DNSK8sNamespace, "dns-k8s-namespace", envOr("LUNA_DNS_K8S_NAMESPACE", enginepkg.POD_NAMESPACE), "kubernetes namespace watched for DnsDomainRecord CRDs")
 	flag.StringVar(&cfg.IngressK8sNS, "ingress-k8s-namespace", envOr("LUNA_INGRESS_K8S_NAMESPACE", ""), "kubernetes ingress namespace")
 	flag.StringVar(&cfg.IngressK8sClass, "ingress-k8s-class", envOr("LUNA_INGRESS_K8S_CLASS", "luna-edge"), "kubernetes ingress class handled by luna-edge")
 	flag.IntVar(&cfg.IngressLRUSize, "ingress-lru-size", envInt("LUNA_INGRESS_LRU_SIZE", 4096), "ingress tls cert LRU size")

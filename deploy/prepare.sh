@@ -7,6 +7,7 @@ MODE_FILE="${MODE_DIR}/mode"
 BASE_URL="${LUNA_EDGE_DEPLOY_BASE_URL:-https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy}"
 
 FILES=(
+  "crd.yaml"
   "ns.yaml"
   "luna-edge-master.yaml"
   "luna-edge-slave.yaml"
@@ -33,4 +34,5 @@ echo "current mode: $(cat "${MODE_FILE}")"
 
 chmod +x "${TARGET_DIR}/run.sh"
 bash "${TARGET_DIR}/run.sh" up ns
+bash "${TARGET_DIR}/run.sh" up crd
 echo "prepare complete"

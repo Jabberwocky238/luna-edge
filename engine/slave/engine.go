@@ -32,6 +32,8 @@ type Config struct {
 	DNSForwardTimeout time.Duration
 	DNSGeoIPEnabled   bool
 	DNSGeoIPMMDBPath  string
+	DNSK8sEnabled     bool
+	DNSK8sNamespace   string
 	IngressHTTPAddr   string
 	IngressTLSAddr    string
 	IngressK8sEnabled bool
@@ -142,6 +144,8 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 			},
 			GeoIPEnabled:  cfg.DNSGeoIPEnabled,
 			GeoIPMMDBPath: cfg.DNSGeoIPMMDBPath,
+			K8sEnabled:    cfg.DNSK8sEnabled,
+			K8sNamespace:  cfg.DNSK8sNamespace,
 		})
 		if err := eng.restoreDNSRuntime(context.Background()); err != nil {
 			_ = conn.Close()

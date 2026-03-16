@@ -1,0 +1,13 @@
+apiVersion: luna-edge.io/v1alpha1
+kind: DnsDomainRecord
+metadata:
+  name: example-com
+  namespace: luna-edge
+spec:
+  domain: example.com
+  records:
+    - name: "@"
+      type: A
+      ttl: 60
+      values:
+        - 1.1.1.1

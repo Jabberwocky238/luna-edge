@@ -22,6 +22,9 @@ mode_file_for_component() {
   mode="$(current_mode)"
   local component="${1:-}"
   case "${mode}:${component}" in
+    default:crd)
+      printf '%s\n' "${SCRIPT_DIR}/crd.yaml"
+      ;;
     default:ns)
       printf '%s\n' "${SCRIPT_DIR}/ns.yaml"
       ;;
@@ -36,6 +39,9 @@ mode_file_for_component() {
       ;;
     default:slave)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-slave.yaml"
+      ;;
+    cilium:crd)
+      printf '%s\n' "${SCRIPT_DIR}/crd.yaml"
       ;;
     cilium:ns)
       printf '%s\n' "${SCRIPT_DIR}/ns.yaml"
@@ -93,8 +99,8 @@ set_mode() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./run.sh up <ns|master|slave|ngi|ngg>
-  ./run.sh down <ns|master|slave|ngi|ngg>
+  ./run.sh up <crd|ns|master|slave|ngi|ngg>
+  ./run.sh down <crd|ns|master|slave|ngi|ngg>
   ./run.sh mode <default|cilium>
 EOF
 }
