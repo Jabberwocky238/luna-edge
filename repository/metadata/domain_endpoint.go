@@ -10,6 +10,8 @@ type DomainEndpoint struct {
 	ZoneID       string    `json:"zone_id" gorm:"column:zone_id;not null;index;type:varchar(64)"`
 	// Hostname 是该入口对象管理的完整域名。
 	Hostname     string    `json:"hostname" gorm:"column:hostname;not null;uniqueIndex;type:varchar(255)"`
+	// BackendType 表示该域名入口走 L4 还是 L7 路由模型。
+	BackendType  string    `json:"backend_type" gorm:"column:backend_type;not null;default:l4;type:varchar(16)"`
 	// SpecJSON 是该域名入口声明态规格的 JSON 文本。
 	SpecJSON     string    `json:"spec_json" gorm:"column:spec_json;not null;default:'';type:text"`
 	// SpecHash 是声明态规格内容的摘要，用于快速判断是否变更。

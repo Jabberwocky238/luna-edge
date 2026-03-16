@@ -189,7 +189,7 @@ func (e *Engine) Subscribe(ctx context.Context, known engine.VersionVector) erro
 }
 
 // ReadCache 返回本地只读缓存。
-func (e *Engine) ReadCache() ingress.BindingLookupReader {
+func (e *Engine) ReadCache() ingress.RouteLookupReader {
 	return e.Cache
 }
 

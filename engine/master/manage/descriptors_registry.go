@@ -78,6 +78,18 @@ func init() {
 		},
 	}
 
+	descriptors["http_routes"] = descriptor{
+		newModel: func() any { return &metadata.HTTPRoute{} },
+		idField:  "id",
+		afterUpsert: func(ctx context.Context, w *Wrapper, model any) error {
+			return publishRoute(ctx, w, model.(*metadata.HTTPRoute).DomainID, "")
+		},
+		afterDelete: func(ctx context.Context, w *Wrapper, model any) error {
+			route := model.(*metadata.HTTPRoute)
+			return publishDeleteForDomain(ctx, w, route.DomainID, nil, route.Hostname)
+		},
+	}
+
 	descriptors["nodes"] = descriptor{
 		newModel: func() any { return &metadata.Node{} },
 		idField:  "id",

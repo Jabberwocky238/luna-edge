@@ -37,6 +37,14 @@ func (p bundleProvider) FetchCertificateBundle(_ context.Context, hostname strin
 	return p.bundles[certificateBundleKey(hostname, revision)], nil
 }
 
+func (p bundleProvider) PutCertificateBundle(_ context.Context, hostname string, revision uint64, bundle *enginepkg.CertificateBundle) error {
+	if p.bundles == nil {
+		return nil
+	}
+	p.bundles[certificateBundleKey(hostname, revision)] = bundle
+	return nil
+}
+
 func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 	t.Parallel()
 

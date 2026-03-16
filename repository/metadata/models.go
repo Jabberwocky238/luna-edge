@@ -13,6 +13,7 @@ func AllModels() []interface{} {
 		&DomainEndpoint{},
 		&DomainEndpointStatus{},
 		&ServiceBinding{},
+		&HTTPRoute{},
 		&DNSRecord{},
 		&CertificateRevision{},
 		&ACMEOrder{},

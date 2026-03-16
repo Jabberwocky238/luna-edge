@@ -2,6 +2,7 @@ package ingress
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -184,19 +185,29 @@ func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind
 		}
 	}
 
-	if binding, ok := e.memory.Get(hostname); ok {
+	if binding, ok := e.memory.Get(hostname, requestPath); ok {
 		return e.resultFromBinding(hostname, binding)
 	}
 
 	if e.slave != nil {
-		binding, err := lookupBindingFromReadOnlyCache(ctx, e.slave, hostname)
-		if err == nil && binding != nil {
-			return e.resultFromReplicaBinding(hostname, binding)
+		route, err := lookupRouteFromReadOnlyCache(ctx, e.slave, hostname)
+		if err == nil && route != nil {
+			return e.resultFromReplicaRoute(hostname, route)
 		}
 		return nil, err
 	}
 
 	if e.repo != nil {
+		route, err := e.repo.GetHTTPRouteByHostname(ctx, hostname, requestPath)
+		if err == nil && route != nil {
+			binding, bindErr := e.repo.GetServiceBindingByDomainID(ctx, route.DomainID)
+			if bindErr == nil && binding != nil {
+				copyBinding := *binding
+				copyBinding.BackendJSON = route.RouteJSON
+				copyBinding.Hostname = route.Hostname
+				return e.resultFromBinding(hostname, binding)
+			}
+		}
 		if binding, err := e.repo.GetServiceBindingByHostname(ctx, hostname); err == nil && binding != nil {
 			return e.resultFromBinding(hostname, binding)
 		}
@@ -205,6 +216,12 @@ func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind
 }
 
 func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBinding) (*RouteResult, error) {
+	if static, ok := parseStaticResponse(binding); ok {
+		return &RouteResult{
+			Found:          true,
+			StaticResponse: static,
+		}, nil
+	}
 	upstreamURL := buildUpstreamURL(string(binding.Protocol), binding.Address, binding.Port)
 	if upstreamURL == "" {
 		return nil, fmt.Errorf("service binding %q has no valid upstream", binding.ID)
@@ -221,31 +238,49 @@ func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBin
 	return result, nil
 }
 
-func (e *Engine) resultFromReplicaBinding(hostname string, binding *enginepkg.BindingRecord) (*RouteResult, error) {
-	upstreamURL := buildUpstreamURL(binding.Protocol, binding.Address, binding.Port)
+func parseStaticResponse(binding *metadata.ServiceBinding) (*StaticResponse, bool) {
+	if binding == nil {
+		return nil, false
+	}
+	var payload struct {
+		Kind             string `json:"kind"`
+		KeyAuthorization string `json:"key_authorization"`
+	}
+	if err := json.Unmarshal([]byte(binding.BackendJSON), &payload); err != nil {
+		return nil, false
+	}
+	if payload.Kind != "acme-http01" {
+		return nil, false
+	}
+	return &StaticResponse{
+		StatusCode:  http.StatusOK,
+		ContentType: "text/plain; charset=utf-8",
+		Body:        []byte(payload.KeyAuthorization),
+	}, true
+}
+
+func (e *Engine) resultFromReplicaRoute(hostname string, route *enginepkg.RouteRecord) (*RouteResult, error) {
+	upstreamURL := buildUpstreamURL(route.UpstreamProtocol, route.UpstreamAddress, route.UpstreamPort)
 	if upstreamURL == "" {
-		return nil, fmt.Errorf("replica binding %q has no valid upstream", binding.ID)
+		return nil, fmt.Errorf("replica route %q has no valid upstream", route.BindingID)
 	}
 	result := &RouteResult{
 		Found: true,
 		Target: ProxyTarget{
 			Hostname:    hostname,
 			UpstreamURL: upstreamURL,
-			Protocol:    binding.Protocol,
+			Protocol:    route.Protocol,
 		},
 	}
 	e.memory.Put(&metadata.ServiceBinding{
-		ID:           binding.ID,
-		DomainID:     binding.DomainID,
-		Hostname:     binding.Hostname,
-		ServiceID:    binding.ServiceID,
-		Namespace:    binding.Namespace,
-		Name:         binding.Name,
-		Address:      binding.Address,
-		Port:         binding.Port,
-		Protocol:     metadata.ServiceBindingRouteKind(binding.Protocol),
-		RouteVersion: binding.RouteVersion,
-		BackendJSON:  binding.BackendJSON,
+		ID:           route.BindingID,
+		DomainID:     route.DomainID,
+		Hostname:     route.Hostname,
+		Address:      route.UpstreamAddress,
+		Port:         route.UpstreamPort,
+		Protocol:     metadata.ServiceBindingRouteKind(route.UpstreamProtocol),
+		RouteVersion: route.RouteVersion,
+		BackendJSON:  route.BackendJSON,
 	})
 	return result, nil
 }

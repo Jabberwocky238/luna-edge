@@ -8,10 +8,14 @@ import (
 
 type SpecRepository interface {
 	GetZoneByName(ctx context.Context, name string) (*metadata.Zone, error)
+	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointStatus(ctx context.Context, domainID string) (*metadata.DomainEndpointStatus, error)
 	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBinding, error)
 	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBinding, error)
+	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBinding, error)
+	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
+	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)
 	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
 	ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error)
 	ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error)
@@ -36,6 +40,7 @@ type Repository interface {
 	DomainEndpoints() GenericRepository[*metadata.DomainEndpoint]
 	DomainEndpointStatuses() GenericRepository[*metadata.DomainEndpointStatus]
 	ServiceBindings() GenericRepository[*metadata.ServiceBinding]
+	HTTPRoutes() GenericRepository[*metadata.HTTPRoute]
 	DNSRecords() GenericRepository[*metadata.DNSRecord]
 	CertificateRevisions() GenericRepository[*metadata.CertificateRevision]
 	ACMEOrders() GenericRepository[*metadata.ACMEOrder]

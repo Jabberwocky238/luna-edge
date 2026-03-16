@@ -27,7 +27,7 @@ type ACMEChallenge struct {
 	// Identifier 是该 challenge 对应的标识，通常是待验证域名。
 	Identifier             string              `json:"identifier" gorm:"column:identifier;not null;index;type:varchar(255)"`
 	// Type 是 challenge 类型，例如 dns-01 或 http-01。
-	Type                   string              `json:"type" gorm:"column:type;not null;type:varchar(32)"`
+	Type                   ChallengeType              `json:"type" gorm:"column:type;not null;type:varchar(32)"`
 	// Token 是 ACME 服务端分配的 challenge token。
 	Token                  string              `json:"token" gorm:"column:token;not null;index;type:varchar(255)"`
 	// KeyAuthorizationDigest 是 key authorization 的摘要或衍生值。

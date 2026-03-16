@@ -223,9 +223,34 @@ func (b *RepositoryProjectionBuilder) BuildRouteRecord(ctx context.Context, doma
 	if domainID == "" {
 		return nil, fmt.Errorf("domain id is required")
 	}
-	binding, err := b.Repo.GetServiceBindingByDomainID(ctx, domainID)
+	domain := &metadata.DomainEndpoint{}
+	if err := b.Repo.DomainEndpoints().GetResourceByField(ctx, domain, "id", domainID); err != nil {
+		return nil, err
+	}
+	bindings, err := b.Repo.ListServiceBindingsByDomainID(ctx, domainID)
 	if err != nil {
 		return nil, err
+	}
+	if len(bindings) == 0 {
+		return nil, fmt.Errorf("service binding not found")
+	}
+	binding := bindings[0]
+	var route *metadata.HTTPRoute
+	if domain.BackendType == "l7" {
+		routes, err := b.Repo.ListHTTPRoutesByDomainID(ctx, domainID)
+		if err != nil {
+			return nil, err
+		}
+		if len(routes) == 0 {
+			return nil, fmt.Errorf("http route not found")
+		}
+		route = &routes[0]
+		for i := range bindings {
+			if bindings[i].ID == route.BindingID {
+				binding = bindings[i]
+				break
+			}
+		}
 	}
 	record := &RouteRecord{
 		DomainID:         domainID,
@@ -237,6 +262,13 @@ func (b *RepositoryProjectionBuilder) BuildRouteRecord(ctx context.Context, doma
 		UpstreamPort:     binding.Port,
 		UpstreamProtocol: string(binding.Protocol),
 		BackendJSON:      binding.BackendJSON,
+	}
+	if route != nil {
+		record.Hostname = route.Hostname
+		record.BindingID = route.BindingID
+		record.RouteVersion = route.RouteVersion
+		record.Listener = route.Listener
+		record.BackendJSON = route.RouteJSON
 	}
 	status, err := b.Repo.GetDomainEndpointStatus(ctx, domainID)
 	if err == nil && status != nil {

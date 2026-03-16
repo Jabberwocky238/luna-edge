@@ -89,6 +89,18 @@ func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if result.StaticResponse != nil {
+		if result.StaticResponse.ContentType != "" {
+			w.Header().Set("Content-Type", result.StaticResponse.ContentType)
+		}
+		status := result.StaticResponse.StatusCode
+		if status == 0 {
+			status = http.StatusOK
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(result.StaticResponse.Body)
+		return
+	}
 
 	targetURL, err := url.Parse(result.Target.UpstreamURL)
 	if err != nil {

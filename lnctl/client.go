@@ -56,6 +56,10 @@ func (c *Client) ServiceBindings() ResourceClient[metadata.ServiceBinding] {
 	return newResourceClient(c, "service_bindings", func(model metadata.ServiceBinding) string { return model.ID })
 }
 
+func (c *Client) HTTPRoutes() ResourceClient[metadata.HTTPRoute] {
+	return newResourceClient(c, "http_routes", func(model metadata.HTTPRoute) string { return model.ID })
+}
+
 func (c *Client) DNSRecords() ResourceClient[metadata.DNSRecord] {
 	return newResourceClient(c, "dns_records", func(model metadata.DNSRecord) string { return model.ID })
 }
@@ -90,6 +94,8 @@ func (c *Client) ManageResource(resource string) (AnyResourceClient, error) {
 		return managedResourceAdapter[metadata.DomainEndpointStatus]{resourceClient: c.DomainEndpointStatuses()}, nil
 	case "service_bindings":
 		return managedResourceAdapter[metadata.ServiceBinding]{resourceClient: c.ServiceBindings()}, nil
+	case "http_routes":
+		return managedResourceAdapter[metadata.HTTPRoute]{resourceClient: c.HTTPRoutes()}, nil
 	case "dns_records":
 		return managedResourceAdapter[metadata.DNSRecord]{resourceClient: c.DNSRecords()}, nil
 	case "certificate_revisions":

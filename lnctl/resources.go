@@ -18,6 +18,7 @@ var supportedResources = []resourceInfo{
 	{name: "dns_records", summary: "manage DNS record rows"},
 	{name: "domain_endpoint_status", summary: "manage domain endpoint status rows"},
 	{name: "domain_endpoints", summary: "manage domain endpoint rows"},
+	{name: "http_routes", summary: "manage HTTP route rows"},
 	{name: "nodes", summary: "manage node rows"},
 	{name: "service_bindings", summary: "manage service binding rows"},
 	{name: "zones", summary: "manage zone rows"},

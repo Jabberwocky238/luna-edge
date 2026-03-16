@@ -42,6 +42,15 @@ type RouteResult struct {
 	Found bool
 	// Target 是匹配到的上游目标。
 	Target ProxyTarget
+	// StaticResponse 表示直接由 ingress 返回静态内容。
+	StaticResponse *StaticResponse
+}
+
+// StaticResponse 表示一个直接回写给客户端的响应。
+type StaticResponse struct {
+	StatusCode  int
+	ContentType string
+	Body        []byte
 }
 
 // K8sResolvedBackend 表示 bridge 对外暴露的一次 Kubernetes 路由解析结果。
@@ -75,5 +84,7 @@ type CertificatePaths struct {
 
 // ServiceBindingReader 定义 ingress 所需的最小仓储读取能力。
 type ServiceBindingReader interface {
+	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)
+	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBinding, error)
 	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBinding, error)
 }

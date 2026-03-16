@@ -135,26 +135,55 @@ func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.Cer
 }
 
 func (s *LocalStore) GetRouteByHostname(ctx context.Context, hostname string) (*engine.RouteRecord, error) {
-	var binding metadata.ServiceBinding
-	if err := s.db.WithContext(ctx).First(&binding, "hostname = ?", hostname).Error; err != nil {
+	var domain metadata.DomainEndpoint
+	if err := s.db.WithContext(ctx).First(&domain, "hostname = ?", hostname).Error; err != nil {
 		return nil, err
+	}
+	var (
+		binding     metadata.ServiceBinding
+		listener    string
+		backendJSON string
+		routeVer    uint64
+	)
+	if domain.BackendType == "l7" {
+		route, err := s.selectHTTPRoute(ctx, hostname, "/")
+		if err != nil {
+			return nil, err
+		}
+		if err := s.db.WithContext(ctx).First(&binding, "id = ?", route.BindingID).Error; err != nil {
+			return nil, err
+		}
+		listener = route.Listener
+		backendJSON = route.RouteJSON
+		routeVer = route.RouteVersion
+	} else {
+		if err := s.db.WithContext(ctx).First(&binding, "domain_id = ?", domain.ID).Error; err != nil {
+			return nil, err
+		}
+		routeVer = binding.RouteVersion
 	}
 	var status metadata.DomainEndpointStatus
 	_ = s.db.WithContext(ctx).First(&status, "domain_endpoint_id = ?", binding.DomainID).Error
 	var attachment metadata.Attachment
 	_ = s.db.WithContext(ctx).Order("updated_at desc").First(&attachment, "domain_id = ?", binding.DomainID).Error
+	if listener == "" {
+		listener = attachment.Listener
+	}
+	if backendJSON == "" {
+		backendJSON = binding.BackendJSON
+	}
 	return &engine.RouteRecord{
 		DomainID:            binding.DomainID,
 		Hostname:            binding.Hostname,
 		BindingID:           binding.ID,
-		RouteVersion:        binding.RouteVersion,
+		RouteVersion:        routeVer,
 		CertificateRevision: status.CertificateRevision,
-		Listener:            attachment.Listener,
+		Listener:            listener,
 		Protocol:            string(binding.Protocol),
 		UpstreamAddress:     binding.Address,
 		UpstreamPort:        binding.Port,
 		UpstreamProtocol:    string(binding.Protocol),
-		BackendJSON:         binding.BackendJSON,
+		BackendJSON:         backendJSON,
 	}, nil
 }
 
@@ -254,10 +283,11 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	if snapshot == nil {
 		return nil
 	}
-		return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, model := range []any{
 			&metadata.Attachment{},
 			&metadata.CertificateRevision{},
+			&metadata.HTTPRoute{},
 			&metadata.ServiceBinding{},
 			&metadata.DomainEndpointStatus{},
 			&metadata.DomainEndpoint{},
@@ -359,14 +389,65 @@ func upsertRoute(tx *gorm.DB, route *engine.RouteRecord) error {
 	if route == nil {
 		return nil
 	}
+	backendType := inferBackendType(route.Protocol)
 	if err := tx.Save(&metadata.DomainEndpoint{
 		ID:           route.DomainID,
-			Hostname:     route.Hostname,
-			StateVersion: route.RouteVersion,
-		}).Error; err != nil {
+		Hostname:     route.Hostname,
+		BackendType:  backendType,
+		StateVersion: route.RouteVersion,
+	}).Error; err != nil {
 		return err
 	}
-	return nil
+	if backendType != "l7" {
+		return nil
+	}
+	var payload struct {
+		Path     string `json:"path"`
+		Priority int32  `json:"priority"`
+	}
+	_ = json.Unmarshal([]byte(route.BackendJSON), &payload)
+	if strings.TrimSpace(payload.Path) == "" {
+		payload.Path = "/"
+	}
+	return tx.Save(&metadata.HTTPRoute{
+		ID:           route.BindingID,
+		DomainID:     route.DomainID,
+		Hostname:     route.Hostname,
+		Path:         payload.Path,
+		Priority:     payload.Priority,
+		BindingID:    route.BindingID,
+		RouteVersion: route.RouteVersion,
+		Listener:     route.Listener,
+		RouteJSON:    route.BackendJSON,
+	}).Error
+}
+
+func (s *LocalStore) selectHTTPRoute(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error) {
+	var routes []metadata.HTTPRoute
+	if err := s.db.WithContext(ctx).
+		Order("priority desc, length(path) desc, id asc").
+		Find(&routes, "hostname = ?", hostname).Error; err != nil {
+		return nil, err
+	}
+	for i := range routes {
+		path := routes[i].Path
+		if path == "" || path == "/" {
+			return &routes[i], nil
+		}
+		if len(requestPath) >= len(path) && requestPath[:len(path)] == path {
+			return &routes[i], nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func inferBackendType(protocol string) string {
+	switch strings.ToLower(strings.TrimSpace(protocol)) {
+	case "http", "https", "grpc":
+		return "l7"
+	default:
+		return "l4"
+	}
 }
 
 func upsertBinding(tx *gorm.DB, binding *engine.BindingRecord) error {

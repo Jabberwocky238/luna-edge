@@ -16,6 +16,13 @@ const (
 	CertificateRevisionStatusRetired CertificateRevisionStatus = "retired"
 )
 
+type ChallengeType string
+
+const (
+	ChallengeTypeDNS01  ChallengeType = "dns-01"
+	ChallengeTypeHTTP01 ChallengeType = "http-01"
+)
+
 // CertificateRevision 表示某个域名的一个证书版本元数据。
 type CertificateRevision struct {
 	// ID 是证书版本对象的唯一标识。
@@ -33,7 +40,7 @@ type CertificateRevision struct {
 	// Provider 是签发该证书的提供方。
 	Provider string `json:"provider" gorm:"column:provider;not null;default:'';type:varchar(128)"`
 	// ChallengeType 是申请该证书时使用的 challenge 类型。
-	ChallengeType string `json:"challenge_type" gorm:"column:challenge_type;not null;default:'';type:varchar(32)"`
+	ChallengeType ChallengeType `json:"challenge_type" gorm:"column:challenge_type;not null;default:'';type:varchar(32)"`
 	// ArtifactBucket 是对象存储中保存该证书的 bucket 名称。
 	ArtifactBucket string `json:"artifact_bucket" gorm:"column:artifact_bucket;not null;default:'';type:varchar(255)"`
 	// ArtifactPrefix 是对象存储中保存该证书的前缀路径。

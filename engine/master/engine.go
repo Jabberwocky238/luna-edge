@@ -46,6 +46,7 @@ type Engine struct {
 
 type CertificateBundleProvider interface {
 	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*enginepkg.CertificateBundle, error)
+	PutCertificateBundle(ctx context.Context, hostname string, revision uint64, bundle *enginepkg.CertificateBundle) error
 }
 
 func New(cfg Config) (*Engine, error) {
@@ -161,22 +162,96 @@ func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.S
 	if err != nil {
 		return nil, err
 	}
+	seenRoutes := map[string]struct{}{}
+	seenBindings := map[string]struct{}{}
+	seenCerts := map[string]struct{}{}
 	for _, attachment := range attachments {
 		if assignment, err := e.Builder.BuildAssignmentRecord(ctx, &attachment); err == nil && assignment != nil {
 			snapshot.Assignments = append(snapshot.Assignments, *assignment)
 			accumulateAssignmentVersions(&snapshot.Versions, *assignment)
 		}
-		if route, err := e.Builder.BuildRouteRecord(ctx, attachment.DomainID); err == nil && route != nil {
-			snapshot.Routes = append(snapshot.Routes, *route)
-			accumulateRouteVersions(&snapshot.Versions, *route)
+		domain, err := e.Repo.GetDomainEndpointByID(ctx, attachment.DomainID)
+		if err == nil && domain != nil && domain.BackendType == "l7" {
+			routes, routeErr := e.Repo.ListHTTPRoutesByDomainID(ctx, attachment.DomainID)
+			if routeErr == nil {
+				for i := range routes {
+					if _, ok := seenRoutes[routes[i].ID]; ok {
+						continue
+					}
+					binding, bindErr := e.Repo.GetServiceBindingByDomainID(ctx, routes[i].DomainID)
+					if bindErr == nil && binding != nil && routes[i].BindingID != "" && routes[i].BindingID != binding.ID {
+						if bindings, listErr := e.Repo.ListServiceBindingsByDomainID(ctx, routes[i].DomainID); listErr == nil {
+							for j := range bindings {
+								if bindings[j].ID == routes[i].BindingID {
+									binding = &bindings[j]
+									break
+								}
+							}
+						}
+					}
+					if binding == nil {
+						continue
+					}
+					route := enginepkg.RouteRecord{
+						DomainID:         routes[i].DomainID,
+						Hostname:         routes[i].Hostname,
+						BindingID:        routes[i].BindingID,
+						RouteVersion:     routes[i].RouteVersion,
+						Listener:         routes[i].Listener,
+						Protocol:         string(binding.Protocol),
+						UpstreamAddress:  binding.Address,
+						UpstreamPort:     binding.Port,
+						UpstreamProtocol: string(binding.Protocol),
+						BackendJSON:      routes[i].RouteJSON,
+					}
+					snapshot.Routes = append(snapshot.Routes, route)
+					seenRoutes[routes[i].ID] = struct{}{}
+					accumulateRouteVersions(&snapshot.Versions, route)
+				}
+			}
+		} else if route, err := e.Builder.BuildRouteRecord(ctx, attachment.DomainID); err == nil && route != nil {
+			if _, ok := seenRoutes[route.BindingID]; !ok {
+				snapshot.Routes = append(snapshot.Routes, *route)
+				seenRoutes[route.BindingID] = struct{}{}
+				accumulateRouteVersions(&snapshot.Versions, *route)
+			}
 		}
-		if binding, err := e.Builder.BuildBindingRecord(ctx, attachment.DomainID); err == nil && binding != nil {
-			snapshot.Bindings = append(snapshot.Bindings, *binding)
-			accumulateBindingVersions(&snapshot.Versions, *binding)
+		if bindings, err := e.Repo.ListServiceBindingsByDomainID(ctx, attachment.DomainID); err == nil {
+			for i := range bindings {
+				if _, ok := seenBindings[bindings[i].ID]; ok {
+					continue
+				}
+				binding := enginepkg.BindingRecord{
+					ID:           bindings[i].ID,
+					DomainID:     bindings[i].DomainID,
+					Hostname:     bindings[i].Hostname,
+					ServiceID:    bindings[i].ServiceID,
+					Namespace:    bindings[i].Namespace,
+					Name:         bindings[i].Name,
+					Address:      bindings[i].Address,
+					Port:         bindings[i].Port,
+					Protocol:     string(bindings[i].Protocol),
+					RouteVersion: bindings[i].RouteVersion,
+					BackendJSON:  bindings[i].BackendJSON,
+				}
+				snapshot.Bindings = append(snapshot.Bindings, binding)
+				seenBindings[bindings[i].ID] = struct{}{}
+				accumulateBindingVersions(&snapshot.Versions, binding)
+			}
+		} else if binding, err := e.Builder.BuildBindingRecord(ctx, attachment.DomainID); err == nil && binding != nil {
+			if _, ok := seenBindings[binding.ID]; !ok {
+				snapshot.Bindings = append(snapshot.Bindings, *binding)
+				seenBindings[binding.ID] = struct{}{}
+				accumulateBindingVersions(&snapshot.Versions, *binding)
+			}
 		}
 		if cert, err := e.Builder.BuildCertificateRecord(ctx, attachment.DomainID, attachment.DesiredCertificateRevision); err == nil && cert != nil {
-			snapshot.Certificates = append(snapshot.Certificates, *cert)
-			accumulateCertificateVersions(&snapshot.Versions, *cert)
+			key := fmt.Sprintf("%s/%d", cert.DomainID, cert.Revision)
+			if _, ok := seenCerts[key]; !ok {
+				snapshot.Certificates = append(snapshot.Certificates, *cert)
+				seenCerts[key] = struct{}{}
+				accumulateCertificateVersions(&snapshot.Versions, *cert)
+			}
 		}
 	}
 	return snapshot, nil

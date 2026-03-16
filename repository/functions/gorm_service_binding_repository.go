@@ -29,3 +29,9 @@ func (r *GormRepository) GetServiceBindingByHostname(ctx context.Context, hostna
 	}
 	return binding, nil
 }
+
+func (r *GormRepository) ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBinding, error) {
+	var bindings []metadata.ServiceBinding
+	err := r.db.WithContext(ctx).Order("id asc").Find(&bindings, "domain_id = ?", domainID).Error
+	return bindings, err
+}
