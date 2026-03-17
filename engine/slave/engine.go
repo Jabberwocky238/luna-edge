@@ -78,8 +78,8 @@ type Engine struct {
 	healthListener net.Listener
 }
 
-type CertificateSnapshotSyncer interface {
-	SyncSnapshotCertificates(ctx context.Context, snapshot *engine.Snapshot) error
+type CertificateSyncer interface {
+	SyncChangelogCertificates(ctx context.Context, changelog *engine.ChangeNotification) error
 }
 
 type CertificateRootProvider interface {
@@ -475,12 +475,14 @@ func (e *Engine) handleHealthz(w http.ResponseWriter, r *http.Request) {
 
 func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
 	log.Printf("slave: refresh runtime begin snapshot_record_id=%d dns=%d domains=%d", snapshot.SnapshotRecordID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-	if syncer, ok := e.Applier.(CertificateSnapshotSyncer); ok {
-		if err := syncer.SyncSnapshotCertificates(ctx, snapshot); err != nil {
-			log.Printf("slave: sync snapshot certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
-			return err
+	if syncer, ok := e.Applier.(CertificateSyncer); ok {
+		for _, changelog := range changelogsFromSnapshot(snapshot) {
+			if err := syncer.SyncChangelogCertificates(ctx, changelog); err != nil {
+				log.Printf("slave: sync changelog certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
+				return err
+			}
 		}
-		log.Printf("slave: sync snapshot certificates done snapshot_record_id=%d", snapshot.SnapshotRecordID)
+		log.Printf("slave: sync changelog certificates done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	}
 	if e.DNS != nil {
 		if err := e.restoreDNSRuntime(context.Background()); err != nil {
@@ -495,6 +497,32 @@ func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.
 	}
 	log.Printf("slave: refresh runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	return nil
+}
+
+func changelogsFromSnapshot(snapshot *engine.Snapshot) []*engine.ChangeNotification {
+	if snapshot == nil {
+		return nil
+	}
+	out := make([]*engine.ChangeNotification, 0, len(snapshot.DNSRecords)+len(snapshot.DomainEntries))
+	for i := range snapshot.DNSRecords {
+		record := snapshot.DNSRecords[i]
+		out = append(out, &engine.ChangeNotification{
+			NodeID:           snapshot.NodeID,
+			CreatedAt:        snapshot.CreatedAt,
+			SnapshotRecordID: snapshot.SnapshotRecordID,
+			DNSRecord:        &record,
+		})
+	}
+	for i := range snapshot.DomainEntries {
+		entry := snapshot.DomainEntries[i]
+		out = append(out, &engine.ChangeNotification{
+			NodeID:           snapshot.NodeID,
+			CreatedAt:        snapshot.CreatedAt,
+			SnapshotRecordID: snapshot.SnapshotRecordID,
+			DomainEntry:      &entry,
+		})
+	}
+	return out
 }
 
 func (e *Engine) restoreDNSRuntime(ctx context.Context) error {

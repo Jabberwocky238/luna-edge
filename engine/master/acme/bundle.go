@@ -1,6 +1,7 @@
 package acme
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
@@ -17,7 +18,8 @@ func buildBundle(resource *certificate.Resource, revision uint64) (*enginepkg.Ce
 	if resource == nil {
 		return nil, time.Time{}, time.Time{}, "", "", fmt.Errorf("certificate resource is nil")
 	}
-	block, _ := pem.Decode(resource.Certificate)
+	fullChain := certificateFullChain(resource.Certificate, resource.IssuerCertificate)
+	block, _ := pem.Decode(fullChain)
 	if block == nil {
 		return nil, time.Time{}, time.Time{}, "", "", fmt.Errorf("decode certificate pem")
 	}
@@ -25,7 +27,7 @@ func buildBundle(resource *certificate.Resource, revision uint64) (*enginepkg.Ce
 	if err != nil {
 		return nil, time.Time{}, time.Time{}, "", "", err
 	}
-	crtHash := sha256.Sum256(resource.Certificate)
+	crtHash := sha256.Sum256(fullChain)
 	keyHash := sha256.Sum256(resource.PrivateKey)
 	metadataJSON, _ := json.Marshal(map[string]any{
 		"hostname":   resource.Domain,
@@ -36,8 +38,25 @@ func buildBundle(resource *certificate.Resource, revision uint64) (*enginepkg.Ce
 	return &enginepkg.CertificateBundle{
 		Hostname:     resource.Domain,
 		Revision:     revision,
-		TLSCrt:       resource.Certificate,
+		TLSCrt:       fullChain,
 		TLSKey:       resource.PrivateKey,
 		MetadataJSON: metadataJSON,
 	}, cert.NotBefore, cert.NotAfter, hex.EncodeToString(crtHash[:]), hex.EncodeToString(keyHash[:]), nil
+}
+
+func certificateFullChain(certificatePEM, issuerPEM []byte) []byte {
+	certificatePEM = bytes.TrimSpace(certificatePEM)
+	issuerPEM = bytes.TrimSpace(issuerPEM)
+	if len(certificatePEM) == 0 {
+		return nil
+	}
+	if len(issuerPEM) == 0 || bytes.Contains(certificatePEM, issuerPEM) {
+		return append(append([]byte(nil), certificatePEM...), '\n')
+	}
+	fullChain := make([]byte, 0, len(certificatePEM)+1+len(issuerPEM)+1)
+	fullChain = append(fullChain, certificatePEM...)
+	fullChain = append(fullChain, '\n')
+	fullChain = append(fullChain, issuerPEM...)
+	fullChain = append(fullChain, '\n')
+	return fullChain
 }
