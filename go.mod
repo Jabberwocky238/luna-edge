@@ -3,6 +3,7 @@ module github.com/jabberwocky238/luna-edge
 go 1.25
 
 require (
+	github.com/go-acme/lego/v4 v4.15.0
 	github.com/golang/protobuf v1.5.4
 	github.com/miekg/dns v1.1.63
 	github.com/minio/minio-go/v7 v7.0.99
@@ -16,6 +17,7 @@ require (
 	k8s.io/api v0.33.4
 	k8s.io/apimachinery v0.33.4
 	k8s.io/client-go v0.33.4
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
@@ -24,7 +26,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
-	github.com/go-acme/lego/v4 v4.15.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.1 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -79,5 +80,4 @@ require (
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )
