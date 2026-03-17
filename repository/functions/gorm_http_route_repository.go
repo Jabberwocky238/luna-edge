@@ -13,14 +13,16 @@ func (r *GormRepository) HTTPRoutes() GenericRepository[*metadata.HTTPRoute] {
 func (r *GormRepository) ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error) {
 	var routes []metadata.HTTPRoute
 	err := r.db.WithContext(ctx).
+		Where("deleted = ?", false).
 		Order("priority desc, length(path) desc, id asc").
-		Find(&routes, "domain_id = ?", domainID).Error
+		Find(&routes, "domain_endpoint_id = ?", domainID).Error
 	return routes, err
 }
 
 func (r *GormRepository) GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error) {
 	var routes []metadata.HTTPRoute
 	if err := r.db.WithContext(ctx).
+		Where("deleted = ?", false).
 		Order("priority desc, length(path) desc, id asc").
 		Find(&routes, "hostname = ?", hostname).Error; err != nil {
 		return nil, err

@@ -11,7 +11,11 @@ func (r *GormRepository) DNSRecords() GenericRepository[*metadata.DNSRecord] {
 }
 
 func (r *GormRepository) ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error {
-	if err := r.db.WithContext(ctx).Where("domain_id = ?", domainID).Delete(&metadata.DNSRecord{}).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Model(&metadata.DNSRecord{}).
+		Where("deleted = ?", false).
+		Where("domain_endpoint_id = ?", domainID).
+		Update("deleted", true).Error; err != nil {
 		return err
 	}
 	if len(records) == 0 {
@@ -23,6 +27,7 @@ func (r *GormRepository) ReplaceDNSRecords(ctx context.Context, domainID string,
 func (r *GormRepository) ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error) {
 	var records []metadata.DNSRecord
 	err := r.db.WithContext(ctx).
+		Where("deleted = ?", false).
 		Order("fqdn asc, record_type asc, id asc").
 		Find(&records, "fqdn = ? AND record_type = ? AND enabled = ?", fqdn, recordType, true).Error
 	return records, err
@@ -30,6 +35,9 @@ func (r *GormRepository) ListDNSRecordsByQuestion(ctx context.Context, fqdn, rec
 
 func (r *GormRepository) ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error) {
 	var records []metadata.DNSRecord
-	err := r.db.WithContext(ctx).Order("fqdn asc, record_type asc").Find(&records, "domain_id = ?", domainID).Error
+	err := r.db.WithContext(ctx).
+		Where("deleted = ?", false).
+		Order("fqdn asc, record_type asc").
+		Find(&records, "domain_endpoint_id = ?", domainID).Error
 	return records, err
 }

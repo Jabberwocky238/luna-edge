@@ -7,13 +7,11 @@ import (
 )
 
 type SpecRepository interface {
-	GetZoneByName(ctx context.Context, name string) (*metadata.Zone, error)
 	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
-	GetDomainEndpointStatus(ctx context.Context, domainID string) (*metadata.DomainEndpointStatus, error)
-	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBinding, error)
-	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBinding, error)
-	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBinding, error)
+	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBackendRef, error)
+	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBackendRef, error)
+	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
 	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
 	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)
 	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
@@ -22,9 +20,6 @@ type SpecRepository interface {
 	GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error)
 	GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error)
 	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
-	ListACMEChallengesByOrderID(ctx context.Context, orderID string) ([]metadata.ACMEChallenge, error)
-	ListAttachmentsByNodeID(ctx context.Context, nodeID string) ([]metadata.Attachment, error)
-	ListAttachmentsByDomainID(ctx context.Context, domainID string) ([]metadata.Attachment, error)
 }
 
 type GenericRepository[M any] interface {
@@ -36,15 +31,9 @@ type GenericRepository[M any] interface {
 
 type Repository interface {
 	SpecRepository
-	Zones() GenericRepository[*metadata.Zone]
 	DomainEndpoints() GenericRepository[*metadata.DomainEndpoint]
-	DomainEndpointStatuses() GenericRepository[*metadata.DomainEndpointStatus]
-	ServiceBindings() GenericRepository[*metadata.ServiceBinding]
+	ServiceBindingRefs() GenericRepository[*metadata.ServiceBackendRef]
 	HTTPRoutes() GenericRepository[*metadata.HTTPRoute]
 	DNSRecords() GenericRepository[*metadata.DNSRecord]
 	CertificateRevisions() GenericRepository[*metadata.CertificateRevision]
-	ACMEOrders() GenericRepository[*metadata.ACMEOrder]
-	ACMEChallenges() GenericRepository[*metadata.ACMEChallenge]
-	Nodes() GenericRepository[*metadata.Node]
-	Attachments() GenericRepository[*metadata.Attachment]
 }

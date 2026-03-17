@@ -12,11 +12,11 @@ type gormGenericRepository[M any] struct {
 }
 
 func (r *gormGenericRepository[M]) ListResource(ctx context.Context, out any, orderBy string) error {
-	return r.db.WithContext(ctx).Order(orderBy).Find(out).Error
+	return r.db.WithContext(ctx).Where("deleted = ?", false).Order(orderBy).Find(out).Error
 }
 
 func (r *gormGenericRepository[M]) GetResourceByField(ctx context.Context, out M, field string, value any) error {
-	return r.db.WithContext(ctx).First(out, field+" = ?", value).Error
+	return r.db.WithContext(ctx).Where("deleted = ?", false).First(out, field+" = ?", value).Error
 }
 
 func (r *gormGenericRepository[M]) UpsertResource(ctx context.Context, model M) error {
@@ -24,5 +24,5 @@ func (r *gormGenericRepository[M]) UpsertResource(ctx context.Context, model M) 
 }
 
 func (r *gormGenericRepository[M]) DeleteResourceByField(ctx context.Context, model M, field string, value any) error {
-	return r.db.WithContext(ctx).Delete(model, field+" = ?", value).Error
+	return r.db.WithContext(ctx).Model(model).Where("deleted = ?", false).Where(field+" = ?", value).Update("deleted", true).Error
 }

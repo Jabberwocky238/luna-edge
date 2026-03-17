@@ -13,6 +13,14 @@ const (
 	DNSTypeCAA   DNSRecordType = "CAA"
 )
 
+type RoutingClass string
+
+const (
+	RoutingClassFirst RoutingClass = "first"
+	RoutingClassGeo   RoutingClass = "geo"
+	RoutingClassLB    RoutingClass = "lb"
+)
+
 // DNSRecord 表示供 DNS 数据面直接查询的一条物化记录。
 type DNSRecord struct {
 	Shared
@@ -23,7 +31,7 @@ type DNSRecord struct {
 	// RecordType 是该记录类型，例如 A、AAAA、TXT。
 	RecordType DNSRecordType `json:"record_type" gorm:"column:record_type;not null;index:idx_dns_lookup,priority:2;type:varchar(32)"`
 	// RoutingClass 表示该记录使用的路由类别，例如 simple 或 geo。
-	RoutingClass string `json:"routing_class" gorm:"column:routing_class;not null;default:simple;type:varchar(32)"`
+	RoutingClass RoutingClass `json:"routing_class" gorm:"column:routing_class;not null;default:simple;type:varchar(32)"`
 	// TTLSeconds 是该记录的 TTL 秒数。
 	TTLSeconds uint32 `json:"ttl_seconds" gorm:"column:ttl_seconds;not null;default:60"`
 	// ValuesJSON 是该记录值集合的 JSON 文本。
