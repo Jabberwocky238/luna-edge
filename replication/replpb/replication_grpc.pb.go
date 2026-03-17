@@ -28,7 +28,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ReplicationServiceClient interface {
-	GetSnapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (*Snapshot, error)
+	GetSnapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Snapshot], error)
 	Subscribe(ctx context.Context, in *SubscriptionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChangeNotification], error)
 	FetchCertificateBundle(ctx context.Context, in *CertificateBundleRequest, opts ...grpc.CallOption) (*CertificateBundleResponse, error)
 }
@@ -41,19 +41,28 @@ func NewReplicationServiceClient(cc grpc.ClientConnInterface) ReplicationService
 	return &replicationServiceClient{cc}
 }
 
-func (c *replicationServiceClient) GetSnapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (*Snapshot, error) {
+func (c *replicationServiceClient) GetSnapshot(ctx context.Context, in *SnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Snapshot], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Snapshot)
-	err := c.cc.Invoke(ctx, ReplicationService_GetSnapshot_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ReplicationService_ServiceDesc.Streams[0], ReplicationService_GetSnapshot_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[SnapshotRequest, Snapshot]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ReplicationService_GetSnapshotClient = grpc.ServerStreamingClient[Snapshot]
 
 func (c *replicationServiceClient) Subscribe(ctx context.Context, in *SubscriptionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChangeNotification], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ReplicationService_ServiceDesc.Streams[0], ReplicationService_Subscribe_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ReplicationService_ServiceDesc.Streams[1], ReplicationService_Subscribe_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +93,7 @@ func (c *replicationServiceClient) FetchCertificateBundle(ctx context.Context, i
 // All implementations must embed UnimplementedReplicationServiceServer
 // for forward compatibility.
 type ReplicationServiceServer interface {
-	GetSnapshot(context.Context, *SnapshotRequest) (*Snapshot, error)
+	GetSnapshot(*SnapshotRequest, grpc.ServerStreamingServer[Snapshot]) error
 	Subscribe(*SubscriptionRequest, grpc.ServerStreamingServer[ChangeNotification]) error
 	FetchCertificateBundle(context.Context, *CertificateBundleRequest) (*CertificateBundleResponse, error)
 	mustEmbedUnimplementedReplicationServiceServer()
@@ -97,8 +106,8 @@ type ReplicationServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedReplicationServiceServer struct{}
 
-func (UnimplementedReplicationServiceServer) GetSnapshot(context.Context, *SnapshotRequest) (*Snapshot, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetSnapshot not implemented")
+func (UnimplementedReplicationServiceServer) GetSnapshot(*SnapshotRequest, grpc.ServerStreamingServer[Snapshot]) error {
+	return status.Error(codes.Unimplemented, "method GetSnapshot not implemented")
 }
 func (UnimplementedReplicationServiceServer) Subscribe(*SubscriptionRequest, grpc.ServerStreamingServer[ChangeNotification]) error {
 	return status.Error(codes.Unimplemented, "method Subscribe not implemented")
@@ -127,23 +136,16 @@ func RegisterReplicationServiceServer(s grpc.ServiceRegistrar, srv ReplicationSe
 	s.RegisterService(&ReplicationService_ServiceDesc, srv)
 }
 
-func _ReplicationService_GetSnapshot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SnapshotRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _ReplicationService_GetSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SnapshotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(ReplicationServiceServer).GetSnapshot(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: ReplicationService_GetSnapshot_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReplicationServiceServer).GetSnapshot(ctx, req.(*SnapshotRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(ReplicationServiceServer).GetSnapshot(m, &grpc.GenericServerStream[SnapshotRequest, Snapshot]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ReplicationService_GetSnapshotServer = grpc.ServerStreamingServer[Snapshot]
 
 func _ReplicationService_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(SubscriptionRequest)
@@ -182,15 +184,16 @@ var ReplicationService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ReplicationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetSnapshot",
-			Handler:    _ReplicationService_GetSnapshot_Handler,
-		},
-		{
 			MethodName: "FetchCertificateBundle",
 			Handler:    _ReplicationService_FetchCertificateBundle_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetSnapshot",
+			Handler:       _ReplicationService_GetSnapshot_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Subscribe",
 			Handler:       _ReplicationService_Subscribe_Handler,

@@ -12,6 +12,7 @@ message Snapshot {
   repeated DNSRecord dns_records = 3;
   repeated DomainEntryProjection domain_entries = 4;
   uint64 snapshot_record_id = 5;
+  bool last = 6;
 }
 
 message SnapshotRequest {
@@ -26,6 +27,11 @@ message SubscriptionRequest {
 message ChangeNotification {
   string node_id = 1;
   google.protobuf.Timestamp created_at = 2;
+  uint64 snapshot_record_id = 3;
+  oneof entry {
+    DNSRecord dns_record = 4;
+    DomainEntryProjection domain_entry = 5;
+  }
 }
 
 message CertificateBundleRequest {
@@ -93,7 +99,7 @@ message DomainEntryProjection {
 }
 
 service ReplicationService {
-  rpc GetSnapshot(SnapshotRequest) returns (Snapshot);
+  rpc GetSnapshot(SnapshotRequest) returns (stream Snapshot);
   rpc Subscribe(SubscriptionRequest) returns (stream ChangeNotification);
   rpc FetchCertificateBundle(CertificateBundleRequest) returns (CertificateBundleResponse);
 }

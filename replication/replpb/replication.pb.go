@@ -29,6 +29,7 @@ type Snapshot struct {
 	DnsRecords       []*DNSRecord             `protobuf:"bytes,3,rep,name=dns_records,json=dnsRecords,proto3" json:"dns_records,omitempty"`
 	DomainEntries    []*DomainEntryProjection `protobuf:"bytes,4,rep,name=domain_entries,json=domainEntries,proto3" json:"domain_entries,omitempty"`
 	SnapshotRecordId uint64                   `protobuf:"varint,5,opt,name=snapshot_record_id,json=snapshotRecordId,proto3" json:"snapshot_record_id,omitempty"`
+	Last             bool                     `protobuf:"varint,6,opt,name=last,proto3" json:"last,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -96,6 +97,13 @@ func (x *Snapshot) GetSnapshotRecordId() uint64 {
 		return x.SnapshotRecordId
 	}
 	return 0
+}
+
+func (x *Snapshot) GetLast() bool {
+	if x != nil {
+		return x.Last
+	}
+	return false
 }
 
 type SnapshotRequest struct {
@@ -195,9 +203,15 @@ func (x *SubscriptionRequest) GetNodeId() string {
 }
 
 type ChangeNotification struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	CreatedAt     *timestamp.Timestamp   `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NodeId           string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	CreatedAt        *timestamp.Timestamp   `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	SnapshotRecordId uint64                 `protobuf:"varint,3,opt,name=snapshot_record_id,json=snapshotRecordId,proto3" json:"snapshot_record_id,omitempty"`
+	// Types that are valid to be assigned to Entry:
+	//
+	//	*ChangeNotification_DnsRecord
+	//	*ChangeNotification_DomainEntry
+	Entry         isChangeNotification_Entry `protobuf_oneof:"entry"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -245,6 +259,54 @@ func (x *ChangeNotification) GetCreatedAt() *timestamp.Timestamp {
 	}
 	return nil
 }
+
+func (x *ChangeNotification) GetSnapshotRecordId() uint64 {
+	if x != nil {
+		return x.SnapshotRecordId
+	}
+	return 0
+}
+
+func (x *ChangeNotification) GetEntry() isChangeNotification_Entry {
+	if x != nil {
+		return x.Entry
+	}
+	return nil
+}
+
+func (x *ChangeNotification) GetDnsRecord() *DNSRecord {
+	if x != nil {
+		if x, ok := x.Entry.(*ChangeNotification_DnsRecord); ok {
+			return x.DnsRecord
+		}
+	}
+	return nil
+}
+
+func (x *ChangeNotification) GetDomainEntry() *DomainEntryProjection {
+	if x != nil {
+		if x, ok := x.Entry.(*ChangeNotification_DomainEntry); ok {
+			return x.DomainEntry
+		}
+	}
+	return nil
+}
+
+type isChangeNotification_Entry interface {
+	isChangeNotification_Entry()
+}
+
+type ChangeNotification_DnsRecord struct {
+	DnsRecord *DNSRecord `protobuf:"bytes,4,opt,name=dns_record,json=dnsRecord,proto3,oneof"`
+}
+
+type ChangeNotification_DomainEntry struct {
+	DomainEntry *DomainEntryProjection `protobuf:"bytes,5,opt,name=domain_entry,json=domainEntry,proto3,oneof"`
+}
+
+func (*ChangeNotification_DnsRecord) isChangeNotification_Entry() {}
+
+func (*ChangeNotification_DomainEntry) isChangeNotification_Entry() {}
 
 type CertificateBundleRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -846,7 +908,7 @@ var File_replication_proto protoreflect.FileDescriptor
 
 const file_replication_proto_rawDesc = "" +
 	"\n" +
-	"\x11replication.proto\x12\x13luna.replication.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa0\x02\n" +
+	"\x11replication.proto\x12\x13luna.replication.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb4\x02\n" +
 	"\bSnapshot\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x129\n" +
 	"\n" +
@@ -854,16 +916,22 @@ const file_replication_proto_rawDesc = "" +
 	"\vdns_records\x18\x03 \x03(\v2\x1e.luna.replication.v1.DNSRecordR\n" +
 	"dnsRecords\x12Q\n" +
 	"\x0edomain_entries\x18\x04 \x03(\v2*.luna.replication.v1.DomainEntryProjectionR\rdomainEntries\x12,\n" +
-	"\x12snapshot_record_id\x18\x05 \x01(\x04R\x10snapshotRecordId\"X\n" +
+	"\x12snapshot_record_id\x18\x05 \x01(\x04R\x10snapshotRecordId\x12\x12\n" +
+	"\x04last\x18\x06 \x01(\bR\x04last\"X\n" +
 	"\x0fSnapshotRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12,\n" +
 	"\x12snapshot_record_id\x18\x02 \x01(\x04R\x10snapshotRecordId\".\n" +
 	"\x13SubscriptionRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"h\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\xb1\x02\n" +
 	"\x12ChangeNotification\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x129\n" +
 	"\n" +
-	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"R\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12,\n" +
+	"\x12snapshot_record_id\x18\x03 \x01(\x04R\x10snapshotRecordId\x12?\n" +
+	"\n" +
+	"dns_record\x18\x04 \x01(\v2\x1e.luna.replication.v1.DNSRecordH\x00R\tdnsRecord\x12O\n" +
+	"\fdomain_entry\x18\x05 \x01(\v2*.luna.replication.v1.DomainEntryProjectionH\x00R\vdomainEntryB\a\n" +
+	"\x05entry\"R\n" +
 	"\x18CertificateBundleRequest\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\"\xaa\x01\n" +
@@ -923,9 +991,9 @@ const file_replication_proto_rawDesc = "" +
 	"\x04cert\x18\x04 \x01(\v2(.luna.replication.v1.CertificateRevisionR\x04cert\x12I\n" +
 	"\vhttp_routes\x18\x05 \x03(\v2(.luna.replication.v1.HTTPRouteProjectionR\n" +
 	"httpRoutes\x12T\n" +
-	"\x12binded_backend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\x10bindedBackendRef2\xc3\x02\n" +
-	"\x12ReplicationService\x12R\n" +
-	"\vGetSnapshot\x12$.luna.replication.v1.SnapshotRequest\x1a\x1d.luna.replication.v1.Snapshot\x12`\n" +
+	"\x12binded_backend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\x10bindedBackendRef2\xc5\x02\n" +
+	"\x12ReplicationService\x12T\n" +
+	"\vGetSnapshot\x12$.luna.replication.v1.SnapshotRequest\x1a\x1d.luna.replication.v1.Snapshot0\x01\x12`\n" +
 	"\tSubscribe\x12(.luna.replication.v1.SubscriptionRequest\x1a'.luna.replication.v1.ChangeNotification0\x01\x12w\n" +
 	"\x16FetchCertificateBundle\x12-.luna.replication.v1.CertificateBundleRequest\x1a..luna.replication.v1.CertificateBundleResponseB?Z=github.com/jabberwocky238/luna-edge/replication/replpb;replpbb\x06proto3"
 
@@ -961,29 +1029,35 @@ var file_replication_proto_depIdxs = []int32{
 	6,  // 1: luna.replication.v1.Snapshot.dns_records:type_name -> luna.replication.v1.DNSRecord
 	10, // 2: luna.replication.v1.Snapshot.domain_entries:type_name -> luna.replication.v1.DomainEntryProjection
 	11, // 3: luna.replication.v1.ChangeNotification.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 4: luna.replication.v1.HTTPRouteProjection.backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
-	11, // 5: luna.replication.v1.CertificateRevision.not_before:type_name -> google.protobuf.Timestamp
-	11, // 6: luna.replication.v1.CertificateRevision.not_after:type_name -> google.protobuf.Timestamp
-	9,  // 7: luna.replication.v1.DomainEntryProjection.cert:type_name -> luna.replication.v1.CertificateRevision
-	8,  // 8: luna.replication.v1.DomainEntryProjection.http_routes:type_name -> luna.replication.v1.HTTPRouteProjection
-	7,  // 9: luna.replication.v1.DomainEntryProjection.binded_backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
-	1,  // 10: luna.replication.v1.ReplicationService.GetSnapshot:input_type -> luna.replication.v1.SnapshotRequest
-	2,  // 11: luna.replication.v1.ReplicationService.Subscribe:input_type -> luna.replication.v1.SubscriptionRequest
-	4,  // 12: luna.replication.v1.ReplicationService.FetchCertificateBundle:input_type -> luna.replication.v1.CertificateBundleRequest
-	0,  // 13: luna.replication.v1.ReplicationService.GetSnapshot:output_type -> luna.replication.v1.Snapshot
-	3,  // 14: luna.replication.v1.ReplicationService.Subscribe:output_type -> luna.replication.v1.ChangeNotification
-	5,  // 15: luna.replication.v1.ReplicationService.FetchCertificateBundle:output_type -> luna.replication.v1.CertificateBundleResponse
-	13, // [13:16] is the sub-list for method output_type
-	10, // [10:13] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	6,  // 4: luna.replication.v1.ChangeNotification.dns_record:type_name -> luna.replication.v1.DNSRecord
+	10, // 5: luna.replication.v1.ChangeNotification.domain_entry:type_name -> luna.replication.v1.DomainEntryProjection
+	7,  // 6: luna.replication.v1.HTTPRouteProjection.backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
+	11, // 7: luna.replication.v1.CertificateRevision.not_before:type_name -> google.protobuf.Timestamp
+	11, // 8: luna.replication.v1.CertificateRevision.not_after:type_name -> google.protobuf.Timestamp
+	9,  // 9: luna.replication.v1.DomainEntryProjection.cert:type_name -> luna.replication.v1.CertificateRevision
+	8,  // 10: luna.replication.v1.DomainEntryProjection.http_routes:type_name -> luna.replication.v1.HTTPRouteProjection
+	7,  // 11: luna.replication.v1.DomainEntryProjection.binded_backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
+	1,  // 12: luna.replication.v1.ReplicationService.GetSnapshot:input_type -> luna.replication.v1.SnapshotRequest
+	2,  // 13: luna.replication.v1.ReplicationService.Subscribe:input_type -> luna.replication.v1.SubscriptionRequest
+	4,  // 14: luna.replication.v1.ReplicationService.FetchCertificateBundle:input_type -> luna.replication.v1.CertificateBundleRequest
+	0,  // 15: luna.replication.v1.ReplicationService.GetSnapshot:output_type -> luna.replication.v1.Snapshot
+	3,  // 16: luna.replication.v1.ReplicationService.Subscribe:output_type -> luna.replication.v1.ChangeNotification
+	5,  // 17: luna.replication.v1.ReplicationService.FetchCertificateBundle:output_type -> luna.replication.v1.CertificateBundleResponse
+	15, // [15:18] is the sub-list for method output_type
+	12, // [12:15] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_replication_proto_init() }
 func file_replication_proto_init() {
 	if File_replication_proto != nil {
 		return
+	}
+	file_replication_proto_msgTypes[3].OneofWrappers = []any{
+		(*ChangeNotification_DnsRecord)(nil),
+		(*ChangeNotification_DomainEntry)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
