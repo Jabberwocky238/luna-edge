@@ -38,7 +38,7 @@ func (s *fakeBundleStore) PutCertificateBundle(_ context.Context, hostname strin
 	if s.bundles == nil {
 		s.bundles = map[string]*enginepkg.CertificateBundle{}
 	}
-	s.bundles[hostname] = bundle
+	s.bundles[fmt.Sprintf("%s:%d", hostname, revision)] = bundle
 	return nil
 }
 
@@ -52,13 +52,12 @@ func (f fakeIssuerFactory) New(_ IssuerConfig, challengeType metadata.ChallengeT
 	if challengeType != f.expectedType {
 		f.t.Fatalf("unexpected challenge type: %s", challengeType)
 	}
-	return fakeIssuer{t: f.t, provider: provider, challengeType: challengeType}, nil
+	return fakeIssuer{t: f.t, provider: provider}, nil
 }
 
 type fakeIssuer struct {
-	t             *testing.T
-	provider      challenge.Provider
-	challengeType metadata.ChallengeType
+	t        *testing.T
+	provider challenge.Provider
 }
 
 func (i fakeIssuer) Obtain(_ context.Context, domains []string) (*certificate.Resource, error) {
@@ -79,7 +78,7 @@ func TestIssueCertificateDNS01(t *testing.T) {
 
 	repo := newTestRepository(t)
 	ctx := context.Background()
-	seedACMEDomain(t, repo, "domain-1", "app.example.com")
+	seedACMEDomain(t, repo, "domain-1", "app.example.com", metadata.BackendTypeL7HTTP)
 
 	publisher := &fakePublisher{}
 	bundles := &fakeBundleStore{}
@@ -88,8 +87,6 @@ func TestIssueCertificateDNS01(t *testing.T) {
 		DNS01TTL:     120,
 	}, repo, publisher, bundles)
 	svc.issuers = fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01}
-	svc.now = fixedClock()
-	svc.idSuffix = sequentialIDs()
 
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
@@ -103,33 +100,26 @@ func TestIssueCertificateDNS01(t *testing.T) {
 		t.Fatalf("unexpected certificate revision: %+v", cert)
 	}
 
-	challenges, err := repo.ListACMEChallengesByOrderID(ctx, "acmeorder-id-002")
+	records, err := repo.ListDNSRecordsByQuestion(ctx, "_acme-challenge.app.example.com.", string(metadata.DNSTypeTXT))
 	if err != nil {
-		t.Fatalf("list challenges: %v", err)
-	}
-	if len(challenges) != 1 || challenges[0].Status != metadata.ACMEChallengeStatusCleaned {
-		t.Fatalf("unexpected challenges: %+v", challenges)
-	}
-
-	records, err := repo.ListDNSRecordsByDomainID(ctx, "domain-1")
-	if err != nil {
-		t.Fatalf("list dns records: %v", err)
+		t.Fatalf("list dns records by question: %v", err)
 	}
 	if len(records) != 0 {
 		t.Fatalf("expected dns records to be cleaned, got %+v", records)
 	}
 
-	status, err := repo.GetDomainEndpointStatus(ctx, "domain-1")
+	domain, err := repo.GetDomainEndpointByID(ctx, "domain-1")
 	if err != nil {
-		t.Fatalf("get status: %v", err)
+		t.Fatalf("get domain: %v", err)
 	}
-	if !status.CertificateReady || status.CertificateRevision != 1 || status.Phase != metadata.DomainPhaseReady {
-		t.Fatalf("unexpected status: %+v", status)
+	if domain.CertID == "" || domain.CertID != cert.ID {
+		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
+
 	if len(publisher.nodes) != 4 {
 		t.Fatalf("expected 4 publishes, got %d", len(publisher.nodes))
 	}
-	if bundles.bundles["app.example.com"] == nil {
+	if bundles.bundles["app.example.com:1"] == nil {
 		t.Fatal("expected bundle to be stored")
 	}
 }
@@ -139,7 +129,7 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 
 	repo := newTestRepository(t)
 	ctx := context.Background()
-	seedACMEDomain(t, repo, "domain-1", "app.example.com")
+	seedACMEDomain(t, repo, "domain-1", "app.example.com", metadata.BackendTypeL7HTTP)
 
 	publisher := &fakePublisher{}
 	svc := NewService(Config{
@@ -147,14 +137,13 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 		HTTP01Priority: 999,
 	}, repo, publisher, &fakeBundleStore{})
 	svc.issuers = fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01}
-	svc.now = fixedClock()
-	svc.idSuffix = sequentialIDs()
 
-	if _, err := svc.IssueCertificate(ctx, IssueRequest{
+	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
 		ChallengeType: metadata.ChallengeTypeHTTP01,
 		Provider:      ProviderLetsEncrypt,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("issue certificate: %v", err)
 	}
 
@@ -166,20 +155,101 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 		t.Fatalf("expected http01 routes to be cleaned, got %+v", routes)
 	}
 
-	bindings, err := repo.ListServiceBindingsByDomainID(ctx, "domain-1")
+	backends, err := repo.ListServiceBindingsByDomainID(ctx, "domain-1")
 	if err != nil {
-		t.Fatalf("list bindings: %v", err)
+		t.Fatalf("list backends: %v", err)
 	}
-	if len(bindings) != 0 {
-		t.Fatalf("expected http01 binding cleanup, got %+v", bindings)
+	if len(backends) != 0 {
+		t.Fatalf("expected http01 backend cleanup, got %+v", backends)
 	}
 
-	var certs []metadata.CertificateRevision
-	if err := repo.CertificateRevisions().ListResource(ctx, &certs, "revision asc"); err != nil {
-		t.Fatalf("list cert revisions: %v", err)
+	domain, err := repo.GetDomainEndpointByID(ctx, "domain-1")
+	if err != nil {
+		t.Fatalf("get domain: %v", err)
 	}
-	if len(certs) != 1 || certs[0].Status != metadata.CertificateRevisionStatusActive {
-		t.Fatalf("unexpected cert revisions: %+v", certs)
+	if domain.CertID != cert.ID {
+		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
+	}
+	if len(publisher.nodes) != 4 {
+		t.Fatalf("expected 4 publishes, got %d", len(publisher.nodes))
+	}
+}
+
+func TestPresentDNS01WritesAndBroadcasts(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	seedACMEDomain(t, repo, "domain-1", "app.example.com", metadata.BackendTypeL7HTTP)
+	domain, err := repo.GetDomainEndpointByID(ctx, "domain-1")
+	if err != nil {
+		t.Fatalf("get domain: %v", err)
+	}
+
+	publisher := &fakePublisher{}
+	svc := NewService(Config{DNS01TTL: 90}, repo, publisher, nil)
+	provider := &masterChallengeProvider{
+		service:       svc,
+		domain:        domain,
+		challengeType: metadata.ChallengeTypeDNS01,
+	}
+
+	if err := provider.Present("app.example.com", "token-1", "token-1.key-auth"); err != nil {
+		t.Fatalf("present dns01: %v", err)
+	}
+
+	records, err := repo.ListDNSRecordsByQuestion(ctx, "_acme-challenge.app.example.com.", string(metadata.DNSTypeTXT))
+	if err != nil {
+		t.Fatalf("list dns records by question: %v", err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("expected 1 dns record, got %+v", records)
+	}
+	if len(publisher.nodes) != 1 || publisher.nodes[0] != "" {
+		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
+	}
+}
+
+func TestPresentHTTP01WritesAndBroadcasts(t *testing.T) {
+	t.Parallel()
+
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	seedACMEDomain(t, repo, "domain-1", "app.example.com", metadata.BackendTypeL7HTTP)
+	domain, err := repo.GetDomainEndpointByID(ctx, "domain-1")
+	if err != nil {
+		t.Fatalf("get domain: %v", err)
+	}
+
+	publisher := &fakePublisher{}
+	svc := NewService(Config{HTTP01Priority: 999}, repo, publisher, nil)
+	provider := &masterChallengeProvider{
+		service:       svc,
+		domain:        domain,
+		challengeType: metadata.ChallengeTypeHTTP01,
+	}
+
+	if err := provider.Present("app.example.com", "token-1", "token-1.key-auth"); err != nil {
+		t.Fatalf("present http01: %v", err)
+	}
+
+	routes, err := repo.ListHTTPRoutesByDomainID(ctx, "domain-1")
+	if err != nil {
+		t.Fatalf("list routes: %v", err)
+	}
+	if len(routes) != 1 || routes[0].Path != http01Path("token-1") {
+		t.Fatalf("unexpected routes: %+v", routes)
+	}
+
+	backend := &metadata.ServiceBackendRef{}
+	if err := repo.ServiceBindingRefs().GetResourceByField(ctx, backend, "id", provider.http01BackendID("token-1")); err != nil {
+		t.Fatalf("get backend ref: %v", err)
+	}
+	if backend.ServiceName != "http01" {
+		t.Fatalf("unexpected backend: %+v", backend)
+	}
+	if len(publisher.nodes) != 1 || publisher.nodes[0] != "" {
+		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
 	}
 }
 
@@ -197,31 +267,14 @@ func newTestRepository(t *testing.T) repository.Repository {
 	return factory.Repository()
 }
 
-func seedACMEDomain(t *testing.T, repo repository.Repository, domainID, hostname string) {
+func seedACMEDomain(t *testing.T, repo repository.Repository, domainID, hostname string, backendType metadata.BackendType) {
 	t.Helper()
 	ctx := context.Background()
-	mustUpsert(t, repo.Zones().UpsertResource(ctx, &metadata.Zone{
-		ID:                  "zone-1",
-		Name:                "example.com",
-		DefaultACMEProvider: ProviderLetsEncrypt,
-	}))
 	mustUpsert(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           domainID,
-		ZoneID:       "zone-1",
-		Hostname:     hostname,
-		BackendType:  "l7",
-		Generation:   1,
-		StateVersion: 1,
-	}))
-	mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
-		ID:                         "attach-1",
-		DomainID:                   domainID,
-		NodeID:                     "node-1",
-		Listener:                   "edge-http",
-		DesiredRouteVersion:        1,
-		DesiredDNSVersion:          1,
-		DesiredCertificateRevision: 0,
-		State:                      metadata.AttachmentStateReady,
+		ID:          domainID,
+		Hostname:    hostname,
+		NeedCert:    true,
+		BackendType: backendType,
 	}))
 }
 
@@ -229,19 +282,6 @@ func mustUpsert(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func fixedClock() func() time.Time {
-	now := time.Date(2026, 3, 16, 12, 0, 0, 0, time.UTC)
-	return func() time.Time { return now }
-}
-
-func sequentialIDs() func() string {
-	var seq int
-	return func() string {
-		seq++
-		return fmt.Sprintf("id-%03d", seq)
 	}
 }
 

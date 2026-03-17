@@ -47,12 +47,8 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	if domain == nil {
 		return nil, fmt.Errorf("domain endpoint %q not found", req.DomainID)
 	}
-	zone := &metadata.Zone{}
-	if err := s.repo.Zones().GetResourceByField(ctx, zone, "id", domain.ZoneID); err != nil {
-		return nil, err
-	}
 
-	issuerCfg, err := s.resolveIssuerConfig(zone, req)
+	issuerCfg, err := s.resolveIssuerConfig(req)
 	if err != nil {
 		return nil, err
 	}
@@ -61,111 +57,70 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		return nil, err
 	}
 	certID := "certrev-" + s.idSuffix()
-	orderID := "acmeorder-" + s.idSuffix()
 	cert := &metadata.CertificateRevision{
-		ID:             certID,
-		DomainID:       domain.ID,
-		ZoneID:         domain.ZoneID,
-		Hostname:       domain.Hostname,
-		Revision:       revisionNumber,
-		Provider:       issuerCfg.Provider,
-		ChallengeType:  req.ChallengeType,
-		Status:         metadata.CertificateRevisionStatusPending,
-		ArtifactBucket: s.cfg.DefaultArtifactBucket,
-		ArtifactPrefix: certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
+		ID:               certID,
+		DomainEndpointID: domain.ID,
+		Hostname:         domain.Hostname,
+		Revision:         revisionNumber,
+		Provider:         issuerCfg.Provider,
+		ChallengeType:    req.ChallengeType,
+		ArtifactBucket:   s.cfg.DefaultArtifactBucket,
+		ArtifactPrefix:   certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
 	}
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
 		return nil, err
 	}
-	order := &metadata.ACMEOrder{
-		ID:                    orderID,
-		DomainID:              domain.ID,
-		CertificateRevisionID: certID,
-		Provider:              issuerCfg.Provider,
-		AccountRef:            issuerCfg.Email,
-		Status:                metadata.ACMEOrderStatusPending,
-		StartedAt:             s.now(),
-	}
-	if err := s.repo.ACMEOrders().UpsertResource(ctx, order); err != nil {
-		return nil, err
-	}
-	if err := s.markIssuing(ctx, domain, revisionNumber); err != nil {
+	if err := s.publishChange(ctx); err != nil {
 		return nil, err
 	}
 
 	solver := &masterChallengeProvider{
-		service:                s,
-		domain:                 domain,
-		orderID:                orderID,
-		challengeType:          req.ChallengeType,
-		timeout:                s.cfg.DNS01Timeout,
-		interval:               s.cfg.DNS01Interval,
+		service:       s,
+		domain:        domain,
+		orderID:       "acmeorder-" + s.idSuffix(),
+		challengeType: req.ChallengeType,
+		timeout:       s.cfg.DNS01Timeout,
+		interval:      s.cfg.DNS01Interval,
 	}
 	issuer, err := s.issuers.New(issuerCfg, req.ChallengeType, solver)
 	if err != nil {
-		_ = s.failOrder(ctx, order, cert, err)
 		return nil, err
 	}
 
 	resource, err := issuer.Obtain(ctx, []string{domain.Hostname})
 	if err != nil {
-		_ = s.failOrder(ctx, order, cert, err)
 		return nil, err
 	}
 	bundle, notBefore, notAfter, crtHash, keyHash, err := buildBundle(resource, revisionNumber)
 	if err != nil {
-		_ = s.failOrder(ctx, order, cert, err)
 		return nil, err
 	}
 
-	cert.Status = metadata.CertificateRevisionStatusActive
 	cert.NotBefore = notBefore
 	cert.NotAfter = notAfter
 	cert.SHA256Crt = crtHash
 	cert.SHA256Key = keyHash
-	cert.Version = fmt.Sprintf("%d", revisionNumber)
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
 		return nil, err
 	}
 	if s.bundles != nil {
 		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
-			_ = s.failOrder(ctx, order, cert, err)
 			return nil, err
 		}
 	}
 
-	now := s.now()
-	order.Status = metadata.ACMEOrderStatusValid
-	order.CompletedAt = now
-	if err := s.repo.ACMEOrders().UpsertResource(ctx, order); err != nil {
+	domain.CertID = cert.ID
+	if err := s.repo.DomainEndpoints().UpsertResource(ctx, domain); err != nil {
 		return nil, err
 	}
-	status := &metadata.DomainEndpointStatus{
-		DomainEndpointID:    domain.ID,
-		ObservedGeneration:  domain.Generation,
-		ChallengeReady:      true,
-		CertificateReady:    true,
-		CertificateRevision: revisionNumber,
-		RouteReady:          true,
-		AttachmentReady:     true,
-		Ready:               true,
-		Phase:               metadata.DomainPhaseReady,
-		UpdatedAt:           now,
-	}
-	if err := s.repo.DomainEndpointStatuses().UpsertResource(ctx, status); err != nil {
-		return nil, err
-	}
-	if err := s.publishDomain(ctx, domain.ID); err != nil {
+	if err := s.publishChange(ctx); err != nil {
 		return nil, err
 	}
 	return cert, nil
 }
 
-func (s *Service) resolveIssuerConfig(zone *metadata.Zone, req IssueRequest) (IssuerConfig, error) {
+func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
 	provider := strings.ToLower(strings.TrimSpace(req.Provider))
-	if provider == "" && zone != nil {
-		provider = strings.ToLower(strings.TrimSpace(zone.DefaultACMEProvider))
-	}
 	if provider == "" {
 		provider = ProviderLetsEncrypt
 	}
@@ -207,70 +162,9 @@ func (s *Service) nextRevision(ctx context.Context, domainID string) (uint64, er
 	return cert.Revision + 1, nil
 }
 
-func (s *Service) publishDomain(ctx context.Context, domainID string) error {
+func (s *Service) publishChange(ctx context.Context) error {
 	if s.publish == nil {
 		return nil
 	}
-	attachments, err := s.repo.ListAttachmentsByDomainID(ctx, domainID)
-	if err != nil {
-		return err
-	}
-	seen := map[string]struct{}{}
-	for i := range attachments {
-		if _, ok := seen[attachments[i].NodeID]; ok {
-			continue
-		}
-		if err := s.publish.PublishNode(ctx, attachments[i].NodeID); err != nil {
-			return err
-		}
-		seen[attachments[i].NodeID] = struct{}{}
-	}
-	return nil
-}
-
-func (s *Service) markIssuing(ctx context.Context, domain *metadata.DomainEndpoint, revision uint64) error {
-	if err := s.repo.DomainEndpointStatuses().UpsertResource(ctx, &metadata.DomainEndpointStatus{
-		DomainEndpointID:    domain.ID,
-		ObservedGeneration:  domain.Generation,
-		Phase:               metadata.DomainPhaseIssuing,
-		CertificateReady:    false,
-		ChallengeReady:      false,
-		CertificateRevision: revision,
-		UpdatedAt:           s.now(),
-	}); err != nil {
-		return err
-	}
-	return s.publishDomain(ctx, domain.ID)
-}
-
-func (s *Service) failOrder(ctx context.Context, order *metadata.ACMEOrder, cert *metadata.CertificateRevision, issueErr error) error {
-	if order != nil {
-		order.Status = metadata.ACMEOrderStatusInvalid
-		order.ErrorMessage = issueErr.Error()
-		order.CompletedAt = s.now()
-		_ = s.repo.ACMEOrders().UpsertResource(ctx, order)
-	}
-	if cert != nil {
-		cert.Status = metadata.CertificateRevisionStatusFailed
-		_ = s.repo.CertificateRevisions().UpsertResource(ctx, cert)
-	}
-	if order != nil {
-		var revision uint64
-		if cert != nil {
-			revision = cert.Revision
-		}
-		_ = s.repo.DomainEndpointStatuses().UpsertResource(ctx, &metadata.DomainEndpointStatus{
-			DomainEndpointID:    order.DomainID,
-			Phase:               metadata.DomainPhaseError,
-			CertificateReady:    false,
-			ChallengeReady:      false,
-			CertificateRevision: revision,
-			Ready:               false,
-			LastError:           issueErr.Error(),
-			LastErrorAt:         s.now(),
-			UpdatedAt:           s.now(),
-		})
-		_ = s.publishDomain(ctx, order.DomainID)
-	}
-	return issueErr
+	return s.publish.PublishNode(ctx, "")
 }

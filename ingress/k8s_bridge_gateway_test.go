@@ -154,3 +154,105 @@ func TestK8sBridgeResolvesGatewayRouteKinds(t *testing.T) {
 		t.Fatalf("unexpected udp backend: %#v ok=%v", udpBackend, ok)
 	}
 }
+
+func TestK8sBridgeTLS443Overlap(t *testing.T) {
+	bridge := NewK8sBridgeWithClients("default", "luna-edge", fake.NewSimpleClientset(), nil)
+
+	bridge.storeGatewayUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "https-app", "protocol": "HTTPS", "port": int64(443), "hostname": "app.example.com"},
+				map[string]interface{}{"name": "tls-term", "protocol": "TLS", "port": int64(443), "hostname": "term.example.com", "tls": map[string]interface{}{"mode": "Terminate"}},
+				map[string]interface{}{"name": "tls-pass", "protocol": "TLS", "port": int64(443), "hostname": "pass.example.com", "tls": map[string]interface{}{"mode": "Passthrough"}},
+			},
+		},
+	}})
+
+	bridge.storeHTTPRouteUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata": map[string]interface{}{
+			"name":      "https-app",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{map[string]interface{}{"name": "edge", "sectionName": "https-app"}},
+			"hostnames":  []interface{}{"app.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-https-app", "port": int64(8443)}},
+			}},
+		},
+	}})
+
+	bridge.storeTLSRouteUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1alpha2",
+		"kind":       "TLSRoute",
+		"metadata": map[string]interface{}{
+			"name":      "tls-term",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{map[string]interface{}{"name": "edge", "sectionName": "tls-term"}},
+			"hostnames":  []interface{}{"term.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-tls-term", "port": int64(9443)}},
+			}},
+		},
+	}})
+
+	bridge.storeTLSRouteUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1alpha2",
+		"kind":       "TLSRoute",
+		"metadata": map[string]interface{}{
+			"name":      "tls-pass",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{map[string]interface{}{"name": "edge", "sectionName": "tls-pass"}},
+			"hostnames":  []interface{}{"pass.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-tls-pass", "port": int64(10443)}},
+			}},
+		},
+	}})
+
+	httpsBackend, ok := bridge.ResolveHTTPS("app.example.com", "/")
+	if !ok || httpsBackend.Kind != RouteKindHTTPS || httpsBackend.Binding.Name != "svc-https-app" {
+		t.Fatalf("unexpected https backend: %#v ok=%v", httpsBackend, ok)
+	}
+
+	terminatedBackend, ok := bridge.ResolveTLS("term.example.com")
+	if !ok || terminatedBackend.Kind != RouteKindTLSTerminate || terminatedBackend.Binding.Name != "svc-tls-term" {
+		t.Fatalf("unexpected tls termination backend: %#v ok=%v", terminatedBackend, ok)
+	}
+
+	passthroughBackend, ok := bridge.ResolveTLSPassthrough("pass.example.com")
+	if !ok || passthroughBackend.Kind != RouteKindTLSPassthrough || passthroughBackend.Binding.Name != "svc-tls-pass" {
+		t.Fatalf("unexpected tls passthrough backend: %#v ok=%v", passthroughBackend, ok)
+	}
+
+	if _, ok := bridge.ResolveTLS("app.example.com"); ok {
+		t.Fatal("expected https sni not to match tls termination route")
+	}
+	if _, ok := bridge.ResolveTLSPassthrough("app.example.com"); ok {
+		t.Fatal("expected https sni not to match tls passthrough route")
+	}
+	if _, ok := bridge.ResolveHTTPS("term.example.com", "/"); ok {
+		t.Fatal("expected tls termination sni not to match https route")
+	}
+	if _, ok := bridge.ResolveTLSPassthrough("term.example.com"); ok {
+		t.Fatal("expected tls termination sni not to match passthrough route")
+	}
+	if _, ok := bridge.ResolveHTTPS("pass.example.com", "/"); ok {
+		t.Fatal("expected tls passthrough sni not to match https route")
+	}
+	if _, ok := bridge.ResolveTLS("pass.example.com"); ok {
+		t.Fatal("expected tls passthrough sni not to match tls termination route")
+	}
+}

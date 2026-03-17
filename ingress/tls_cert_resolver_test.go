@@ -56,6 +56,32 @@ func TestTLSCertResolverFallsBackToWildcardCertificate(t *testing.T) {
 	}
 }
 
+func TestTLSCertResolverWildcardNginxApp238ComMatchesSubdomain(t *testing.T) {
+	cacheRoot := t.TempDir()
+	rootCA := writeTestCertificate(t, cacheRoot, "*.nginx.app238.com")
+	if rootCA == nil {
+		t.Fatal("expected test root CA")
+	}
+
+	resolver, err := NewLunaTLSCertResolver(cacheRoot, 2)
+	if err != nil {
+		t.Fatalf("create resolver: %v", err)
+	}
+	cert, err := resolver.Load("aaa.nginx.app238.com")
+	if err != nil {
+		t.Fatalf("load wildcard certificate: %v", err)
+	}
+	if cert == nil {
+		t.Fatal("expected wildcard certificate to be loaded")
+	}
+	if got := certificateCommonName(t, cert); got != "*.nginx.app238.com" {
+		t.Fatalf("expected wildcard cert CN, got %q", got)
+	}
+	if _, ok := resolver.certs.Get("*.nginx.app238.com"); !ok {
+		t.Fatal("expected wildcard certificate to be cached under wildcard hostname")
+	}
+}
+
 func TestTLSCertResolverPrefersExactCertificateOverWildcard(t *testing.T) {
 	cacheRoot := t.TempDir()
 	writeTestCertificate(t, cacheRoot, "*.a.com")

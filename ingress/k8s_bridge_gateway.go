@@ -48,7 +48,7 @@ type k8sHTTPRouteState struct {
 	name       string
 	namespace  string
 	hostnames  []string
-	parentRefs []string
+	parentRefs []k8sParentRef
 	rules      []k8sHTTPRouteRuleState
 }
 
@@ -67,8 +67,13 @@ type k8sL4RouteState struct {
 	name       string
 	namespace  string
 	hostnames  []string
-	parentRefs []string
+	parentRefs []k8sParentRef
 	backend    k8sBackendRef
+}
+
+type k8sParentRef struct {
+	gatewayKey  string
+	sectionName string
 }
 
 func (b *K8sBridge) ensureGatewayInformers() {
@@ -150,13 +155,16 @@ func (b *K8sBridge) rebuildGatewayRoutesLocked() {
 	}
 }
 
-func (b *K8sBridge) materializeHTTPFamilyLocked(namespace, routeName string, hostnames, parentRefs []string, rules []k8sHTTPRouteRuleState) {
+func (b *K8sBridge) materializeHTTPFamilyLocked(namespace, routeName string, hostnames []string, parentRefs []k8sParentRef, rules []k8sHTTPRouteRuleState) {
 	for _, parentRef := range parentRefs {
-		gateway := b.gateways[parentRef]
+		gateway := b.gateways[parentRef.gatewayKey]
 		if gateway == nil {
 			continue
 		}
 		for _, listener := range gateway.listeners {
+			if parentRef.sectionName != "" && listener.name != parentRef.sectionName {
+				continue
+			}
 			if listener.routeKind != RouteKindHTTP && listener.routeKind != RouteKindHTTPS {
 				continue
 			}
@@ -182,13 +190,16 @@ func (b *K8sBridge) materializeHTTPFamilyLocked(namespace, routeName string, hos
 	}
 }
 
-func (b *K8sBridge) materializeGRPCFamilyLocked(namespace, routeName string, hostnames, parentRefs []string, rules []k8sHTTPRouteRuleState) {
+func (b *K8sBridge) materializeGRPCFamilyLocked(namespace, routeName string, hostnames []string, parentRefs []k8sParentRef, rules []k8sHTTPRouteRuleState) {
 	for _, parentRef := range parentRefs {
-		gateway := b.gateways[parentRef]
+		gateway := b.gateways[parentRef.gatewayKey]
 		if gateway == nil {
 			continue
 		}
 		for _, listener := range gateway.listeners {
+			if parentRef.sectionName != "" && listener.name != parentRef.sectionName {
+				continue
+			}
 			if !listenerAllowsKind(listener, RouteKindGRPC) {
 				continue
 			}
@@ -208,11 +219,14 @@ func (b *K8sBridge) materializeGRPCFamilyLocked(namespace, routeName string, hos
 
 func (b *K8sBridge) materializeL4Locked(kind RouteKind, route *k8sL4RouteState) {
 	for _, parentRef := range route.parentRefs {
-		gateway := b.gateways[parentRef]
+		gateway := b.gateways[parentRef.gatewayKey]
 		if gateway == nil {
 			continue
 		}
 		for _, listener := range gateway.listeners {
+			if parentRef.sectionName != "" && listener.name != parentRef.sectionName {
+				continue
+			}
 			if !listenerAllowsKind(listener, kind) {
 				continue
 			}
@@ -550,9 +564,9 @@ func parseL4RouteState(obj *unstructured.Unstructured) *k8sL4RouteState {
 	return state
 }
 
-func parseParentRefs(obj map[string]interface{}) []string {
+func parseParentRefs(obj map[string]interface{}) []k8sParentRef {
 	items, _, _ := unstructured.NestedSlice(obj, "spec", "parentRefs")
-	out := make([]string, 0, len(items))
+	out := make([]k8sParentRef, 0, len(items))
 	for _, raw := range items {
 		item, ok := raw.(map[string]interface{})
 		if !ok {
@@ -566,7 +580,11 @@ func parseParentRefs(obj map[string]interface{}) []string {
 		if namespace == "" {
 			namespace, _, _ = unstructured.NestedString(obj, "metadata", "namespace")
 		}
-		out = append(out, namespace+"/"+name)
+		sectionName, _, _ := unstructured.NestedString(item, "sectionName")
+		out = append(out, k8sParentRef{
+			gatewayKey:  namespace + "/" + name,
+			sectionName: sectionName,
+		})
 	}
 	return out
 }
