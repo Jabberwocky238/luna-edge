@@ -20,17 +20,6 @@ func publishAssignmentsForNode(ctx context.Context, w *Wrapper, nodeID string) e
 	return publishNode(ctx, w, nodeID)
 }
 
-func publishAssignment(ctx context.Context, w *Wrapper, attachment *metadata.Attachment) error {
-	if attachment == nil {
-		return nil
-	}
-	return publishNode(ctx, w, attachment.NodeID)
-}
-
-func publishBinding(ctx context.Context, w *Wrapper, domainID string) error {
-	return publishNodesForDomain(ctx, w, domainID)
-}
-
 func publishRoute(ctx context.Context, w *Wrapper, domainID, _ string) error {
 	return publishNodesForDomain(ctx, w, domainID)
 }

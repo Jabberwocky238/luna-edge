@@ -13,7 +13,6 @@ import (
 	"github.com/jabberwocky238/luna-edge/dns"
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/ingress"
-	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -44,11 +43,11 @@ type Config struct {
 }
 
 type Reader interface {
-	GetRouteByHostname(ctx context.Context, hostname string) (*engine.RouteRecord, error)
-	GetBindingByHostname(ctx context.Context, hostname string) (*engine.BindingRecord, error)
-	GetCertificate(ctx context.Context, hostname string, revision uint64) (*engine.CertificateRecord, error)
-	ListAssignments(ctx context.Context, nodeID string) ([]engine.AssignmentRecord, error)
-	GetVersions(ctx context.Context, nodeID string) (engine.VersionVector, error)
+	GetCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error)
+	GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
+	GetDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error)
+	ListDNSRecords(ctx context.Context) ([]metadata.DNSRecord, error)
+	GetSnapshotRecordID(ctx context.Context) (uint64, error)
 }
 
 type Writer interface {
@@ -65,7 +64,6 @@ type Engine struct {
 	Config     Config
 	CacheRoot  string
 	Cache      Reader
-	Repo       repository.Repository
 	Subscriber engine.Subscriber
 	Applier    engine.SnapshotApplier
 	ClientConn *grpc.ClientConn
@@ -127,15 +125,12 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 	}
 	subscriber.OnConnect = func() { eng.ready.Store(true) }
 	subscriber.OnDisconnect = func() { eng.ready.Store(false) }
-	if store, ok := applier.(interface{ Repository() repository.Repository }); ok {
-		eng.Repo = store.Repository()
-	}
 	if store, ok := applier.(interface {
 		SetCertificateBundleFetcher(CertificateBundleFetcher)
 	}); ok {
 		store.SetCertificateBundleFetcher(client)
 	}
-	if eng.Repo != nil && cfg.DNSListenAddr != "" {
+	if eng.Cache != nil && cfg.DNSListenAddr != "" {
 		eng.DNS = dns.NewEngine(dns.EngineOptions{
 			Forwarder: dns.ForwarderConfig{
 				Enabled: cfg.DNSForwardEnabled,
@@ -181,16 +176,11 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 }
 
 // Subscribe 拉取 master 复制流。
-func (e *Engine) Subscribe(ctx context.Context, known engine.VersionVector) error {
+func (e *Engine) Subscribe(ctx context.Context) error {
 	if e.Subscriber == nil {
 		return fmt.Errorf("subscriber is not configured")
 	}
-	return e.Subscriber.Subscribe(ctx, e.Config.NodeID, known)
-}
-
-// ReadCache 返回本地只读缓存。
-func (e *Engine) ReadCache() ingress.RouteLookupReader {
-	return e.Cache
+	return e.Subscriber.Subscribe(ctx, e.Config.NodeID)
 }
 
 // Start 启动复制订阅，并在失败时指数退避重试。
@@ -215,12 +205,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	backoff := e.Config.RetryMinBackoff
 	for {
-		known, err := e.subscriptionState(ctx)
-		if err != nil {
-			e.ready.Store(false)
-			return err
-		}
-		err = e.Subscribe(ctx, known)
+		err := e.Subscribe(ctx)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
 			return err
@@ -240,13 +225,6 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 }
 
-func (e *Engine) subscriptionState(ctx context.Context) (engine.VersionVector, error) {
-	if e.Cache == nil {
-		return engine.VersionVector{}, nil
-	}
-	return e.Cache.GetVersions(ctx, e.Config.NodeID)
-}
-
 type streamSubscriber struct {
 	Client       engine.Client
 	Applier      engine.SnapshotApplier
@@ -255,14 +233,14 @@ type streamSubscriber struct {
 	OnDisconnect func()
 }
 
-func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string, known engine.VersionVector) error {
+func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 	if s.Client == nil {
 		return fmt.Errorf("replication client is not configured")
 	}
 	if s.Applier == nil {
 		return fmt.Errorf("replication applier is not configured")
 	}
-	stream, err := s.Client.Subscribe(ctx, nodeID, known)
+	stream, err := s.Client.Subscribe(ctx, nodeID)
 	if err != nil {
 		return err
 	}
@@ -274,6 +252,20 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string, known e
 			s.OnDisconnect()
 		}
 	}()
+	var cursor uint64
+	if provider, ok := s.Applier.(interface {
+		GetSnapshotRecordID(context.Context) (uint64, error)
+	}); ok {
+		value, err := provider.GetSnapshotRecordID(ctx)
+		if err != nil {
+			return err
+		}
+		cursor = value
+	}
+	if err := s.catchUpSnapshots(ctx, nodeID, cursor); err != nil {
+		return err
+	}
+
 	for {
 		notice, recvErr := stream.Recv()
 		if recvErr != nil {
@@ -282,12 +274,27 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string, known e
 			}
 			return recvErr
 		}
-		if notice == nil || !notice.Versions.DiffersFrom(known) {
+		if notice == nil {
 			continue
 		}
-		snapshot, err := s.Client.GetSnapshot(ctx, nodeID)
-		if err != nil {
+		if err := s.catchUpSnapshots(ctx, nodeID, notice.SnapshotRecordID-1); err != nil {
 			return err
+		}
+	}
+}
+
+func (s *streamSubscriber) catchUpSnapshots(ctx context.Context, nodeID string, cursor uint64) error {
+	snapshotStream, err := s.Client.GetSnapshot(ctx, nodeID, cursor)
+	if err != nil {
+		return err
+	}
+	for {
+		snapshot, recvErr := snapshotStream.Recv()
+		if recvErr != nil {
+			if recvErr == io.EOF {
+				return nil
+			}
+			return recvErr
 		}
 		if snapshot == nil {
 			continue
@@ -295,11 +302,13 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string, known e
 		if err := s.Applier.ApplySnapshot(ctx, snapshot); err != nil {
 			return err
 		}
-		known = snapshot.Versions
 		if s.OnSnapshot != nil {
 			if err := s.OnSnapshot(ctx, snapshot); err != nil {
 				return err
 			}
+		}
+		if snapshot.Last {
+			return nil
 		}
 	}
 }
@@ -392,11 +401,11 @@ func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.
 }
 
 func (e *Engine) restoreDNSRuntime(ctx context.Context) error {
-	if e == nil || e.DNS == nil || e.Repo == nil {
+	if e == nil || e.DNS == nil || e.Cache == nil {
 		return nil
 	}
-	var records []metadata.DNSRecord
-	if err := e.Repo.DNSRecords().ListResource(ctx, &records, "fqdn asc, record_type asc, id asc"); err != nil {
+	records, err := e.Cache.ListDNSRecords(ctx)
+	if err != nil {
 		return err
 	}
 	e.DNS.RestoreRecords(records)

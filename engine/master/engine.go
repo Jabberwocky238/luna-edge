@@ -12,6 +12,7 @@ import (
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"google.golang.org/grpc"
 	"slices"
 )
@@ -34,7 +35,6 @@ type Engine struct {
 	Factory repository.Factory
 	Repo    repository.Repository
 	Hub     *Hub
-	Builder enginepkg.ProjectionBuilder
 	Bundles CertificateBundleProvider
 	Manage  *manage.API
 
@@ -66,18 +66,11 @@ func New(cfg Config) (*Engine, error) {
 		return nil, err
 	}
 	repo := factory.Repository()
-	builder, err := enginepkg.NewRepositoryProjectionBuilder(repo)
-	if err != nil {
-		_ = factory.Close()
-		return nil, err
-	}
-
 	engine := &Engine{
 		Config:  cfg,
 		Factory: factory,
 		Repo:    repo,
 		Hub:     NewHub(),
-		Builder: builder,
 	}
 	if cfg.S3.Enabled() {
 		bundles, err := NewS3CertificateBundleProvider(repo, cfg.S3)
@@ -87,7 +80,7 @@ func New(cfg Config) (*Engine, error) {
 		}
 		engine.Bundles = bundles
 	}
-	wrapper := manage.NewWrapper(repo, builder, engine)
+	wrapper := manage.NewWrapper(repo, nil, engine)
 	engine.Manage = manage.NewAPI(wrapper)
 	return engine, nil
 }
@@ -125,11 +118,22 @@ func (e *Engine) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot
 	if e == nil || e.Hub == nil || snapshot == nil {
 		return nil
 	}
-	e.Hub.Publish(snapshot.NodeID, &enginepkg.ChangeNotification{
-		NodeID:    snapshot.NodeID,
-		Versions:  snapshot.Versions,
-		CreatedAt: time.Now().UTC(),
-	})
+	for i := range snapshot.DNSRecords {
+		recordID, err := e.appendSnapshotRecord(context.Background(), metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
+		if err != nil {
+			return err
+		}
+		rec := snapshot.DNSRecords[i]
+		e.Hub.Publish(snapshot.NodeID, &enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
+	}
+	for i := range snapshot.DomainEntries {
+		recordID, err := e.appendSnapshotRecord(context.Background(), metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
+		if err != nil {
+			return err
+		}
+		entry := snapshot.DomainEntries[i]
+		e.Hub.Publish(snapshot.NodeID, &enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DomainEntry: &entry})
+	}
 	return nil
 }
 
@@ -137,16 +141,11 @@ func (e *Engine) PublishNode(ctx context.Context, nodeID string) error {
 	if e == nil || e.Hub == nil {
 		return nil
 	}
-	versions, err := e.currentVersions(ctx, nodeID)
+	snapshot, err := e.BuildSnapshot(ctx, nodeID)
 	if err != nil {
 		return err
 	}
-	e.Hub.Publish(nodeID, &enginepkg.ChangeNotification{
-		NodeID:    nodeID,
-		Versions:  versions,
-		CreatedAt: time.Now().UTC(),
-	})
-	return nil
+	return e.PublishSnapshot(ctx, snapshot)
 }
 
 func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.Snapshot, error) {
@@ -154,178 +153,85 @@ func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.S
 		NodeID:    nodeID,
 		CreatedAt: time.Now().UTC(),
 	}
-	if e == nil || e.Repo == nil || e.Builder == nil {
+	if e == nil || e.Repo == nil {
 		return snapshot, nil
 	}
-
-	attachments, err := e.Repo.ListAttachmentsByNodeID(ctx, nodeID)
-	if err != nil {
+	if err := e.Repo.DNSRecords().ListResource(ctx, &snapshot.DNSRecords, "fqdn asc, record_type asc, id asc"); err != nil {
 		return nil, err
 	}
-	seenRoutes := map[string]struct{}{}
-	seenBindings := map[string]struct{}{}
-	seenCerts := map[string]struct{}{}
-	for _, attachment := range attachments {
-		if assignment, err := e.Builder.BuildAssignmentRecord(ctx, &attachment); err == nil && assignment != nil {
-			snapshot.Assignments = append(snapshot.Assignments, *assignment)
-			accumulateAssignmentVersions(&snapshot.Versions, *assignment)
-		}
-		domain, err := e.Repo.GetDomainEndpointByID(ctx, attachment.DomainID)
-		if err == nil && domain != nil && domain.BackendType == "l7" {
-			routes, routeErr := e.Repo.ListHTTPRoutesByDomainID(ctx, attachment.DomainID)
-			if routeErr == nil {
-				for i := range routes {
-					if _, ok := seenRoutes[routes[i].ID]; ok {
-						continue
-					}
-					binding, bindErr := e.Repo.GetServiceBindingByDomainID(ctx, routes[i].DomainID)
-					if bindErr == nil && binding != nil && routes[i].BindingID != "" && routes[i].BindingID != binding.ID {
-						if bindings, listErr := e.Repo.ListServiceBindingsByDomainID(ctx, routes[i].DomainID); listErr == nil {
-							for j := range bindings {
-								if bindings[j].ID == routes[i].BindingID {
-									binding = &bindings[j]
-									break
-								}
-							}
-						}
-					}
-					if binding == nil {
-						continue
-					}
-					route := enginepkg.RouteRecord{
-						DomainID:         routes[i].DomainID,
-						Hostname:         routes[i].Hostname,
-						BindingID:        routes[i].BindingID,
-						RouteVersion:     routes[i].RouteVersion,
-						Listener:         routes[i].Listener,
-						Protocol:         string(binding.Protocol),
-						UpstreamAddress:  binding.Address,
-						UpstreamPort:     binding.Port,
-						UpstreamProtocol: string(binding.Protocol),
-						BackendJSON:      routes[i].RouteJSON,
-					}
-					snapshot.Routes = append(snapshot.Routes, route)
-					seenRoutes[routes[i].ID] = struct{}{}
-					accumulateRouteVersions(&snapshot.Versions, route)
-				}
-			}
-		} else if route, err := e.Builder.BuildRouteRecord(ctx, attachment.DomainID); err == nil && route != nil {
-			if _, ok := seenRoutes[route.BindingID]; !ok {
-				snapshot.Routes = append(snapshot.Routes, *route)
-				seenRoutes[route.BindingID] = struct{}{}
-				accumulateRouteVersions(&snapshot.Versions, *route)
-			}
-		}
-		if bindings, err := e.Repo.ListServiceBindingsByDomainID(ctx, attachment.DomainID); err == nil {
-			for i := range bindings {
-				if _, ok := seenBindings[bindings[i].ID]; ok {
-					continue
-				}
-				binding := enginepkg.BindingRecord{
-					ID:           bindings[i].ID,
-					DomainID:     bindings[i].DomainID,
-					Hostname:     bindings[i].Hostname,
-					ServiceID:    bindings[i].ServiceID,
-					Namespace:    bindings[i].Namespace,
-					Name:         bindings[i].Name,
-					Address:      bindings[i].Address,
-					Port:         bindings[i].Port,
-					Protocol:     string(bindings[i].Protocol),
-					RouteVersion: bindings[i].RouteVersion,
-					BackendJSON:  bindings[i].BackendJSON,
-				}
-				snapshot.Bindings = append(snapshot.Bindings, binding)
-				seenBindings[bindings[i].ID] = struct{}{}
-				accumulateBindingVersions(&snapshot.Versions, binding)
-			}
-		} else if binding, err := e.Builder.BuildBindingRecord(ctx, attachment.DomainID); err == nil && binding != nil {
-			if _, ok := seenBindings[binding.ID]; !ok {
-				snapshot.Bindings = append(snapshot.Bindings, *binding)
-				seenBindings[binding.ID] = struct{}{}
-				accumulateBindingVersions(&snapshot.Versions, *binding)
-			}
-		}
-		if cert, err := e.Builder.BuildCertificateRecord(ctx, attachment.DomainID, attachment.DesiredCertificateRevision); err == nil && cert != nil {
-			key := fmt.Sprintf("%s/%d", cert.DomainID, cert.Revision)
-			if _, ok := seenCerts[key]; !ok {
-				snapshot.Certificates = append(snapshot.Certificates, *cert)
-				seenCerts[key] = struct{}{}
-				accumulateCertificateVersions(&snapshot.Versions, *cert)
-			}
+	var domains []metadata.DomainEndpoint
+	if err := e.Repo.DomainEndpoints().ListResource(ctx, &domains, "hostname asc"); err != nil {
+		return nil, err
+	}
+	for i := range domains {
+		entry, err := e.Repo.GetDomainEntryProjectionByDomain(ctx, domains[i].Hostname)
+		if err == nil && entry != nil {
+			snapshot.DomainEntries = append(snapshot.DomainEntries, *entry)
 		}
 	}
 	return snapshot, nil
 }
 
-func (e *Engine) currentVersions(ctx context.Context, nodeID string) (enginepkg.VersionVector, error) {
-	snapshot, err := e.BuildSnapshot(ctx, nodeID)
+func (e *Engine) appendSnapshotRecord(ctx context.Context, syncType metadata.SnapshotSyncType, syncID string, action metadata.SnapshotAction) (uint64, error) {
+	record := &metadata.SnapshotRecord{SyncType: syncType, SyncID: syncID, Action: action}
+	if err := e.Repo.AppendSnapshotRecord(ctx, record); err != nil {
+		return 0, err
+	}
+	return record.ID, nil
+}
+
+func (e *Engine) GetSnapshot(req *replpb.SnapshotRequest, stream grpc.ServerStreamingServer[replpb.Snapshot]) error {
+	records, err := e.Repo.ListSnapshotRecordsAfter(stream.Context(), req.GetSnapshotRecordId())
 	if err != nil {
-		return enginepkg.VersionVector{}, err
+		return err
 	}
-	if snapshot == nil {
-		return enginepkg.VersionVector{}, nil
+	chunk := &enginepkg.Snapshot{NodeID: req.GetNodeId(), CreatedAt: time.Now().UTC()}
+	count := 0
+	lastSeen := req.GetSnapshotRecordId()
+	sendChunk := func(last bool) error {
+		chunk.Last = last
+		chunk.SnapshotRecordID = lastSeen
+		if len(chunk.DNSRecords) == 0 && len(chunk.DomainEntries) == 0 && !last {
+			return nil
+		}
+		if err := stream.Send(enginepkg.SnapshotToProto(chunk)); err != nil {
+			return err
+		}
+		chunk = &enginepkg.Snapshot{NodeID: req.GetNodeId(), CreatedAt: time.Now().UTC()}
+		count = 0
+		return nil
 	}
-	return snapshot.Versions, nil
-}
-
-func accumulateAssignmentVersions(out *enginepkg.VersionVector, assignment enginepkg.AssignmentRecord) {
-	if assignment.DesiredRouteVersion > out.DesiredRouteVersion {
-		out.DesiredRouteVersion = assignment.DesiredRouteVersion
+	for i := range records {
+		record := records[i]
+		lastSeen = record.ID
+		switch record.SyncType {
+		case metadata.SnapshotSyncTypeDNSRecord:
+			item := &metadata.DNSRecord{}
+			if err := e.Repo.DNSRecords().GetResourceByField(stream.Context(), item, "id", record.SyncID); err == nil {
+				chunk.DNSRecords = append(chunk.DNSRecords, *item)
+				count++
+			}
+		case metadata.SnapshotSyncTypeDomainEntryProjection:
+			domain, err := e.Repo.GetDomainEndpointByID(stream.Context(), record.SyncID)
+			if err == nil && domain != nil {
+				item, projErr := e.Repo.GetDomainEntryProjectionByDomain(stream.Context(), domain.Hostname)
+				if projErr == nil && item != nil {
+					chunk.DomainEntries = append(chunk.DomainEntries, *item)
+					count++
+				}
+			}
+		}
+		if count >= 1000 {
+			if err := sendChunk(false); err != nil {
+				return err
+			}
+		}
 	}
-	if assignment.DesiredCertificateRevision > out.DesiredCertificateRevision {
-		out.DesiredCertificateRevision = assignment.DesiredCertificateRevision
-	}
-	if assignment.DesiredDNSVersion > out.DesiredDNSVersion {
-		out.DesiredDNSVersion = assignment.DesiredDNSVersion
-	}
-}
-
-func accumulateRouteVersions(out *enginepkg.VersionVector, route enginepkg.RouteRecord) {
-	if route.RouteVersion > out.DesiredRouteVersion {
-		out.DesiredRouteVersion = route.RouteVersion
-	}
-	if route.CertificateRevision > out.DesiredCertificateRevision {
-		out.DesiredCertificateRevision = route.CertificateRevision
-	}
-}
-
-func accumulateBindingVersions(out *enginepkg.VersionVector, binding enginepkg.BindingRecord) {
-	if binding.RouteVersion > out.DesiredRouteVersion {
-		out.DesiredRouteVersion = binding.RouteVersion
-	}
-}
-
-func accumulateCertificateVersions(out *enginepkg.VersionVector, cert enginepkg.CertificateRecord) {
-	if cert.Revision > out.DesiredCertificateRevision {
-		out.DesiredCertificateRevision = cert.Revision
-	}
-}
-
-func (e *Engine) GetSnapshot(ctx context.Context, req *replpb.SnapshotRequest) (*replpb.Snapshot, error) {
-	snapshot, err := e.BuildSnapshot(ctx, req.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	return enginepkg.SnapshotToProto(snapshot), nil
+	return sendChunk(true)
 }
 
 func (e *Engine) Subscribe(req *replpb.SubscriptionRequest, stream grpc.ServerStreamingServer[replpb.ChangeNotification]) error {
 	nodeID := req.GetNodeId()
-	current, err := e.currentVersions(stream.Context(), nodeID)
-	if err != nil {
-		return err
-	}
-	known := enginepkg.VersionVectorFromProto(req.GetKnownVersions())
-	if current.DiffersFrom(known) {
-		if err := stream.Send(enginepkg.ChangeNotificationToProto(&enginepkg.ChangeNotification{
-			NodeID:    nodeID,
-			Versions:  current,
-			CreatedAt: time.Now().UTC(),
-		})); err != nil {
-			return err
-		}
-	}
-
 	subID, ch := e.Hub.Subscribe(nodeID, 128)
 	defer e.Hub.Unsubscribe(nodeID, subID)
 	for {

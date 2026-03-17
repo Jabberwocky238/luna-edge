@@ -22,6 +22,7 @@ type SpecRepository interface {
 	GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error)
 	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
 	AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error
+	ListSnapshotRecordsAfter(ctx context.Context, afterID uint64) ([]metadata.SnapshotRecord, error)
 }
 
 type GenericRepository[M any] interface {

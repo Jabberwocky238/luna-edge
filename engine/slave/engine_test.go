@@ -20,57 +20,31 @@ import (
 
 type stubReader struct{}
 
-func (stubReader) GetRouteByHostname(context.Context, string) (*enginepkg.RouteRecord, error) {
+func (stubReader) GetCertificateBundle(context.Context, string, uint64) (*enginepkg.CertificateBundle, error) {
 	return nil, nil
 }
 
-func (stubReader) GetBindingByHostname(context.Context, string) (*enginepkg.BindingRecord, error) {
-	return &enginepkg.BindingRecord{Hostname: "example.com", Address: "127.0.0.1", Port: 8080, Protocol: "http"}, nil
-}
-
-func (stubReader) GetCertificate(context.Context, string, uint64) (*enginepkg.CertificateRecord, error) {
+func (stubReader) GetDomainEntryByHostname(context.Context, string) (*metadata.DomainEntryProjection, error) {
 	return nil, nil
 }
 
-func (stubReader) ListAssignments(context.Context, string) ([]enginepkg.AssignmentRecord, error) {
+func (stubReader) GetDNSRecordsByHostname(context.Context, string) ([]metadata.DNSRecord, error) {
 	return nil, nil
 }
 
-func (stubReader) GetVersions(context.Context, string) (enginepkg.VersionVector, error) {
-	return enginepkg.VersionVector{}, nil
-}
-
-type stubVersionReader struct {
-	versions enginepkg.VersionVector
-}
-
-func (r stubVersionReader) GetRouteByHostname(context.Context, string) (*enginepkg.RouteRecord, error) {
+func (stubReader) ListDNSRecords(context.Context) ([]metadata.DNSRecord, error) {
 	return nil, nil
 }
 
-func (r stubVersionReader) GetBindingByHostname(context.Context, string) (*enginepkg.BindingRecord, error) {
-	return nil, nil
-}
-
-func (r stubVersionReader) GetCertificate(context.Context, string, uint64) (*enginepkg.CertificateRecord, error) {
-	return nil, nil
-}
-
-func (r stubVersionReader) ListAssignments(context.Context, string) ([]enginepkg.AssignmentRecord, error) {
-	return nil, nil
-}
-
-func (r stubVersionReader) GetVersions(context.Context, string) (enginepkg.VersionVector, error) {
-	return r.versions, nil
+func (stubReader) GetSnapshotRecordID(context.Context) (uint64, error) {
+	return 0, nil
 }
 
 type stubSubscriber struct {
-	known enginepkg.VersionVector
 	calls int
 }
 
-func (s *stubSubscriber) Subscribe(ctx context.Context, nodeID string, known enginepkg.VersionVector) error {
-	s.known = known
+func (s *stubSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 	s.calls++
 	return context.Canceled
 }
@@ -105,62 +79,7 @@ func TestIngressResolverLoadsDomainCertFromRoot(t *testing.T) {
 	}
 }
 
-func TestLocalStoreKeepsOnlyLatestCertificateRevision(t *testing.T) {
-	t.Parallel()
-
-	store, err := NewLocalStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("new local store: %v", err)
-	}
-	defer func() { _ = store.Close() }()
-
-	ctx := context.Background()
-	first := &enginepkg.Snapshot{
-		Certificates: []enginepkg.CertificateRecord{{
-			ID:       "cert-1",
-			DomainID: "domain-1",
-			Hostname: "example.com",
-			Revision: 1,
-			Status:   "ready",
-		}},
-	}
-	second := &enginepkg.Snapshot{
-		Certificates: []enginepkg.CertificateRecord{{
-			ID:       "cert-2",
-			DomainID: "domain-1",
-			Hostname: "example.com",
-			Revision: 2,
-			Status:   "ready",
-		}},
-	}
-	if err := store.ApplySnapshot(ctx, first); err != nil {
-		t.Fatalf("apply first cert event: %v", err)
-	}
-	if err := store.ApplySnapshot(ctx, second); err != nil {
-		t.Fatalf("apply second cert event: %v", err)
-	}
-
-	var count int64
-	if err := store.db.WithContext(ctx).Model(&struct{ metadata.CertificateRevision }{}).Where("hostname = ?", "example.com").Count(&count).Error; err != nil {
-		t.Fatalf("count cert revisions: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expected only one local certificate revision, got %d", count)
-	}
-
-	cert, err := store.GetCertificate(ctx, "example.com", 0)
-	if err != nil {
-		t.Fatalf("get current certificate: %v", err)
-	}
-	if cert.Revision != 2 {
-		t.Fatalf("expected latest revision 2, got %d", cert.Revision)
-	}
-	if _, err := store.GetCertificate(ctx, "example.com", 1); err == nil {
-		t.Fatalf("expected old revision lookup to fail")
-	}
-}
-
-func TestEngineStartRestoresSubscriptionVersionsFromCache(t *testing.T) {
+func TestEngineStartAttemptsSubscribe(t *testing.T) {
 	t.Parallel()
 
 	sub := &stubSubscriber{}
@@ -171,11 +90,7 @@ func TestEngineStartRestoresSubscriptionVersionsFromCache(t *testing.T) {
 			RetryMinBackoff:   time.Millisecond,
 			RetryMaxBackoff:   time.Millisecond,
 		},
-		Cache: stubVersionReader{versions: enginepkg.VersionVector{
-			DesiredRouteVersion:        42,
-			DesiredCertificateRevision: 9,
-			DesiredDNSVersion:          7,
-		}},
+		Cache:      stubReader{},
 		Subscriber: sub,
 	}
 
@@ -187,9 +102,6 @@ func TestEngineStartRestoresSubscriptionVersionsFromCache(t *testing.T) {
 	}
 	if sub.calls != 1 {
 		t.Fatalf("expected one subscribe attempt, got %d", sub.calls)
-	}
-	if sub.known.DesiredRouteVersion != 42 || sub.known.DesiredCertificateRevision != 9 || sub.known.DesiredDNSVersion != 7 {
-		t.Fatalf("unexpected known versions: %+v", sub.known)
 	}
 }
 

@@ -13,13 +13,12 @@ import (
 // Wrapper 承担 manage 层的统一 CRUD 和自动广播。
 type Wrapper struct {
 	repo      functions.Repository
-	builder   enginepkg.ProjectionBuilder
 	publisher enginepkg.Publisher
 }
 
 // NewWrapper 创建 wrapper。
-func NewWrapper(repo functions.Repository, builder enginepkg.ProjectionBuilder, publisher enginepkg.Publisher) *Wrapper {
-	return &Wrapper{repo: repo, builder: builder, publisher: publisher}
+func NewWrapper(repo functions.Repository, _ any, publisher enginepkg.Publisher) *Wrapper {
+	return &Wrapper{repo: repo, publisher: publisher}
 }
 
 type genericResourceRepository interface {
