@@ -68,7 +68,6 @@ spec:
                       comment:
                         type: string
                         description: Optional human-readable note for operators.
-                    additionalProperties: false
             status:
               type: object
               properties:
