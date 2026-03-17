@@ -12,19 +12,18 @@ import (
 	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
-
 	slave "github.com/jabberwocky238/luna-edge/engine/slave"
 )
 
 func main() {
 	var cfg slave.Config
 	var cacheRoot string
-	flag.StringVar(&cfg.NodeID, "node-id", envOr("LUNA_NODE_ID", enginepkg.POD_NAME), "slave node id")
 	flag.StringVar(&cfg.MasterAddress, "master-address", envOr("LUNA_MASTER_ADDRESS", "luna-master.luna-edge.svc.cluster.local:50051"), "master replication address")
 	flag.StringVar(&cfg.MasterManageURL, "master-manage-url", envOr("LUNA_MASTER_MANAGE_URL", "http://luna-master.luna-edge.svc.cluster.local:8080"), "master manage http base url")
 	flag.BoolVar(&cfg.SubscribeSnapshot, "subscribe-snapshot", envOr("LUNA_SUBSCRIBE_SNAPSHOT", "1") != "0", "request initial snapshot")
 	flag.DurationVar(&cfg.RetryMinBackoff, "retry-min-backoff", envDuration("LUNA_RETRY_MIN_BACKOFF", time.Second), "minimum retry backoff")
 	flag.DurationVar(&cfg.RetryMaxBackoff, "retry-max-backoff", envDuration("LUNA_RETRY_MAX_BACKOFF", 30*time.Second), "maximum retry backoff")
+
 	flag.StringVar(&cfg.DNSListenAddr, "dns-listen", envOr("LUNA_DNS_LISTEN", ""), "dns listen address")
 	flag.BoolVar(&cfg.DNSForwardEnabled, "dns-forward-enabled", envOr("LUNA_DNS_FORWARD_ENABLED", "0") == "1", "enable upstream dns forward on local miss")
 	flag.Func("dns-forward-servers", "comma-separated upstream dns servers", func(value string) error {
@@ -35,12 +34,14 @@ func main() {
 	flag.BoolVar(&cfg.DNSGeoIPEnabled, "dns-geoip-enabled", envOr("LUNA_DNS_GEOIP_ENABLED", "0") == "1", "enable geoip distance-based sorting for A/AAAA dns records")
 	flag.StringVar(&cfg.DNSGeoIPMMDBPath, "dns-geoip-mmdb-path", envOr("LUNA_DNS_GEOIP_MMDB_PATH", ""), "path to maxmind city mmdb file for dns geoip sorting")
 	flag.BoolVar(&cfg.DNSK8sEnabled, "dns-k8s-enabled", envOr("LUNA_DNS_K8S_ENABLED", "0") == "1", "enable kubernetes DnsDomainRecord CRD bridge")
-	flag.StringVar(&cfg.DNSK8sNamespace, "dns-k8s-namespace", envOr("LUNA_DNS_K8S_NAMESPACE", enginepkg.POD_NAMESPACE), "kubernetes namespace watched for DnsDomainRecord CRDs")
+
 	flag.StringVar(&cfg.IngressK8sNS, "ingress-k8s-namespace", envOr("LUNA_INGRESS_K8S_NAMESPACE", ""), "kubernetes ingress namespace")
 	flag.StringVar(&cfg.IngressK8sClass, "ingress-k8s-class", envOr("LUNA_INGRESS_K8S_CLASS", "luna-edge"), "kubernetes ingress class handled by luna-edge")
 	flag.IntVar(&cfg.IngressLRUSize, "ingress-lru-size", envInt("LUNA_INGRESS_LRU_SIZE", 4096), "ingress tls cert LRU size")
+
 	flag.StringVar(&cfg.HealthListenAddr, "health-listen", envOr("LUNA_HEALTH_LISTEN", ":50050"), "health HTTP listen address")
 	flag.StringVar(&cacheRoot, "cache-root", envOr("LUNA_CACHE_ROOT", ""), "slave cache root")
+
 	flag.Parse()
 	if strings.TrimSpace(cacheRoot) == "" {
 		log.Fatal("cache root is required, set --cache-root or LUNA_CACHE_ROOT")
@@ -69,7 +70,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log.Printf("slave started: node=%s master=%s", cfg.NodeID, cfg.MasterAddress)
+	log.Printf("slave started: node=%s master=%s", enginepkg.POD_NAME, cfg.MasterAddress)
 	if err := engine.Start(ctx); err != nil && ctx.Err() == nil {
 		log.Fatalf("run slave: %v", err)
 	}

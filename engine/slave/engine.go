@@ -32,7 +32,6 @@ type Config struct {
 	DNSGeoIPEnabled   bool
 	DNSGeoIPMMDBPath  string
 	DNSK8sEnabled     bool
-	DNSK8sNamespace   string
 	IngressHTTPAddr   string
 	IngressTLSAddr    string
 	IngressK8sEnabled bool
@@ -137,7 +136,7 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 			GeoIPEnabled:  cfg.DNSGeoIPEnabled,
 			GeoIPMMDBPath: cfg.DNSGeoIPMMDBPath,
 			K8sEnabled:    cfg.DNSK8sEnabled,
-			K8sNamespace:  cfg.DNSK8sNamespace,
+			K8sNamespace:  engine.POD_NAMESPACE,
 		})
 		if err := eng.restoreDNSRuntime(context.Background()); err != nil {
 			_ = conn.Close()
@@ -158,7 +157,7 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 			HTTPListenAddr:       cfg.IngressHTTPAddr,
 			TLSListenAddr:        cfg.IngressTLSAddr,
 			K8sEnabled:           cfg.IngressK8sEnabled,
-			K8sNamespace:         cfg.IngressK8sNS,
+			K8sNamespace:         engine.POD_NAMESPACE,
 			K8sIngressClass:      cfg.IngressK8sClass,
 			LRUSize:              cfg.IngressLRUSize,
 			MasterHTTP01ProxyURL: cfg.MasterManageURL,
