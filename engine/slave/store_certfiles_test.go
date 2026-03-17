@@ -53,7 +53,6 @@ func TestLocalStoreSyncSnapshotCertificatesWritesAndPrunes(t *testing.T) {
 			Hostname: "app.example.com",
 			Cert: &metadata.CertificateRevision{
 				ID:       "cert-1",
-				Hostname: "app.example.com",
 				Revision: 3,
 			},
 		}},

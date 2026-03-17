@@ -132,8 +132,12 @@ func TestIssueCertificateDNS01(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get domain: %v", err)
 	}
-	if domain.CertID == "" || domain.CertID != cert.ID {
-		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
+	active, err := repo.GetActiveCertificateForDomain(ctx, domain)
+	if err != nil {
+		t.Fatalf("get active certificate: %v", err)
+	}
+	if active == nil || active.ID != cert.ID {
+		t.Fatalf("expected active certificate to be updated, got %+v", active)
 	}
 
 	if len(publisher.changeLogs) != 5 {
@@ -175,8 +179,12 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get domain: %v", err)
 	}
-	if domain.CertID != cert.ID {
-		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
+	active, err := repo.GetActiveCertificateForDomain(ctx, domain)
+	if err != nil {
+		t.Fatalf("get active certificate: %v", err)
+	}
+	if active == nil || active.ID != cert.ID {
+		t.Fatalf("expected active certificate to be updated, got %+v", active)
 	}
 	if len(publisher.changeLogs) != 3 {
 		t.Fatalf("expected 3 publishes, got %d", len(publisher.changeLogs))

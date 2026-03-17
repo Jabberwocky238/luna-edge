@@ -38,7 +38,6 @@ func TestLocalStoreMetadataApplySnapshotAndReadBack(t *testing.T) {
 			Cert: &metadata.CertificateRevision{
 				ID:               "cert-1",
 				DomainEndpointID: "domain-1",
-				Hostname:         "app.example.com",
 				Revision:         7,
 				ArtifactBucket:   "bucket",
 				ArtifactPrefix:   "prefix",
@@ -48,11 +47,9 @@ func TestLocalStoreMetadataApplySnapshotAndReadBack(t *testing.T) {
 				NotAfter:         time.Now().Add(time.Hour).UTC(),
 			},
 			HTTPRoutes: []metadata.HTTPRouteProjection{{
-				ID:               "route-1",
-				DomainEndpointID: "domain-1",
-				Hostname:         "app.example.com",
-				Path:             "/",
-				Priority:         10,
+				ID:       "route-1",
+				Path:     "/",
+				Priority: 10,
 				BackendRef: &metadata.ServiceBackendRef{
 					ID:               "backend-1",
 					ServiceNamespace: "default",

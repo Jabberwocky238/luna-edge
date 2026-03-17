@@ -301,7 +301,6 @@ func seedMasterProjection(t *testing.T, repo repository.Repository) {
 	mustUpsert(t, repo.HTTPRoutes().UpsertResource(ctx, &metadata.HTTPRoute{
 		ID:               "route-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Path:             "/",
 		Priority:         10,
 		BackendRefID:     "backend-1",

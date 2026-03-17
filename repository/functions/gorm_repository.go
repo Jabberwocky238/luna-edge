@@ -33,8 +33,6 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 		CertSHA256Crt          *string                 `gorm:"column:cert_sha256_crt"`
 		CertSHA256Key          *string                 `gorm:"column:cert_sha256_key"`
 		RouteID                *string                 `gorm:"column:route_id"`
-		RouteDomainID          *string                 `gorm:"column:route_domain_endpoint_id"`
-		RouteHost              *string                 `gorm:"column:route_hostname"`
 		RoutePath              *string                 `gorm:"column:route_path"`
 		RoutePriority          *int32                  `gorm:"column:route_priority"`
 		RouteBackendRefID      *string                 `gorm:"column:route_backend_ref_id"`
@@ -63,8 +61,6 @@ SELECT
 	cr.sha256_crt AS cert_sha256_crt,
 	cr.sha256_key AS cert_sha256_key,
 	hr.id AS route_id,
-	hr.domain_endpoint_id AS route_domain_endpoint_id,
-	hr.hostname AS route_hostname,
 	hr.path AS route_path,
 	hr.priority AS route_priority,
 	route_sbr.id AS route_backend_ref_id,

@@ -58,7 +58,6 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 		ID:          "domain-1",
 		Hostname:    "app.example.com",
 		BackendType: metadata.BackendTypeL7HTTP,
-		CertID:      "cert-1",
 	}); err != nil {
 		t.Fatalf("upsert domain: %v", err)
 	}
@@ -73,7 +72,6 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 	if err := repo.HTTPRoutes().UpsertResource(ctx, &metadata.HTTPRoute{
 		ID:               "route-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Path:             "/",
 		Priority:         10,
 		BackendRefID:     "backend-1",
@@ -94,7 +92,6 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 	if err := repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
 		ID:               "cert-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Revision:         9,
 	}); err != nil {
 		t.Fatalf("upsert cert: %v", err)

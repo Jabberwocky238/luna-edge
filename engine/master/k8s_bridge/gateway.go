@@ -278,7 +278,6 @@ func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMater
 						item.routes = append(item.routes, metadata.HTTPRoute{
 							ID:               fmt.Sprintf("k8s:route:gateway:%s:%s:%s:%d:%d", route.namespace, route.name, host, idx, ruleIdx),
 							DomainEndpointID: item.domain.ID,
-							Hostname:         host,
 							Path:             normalizePath(rule.path),
 							Priority:         priority,
 							BackendRefID:     backendID,

@@ -163,7 +163,6 @@ func seedMasterProjectionWithCertificate(t *testing.T, repo repository.Repositor
 		ID:          "domain-1",
 		Hostname:    bundle.Hostname,
 		BackendType: metadata.BackendTypeL7HTTP,
-		CertID:      "cert-1",
 	}))
 	mustUpsert(t, repo.ServiceBindingRefs().UpsertResource(ctx, &metadata.ServiceBackendRef{
 		ID:               "backend-1",
@@ -174,7 +173,6 @@ func seedMasterProjectionWithCertificate(t *testing.T, repo repository.Repositor
 	mustUpsert(t, repo.HTTPRoutes().UpsertResource(ctx, &metadata.HTTPRoute{
 		ID:               "route-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         bundle.Hostname,
 		Path:             "/",
 		Priority:         10,
 		BackendRefID:     "backend-1",
@@ -182,7 +180,6 @@ func seedMasterProjectionWithCertificate(t *testing.T, repo repository.Repositor
 	mustUpsert(t, repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
 		ID:               "cert-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         bundle.Hostname,
 		Revision:         bundle.Revision,
 		ArtifactBucket:   "master",
 		ArtifactPrefix:   "bundle/app.example.com",

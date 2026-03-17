@@ -47,7 +47,7 @@ func init() {
 		},
 		afterDelete: func(ctx context.Context, w *Wrapper, model any) error {
 			route := model.(*metadata.HTTPRoute)
-			return publishDeleteForDomain(ctx, w, route.DomainEndpointID, nil, route.Hostname)
+			return publishDomain(ctx, w, route.DomainEndpointID)
 		},
 	}
 

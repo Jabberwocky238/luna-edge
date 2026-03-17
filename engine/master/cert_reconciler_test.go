@@ -59,7 +59,6 @@ func (f *fakeCertificateIssuer) IssueCertificate(ctx context.Context, req acme.I
 	cert := &metadata.CertificateRevision{
 		ID:               "cert-" + time.Now().UTC().Format("150405.000000000"),
 		DomainEndpointID: domain.ID,
-		Hostname:         domain.Hostname,
 		Revision:         revision,
 		ChallengeType:    req.ChallengeType,
 		Provider:         metadata.ProviderLetsEncrypt,
@@ -75,10 +74,6 @@ func (f *fakeCertificateIssuer) IssueCertificate(ctx context.Context, req acme.I
 		TLSCrt:   []byte("crt"),
 		TLSKey:   []byte("key"),
 	}); err != nil {
-		return nil, err
-	}
-	domain.CertID = cert.ID
-	if err := f.repo.DomainEndpoints().UpsertResource(ctx, domain); err != nil {
 		return nil, err
 	}
 	return cert, nil
@@ -141,14 +136,12 @@ func TestCertReconcilerNotifyIssuesForExpiringCertificate(t *testing.T) {
 		Hostname:    "app.example.com",
 		NeedCert:    true,
 		BackendType: metadata.BackendTypeL4TLSPassthrough,
-		CertID:      "cert-1",
 	}); err != nil {
 		t.Fatalf("upsert domain: %v", err)
 	}
 	if err := repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
 		ID:               "cert-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Revision:         1,
 		NotAfter:         time.Now().UTC().Add(12 * time.Hour),
 	}); err != nil {
@@ -176,13 +169,12 @@ func assertIssuedCertificate(t *testing.T, ctx context.Context, repo repository.
 	if err != nil {
 		t.Fatalf("get domain: %v", err)
 	}
-	if domain.CertID == "" {
-		t.Fatal("expected cert id to be set")
+	cert, err := repo.GetActiveCertificateForDomain(ctx, domain)
+	if err != nil {
+		t.Fatalf("get active certificate: %v", err)
 	}
-
-	cert := &metadata.CertificateRevision{}
-	if err := repo.CertificateRevisions().GetResourceByField(ctx, cert, "id", domain.CertID); err != nil {
-		t.Fatalf("get cert revision: %v", err)
+	if cert == nil {
+		t.Fatal("expected active certificate")
 	}
 	if cert.Revision != expectedRevision {
 		t.Fatalf("expected revision %d, got %+v", expectedRevision, cert)

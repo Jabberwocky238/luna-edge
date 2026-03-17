@@ -244,7 +244,6 @@ func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMater
 					item.routes = append(item.routes, metadata.HTTPRoute{
 						ID:               fmt.Sprintf("k8s:route:ingress:%s:%s:%s:%d", ing.Namespace, ing.Name, host, idx),
 						DomainEndpointID: item.domain.ID,
-						Hostname:         host,
 						Path:             normalizePath(path.Path),
 						Priority:         priority,
 						BackendRefID:     backendID,

@@ -318,11 +318,9 @@ func TestEngineRouteHTTPSUsesHTTPUpstreamForL7Projection(t *testing.T) {
 				Hostname:    "secure.example.com",
 				BackendType: metadata.BackendTypeL7HTTPS,
 				HTTPRoutes: []metadata.HTTPRouteProjection{{
-					ID:               "route-1",
-					DomainEndpointID: "domain-1",
-					Hostname:         "secure.example.com",
-					Path:             "/",
-					Priority:         10,
+					ID:       "route-1",
+					Path:     "/",
+					Priority: 10,
 					BackendRef: &metadata.ServiceBackendRef{
 						ID:               "backend-1",
 						ServiceNamespace: "default",

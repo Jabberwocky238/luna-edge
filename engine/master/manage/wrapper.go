@@ -328,7 +328,7 @@ func (w *Wrapper) deleteHTTPRoute(ctx context.Context, model *metadata.HTTPRoute
 	if err := w.raw.HTTPRoutes().DeleteResourceByField(ctx, model, field, value); err != nil {
 		return err
 	}
-	return publishDeleteForDomain(ctx, w, current.DomainEndpointID, nil, current.Hostname)
+	return publishDomain(ctx, w, current.DomainEndpointID)
 }
 
 func (w *Wrapper) upsertDNSRecord(ctx context.Context, record *metadata.DNSRecord) error {
