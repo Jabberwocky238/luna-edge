@@ -19,15 +19,15 @@ const (
 type DomainEndpoint struct {
 	Shared
 	// ID 是域名入口对象的唯一标识。
-	ID string `json:"id" gorm:"column:id;primaryKey;type:varchar(64)"`
+	ID string `json:"id" gorm:"column:id;primaryKey;type:text"`
 	// Hostname 是该入口对象管理的完整域名。
-	Hostname string `json:"hostname" gorm:"column:hostname;not null;uniqueIndex;type:varchar(255)"`
+	Hostname string `json:"hostname" gorm:"column:hostname;not null;uniqueIndex;type:text"`
 	// 是否需要证书
 	NeedCert bool `json:"need_cert" gorm:"column:need_cert;not null;default:false"`
 	// 最新证书
-	CertID          string      `json:"cert_id" gorm:"column:cert_id;not null;default:'';type:varchar(64)"`
-	BackendType     BackendType `json:"backend_type" gorm:"column:backend_type;not null;type:varchar(16)"`
-	BindedServiceID string      `json:"binded_service_ref" gorm:"column:binded_service_ref;type:varchar(64)"`
+	CertID          string      `json:"cert_id" gorm:"column:cert_id;not null;default:'';type:text"`
+	BackendType     BackendType `json:"backend_type" gorm:"column:backend_type;not null;type:text"`
+	BindedServiceID string      `json:"binded_service_ref" gorm:"column:binded_service_ref;type:text"`
 }
 
 func (DomainEndpoint) TableName() string {

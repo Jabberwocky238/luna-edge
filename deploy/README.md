@@ -62,6 +62,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/mai
 同样先准备部署文件：
 
 ```bash
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml
 bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
 ```
 
