@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
+	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
@@ -143,6 +144,12 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		log.Printf("acme: publish final cert change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
+	log.Printf("acme: publish final cert change done hostname=%s cert_id=%s", domain.Hostname, cert.ID)
+	if err := s.publishChange(ctx); err != nil {
+		log.Printf("acme: publish post-issue extra change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
+		return nil, err
+	}
+	log.Printf("acme: publish post-issue extra change done hostname=%s cert_id=%s", domain.Hostname, cert.ID)
 	log.Printf("acme: issue completed hostname=%s provider=%s challenge=%s cert_id=%s revision=%d", domain.Hostname, issuerCfg.Provider, req.ChallengeType, cert.ID, cert.Revision)
 	return cert, nil
 }
@@ -198,5 +205,5 @@ func (s *Service) publishChange(ctx context.Context) error {
 	if s.publish == nil {
 		return nil
 	}
-	return s.publish.PublishNode(ctx, "")
+	return s.publish.PublishNode(ctx, engine.POD_NAME)
 }

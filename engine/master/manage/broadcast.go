@@ -1,6 +1,10 @@
 package manage
 
-import "context"
+import (
+	"context"
+
+	"github.com/jabberwocky238/luna-edge/engine"
+)
 
 func noopBroadcast(context.Context, *Wrapper, any) error { return nil }
 
@@ -32,7 +36,7 @@ func publishAll(ctx context.Context, w *Wrapper) error {
 	if w.publisher == nil {
 		return nil
 	}
-	return w.publisher.PublishNode(ctx, "")
+	return w.publisher.PublishNode(ctx, engine.POD_NAME)
 }
 
 func publishAllModel(ctx context.Context, w *Wrapper, _ any) error {

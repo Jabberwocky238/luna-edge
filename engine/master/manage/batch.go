@@ -3,6 +3,7 @@ package manage
 import (
 	"context"
 
+	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/functions"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -38,7 +39,7 @@ func (w *Wrapper) Batch(ctx context.Context, fn func(repo repository.Repository)
 		}
 	}
 	if batch.publish && w.publisher != nil {
-		if err := w.publisher.PublishNode(ctx, ""); err != nil {
+		if err := w.publisher.PublishNode(ctx, engine.POD_NAME); err != nil {
 			return err
 		}
 	}
