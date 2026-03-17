@@ -33,6 +33,7 @@ type DNSBridge struct {
 	dynamicClient dynamic.Interface
 	factory       dynamicinformer.DynamicSharedInformerFactory
 	stopCh        chan struct{}
+	ctx           context.Context
 	repo          repository.Repository
 
 	mu      sync.RWMutex
@@ -106,11 +107,23 @@ func (b *DNSBridge) LoadInitial(ctx context.Context) error {
 	return b.syncRecords(ctx, records)
 }
 
-func (b *DNSBridge) Listen() {
+func (b *DNSBridge) Listen(runCtx ...context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.ctx = ctx
 	b.factory.Start(b.stopCh)
+	go func() {
+		<-ctx.Done()
+		_ = b.Stop()
+	}()
 }
 
 func (b *DNSBridge) Stop() error {
@@ -152,7 +165,7 @@ func (b *DNSBridge) storeObject(obj interface{}) {
 	b.records[state.key] = state
 	records := b.flattenRecordsLocked()
 	b.mu.Unlock()
-	_ = b.syncRecords(context.Background(), records)
+	_ = b.syncRecords(b.runtimeContext(), records)
 }
 
 func (b *DNSBridge) updateObject(_old, obj interface{}) {
@@ -165,8 +178,15 @@ func (b *DNSBridge) deleteObject(obj interface{}) {
 		delete(b.records, namespace+"/"+name)
 		records := b.flattenRecordsLocked()
 		b.mu.Unlock()
-		_ = b.syncRecords(context.Background(), records)
+		_ = b.syncRecords(b.runtimeContext(), records)
 	})
+}
+
+func (b *DNSBridge) runtimeContext() context.Context {
+	if b != nil && b.ctx != nil {
+		return b.ctx
+	}
+	return context.Background()
 }
 
 func (b *DNSBridge) syncRecords(ctx context.Context, records []metadata.DNSRecord) error {

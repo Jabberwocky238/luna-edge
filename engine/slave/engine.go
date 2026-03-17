@@ -191,6 +191,16 @@ func (e *Engine) Subscribe(ctx context.Context) error {
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
+	if e.DNS != nil {
+		if err := e.DNS.BindContext(ctx); err != nil {
+			return err
+		}
+	}
+	if e.Ingress != nil {
+		if err := e.Ingress.BindContext(ctx); err != nil {
+			return err
+		}
+	}
 	if err := e.startHealthServer(); err != nil {
 		return err
 	}

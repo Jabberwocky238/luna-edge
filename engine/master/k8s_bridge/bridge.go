@@ -80,18 +80,22 @@ func (b *Bridge) LoadInitial(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bridge) Listen() {
+func (b *Bridge) Listen(runCtx ...context.Context) {
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
 	if b == nil {
 		return
 	}
 	if b.DNS != nil {
-		b.DNS.Listen()
+		b.DNS.Listen(ctx)
 	}
 	if b.Ingress != nil {
-		b.Ingress.Listen()
+		b.Ingress.Listen(ctx)
 	}
 	if b.Gateway != nil {
-		b.Gateway.Listen()
+		b.Gateway.Listen(ctx)
 	}
 }
 

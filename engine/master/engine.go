@@ -51,6 +51,7 @@ type Engine struct {
 	grpcListener net.Listener
 	httpServer   *http.Server
 	httpListener net.Listener
+	runCtx       context.Context
 }
 
 type CertificateBundleProvider interface {
@@ -83,14 +84,12 @@ func New(cfg Config) (*Engine, error) {
 	wrapper := manage.NewWrapper(repo, engine, engine)
 	engine.Repo = wrapper
 	engine.Manage = manage.NewAPI(wrapper)
-	if cfg.S3.Enabled() {
-		bundles, err := NewS3CertificateBundleProvider(wrapper, cfg.S3)
-		if err != nil {
-			_ = factory.Close()
-			return nil, err
-		}
-		engine.Bundles = bundles
+	bundles, err := NewS3CertificateBundleProvider(wrapper, cfg.S3)
+	if err != nil {
+		_ = factory.Close()
+		return nil, err
 	}
+	engine.Bundles = bundles
 	engine.ACME = acme.NewService(cfg.ACME, wrapper, engine, engine.Bundles, acme.LegoIssuerFactory{}, engine.Manage)
 	engine.Certs = NewCertReconciler(wrapper, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
 	if cfg.K8sBridgeEnabled {
@@ -108,15 +107,20 @@ func New(cfg Config) (*Engine, error) {
 	return engine, nil
 }
 
-func (e *Engine) Start() error {
+func (e *Engine) Start(runCtx ...context.Context) error {
+	ctx := context.Background()
+	if len(runCtx) > 0 && runCtx[0] != nil {
+		ctx = runCtx[0]
+	}
+	e.runCtx = ctx
 	if e.K8sBridge != nil {
-		if err := e.K8sBridge.LoadInitial(context.Background()); err != nil {
+		if err := e.K8sBridge.LoadInitial(ctx); err != nil {
 			return err
 		}
-		e.K8sBridge.Listen()
+		e.K8sBridge.Listen(ctx)
 	}
 	if e.Certs != nil {
-		e.Certs.Start()
+		e.Certs.Start(ctx)
 	}
 	if e.Config.ReplicationListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ReplicationListenAddr)
@@ -152,12 +156,18 @@ func (e *Engine) Start() error {
 	return nil
 }
 
-func (e *Engine) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot) error {
+func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapshot) error {
 	if e == nil || e.Hub == nil || snapshot == nil {
 		return nil
 	}
+	if ctx == nil {
+		ctx = e.runCtx
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for i := range snapshot.DNSRecords {
-		recordID, err := e.appendSnapshotRecord(context.Background(), metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
+		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
 		if err != nil {
 			return err
 		}
@@ -165,7 +175,7 @@ func (e *Engine) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot
 		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
 	}
 	for i := range snapshot.DomainEntries {
-		recordID, err := e.appendSnapshotRecord(context.Background(), metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
+		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
 		if err != nil {
 			return err
 		}

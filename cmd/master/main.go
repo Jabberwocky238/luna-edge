@@ -51,13 +51,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("create master: %v", err)
 	}
-	if err := engine.Start(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := engine.Start(ctx); err != nil {
 		log.Fatalf("start master: %v", err)
 	}
 	log.Printf("master started: replication=%s manage=%s", cfg.ReplicationListenAddr, cfg.ManageListenAddr)
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	<-ctx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

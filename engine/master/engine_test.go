@@ -14,7 +14,7 @@ import (
 
 func TestEngineStartReturnsManageListenError(t *testing.T) {
 	t.Parallel()
-
+	ctx := context.Background()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -28,10 +28,10 @@ func TestEngineStartReturnsManageListenError(t *testing.T) {
 		Manage: manage.NewAPI(nil),
 	}
 
-	if err := eng.Start(); err == nil {
+	if err := eng.Start(ctx); err == nil {
 		t.Fatal("expected start to fail when manage port is already in use")
 	}
-	_ = eng.Stop(context.Background())
+	_ = eng.Stop(ctx)
 }
 
 func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {

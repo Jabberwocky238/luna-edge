@@ -24,6 +24,7 @@ type K8sBridge struct {
 	ingressFactory informers.SharedInformerFactory
 	gatewayFactory dynamicinformer.DynamicSharedInformerFactory
 	stopCh         chan struct{}
+	ctx            context.Context
 
 	mu sync.RWMutex
 
@@ -143,13 +144,25 @@ func (b *K8sBridge) LoadInitial(ctx context.Context) error {
 }
 
 // Listen 启动 informer 监听当前命名空间资源变化。
-func (b *K8sBridge) Listen() {
+func (b *K8sBridge) Listen(runCtx ...context.Context) {
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.ctx = ctx
 	if b.ingressFactory != nil {
 		b.ingressFactory.Start(b.stopCh)
 	}
 	if b.gatewayFactory != nil {
 		b.gatewayFactory.Start(b.stopCh)
 	}
+	go func() {
+		<-ctx.Done()
+		_ = b.Stop()
+	}()
 }
 
 // Stop 停止 informer。

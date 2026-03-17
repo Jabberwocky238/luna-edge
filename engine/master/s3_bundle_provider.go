@@ -30,10 +30,6 @@ type S3Config struct {
 	HTTPTimeout        time.Duration
 }
 
-func (c S3Config) Enabled() bool {
-	return strings.TrimSpace(c.Endpoint) != ""
-}
-
 type S3CertificateBundleProvider struct {
 	repo   repository.Repository
 	cfg    S3Config

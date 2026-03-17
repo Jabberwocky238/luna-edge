@@ -33,6 +33,7 @@ type GatewayBridge struct {
 	dynamicClient dynamic.Interface
 	factory       dynamicinformer.DynamicSharedInformerFactory
 	stopCh        chan struct{}
+	ctx           context.Context
 	repo          repository.Repository
 	gateways      map[string]*gatewayState
 	httpRoutes    map[string]*httpRouteState
@@ -93,11 +94,23 @@ func (b *GatewayBridge) LoadInitial(ctx context.Context) error {
 	return b.syncHosts(ctx, b.collectHosts(), nil)
 }
 
-func (b *GatewayBridge) Listen() {
+func (b *GatewayBridge) Listen(runCtx ...context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.ctx = ctx
 	b.factory.Start(b.stopCh)
+	go func() {
+		<-ctx.Done()
+		_ = b.Stop()
+	}()
 }
 
 func (b *GatewayBridge) Stop() error {
@@ -160,13 +173,20 @@ func (b *GatewayBridge) storeGateway(obj *unstructured.Unstructured) {
 		affected = gatewayHosts(state)
 	}
 	newHosts := b.collectHosts()
-	_ = b.syncHosts(context.Background(), affected, diffStrings(oldHosts, newHosts))
+	_ = b.syncHosts(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteGateway(obj interface{}) {
 	oldHosts := b.collectHosts()
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.gateways, namespace+"/"+name) })
-	_ = b.syncHosts(context.Background(), nil, diffStrings(oldHosts, b.collectHosts()))
+	_ = b.syncHosts(b.runtimeContext(), nil, diffStrings(oldHosts, b.collectHosts()))
+}
+
+func (b *GatewayBridge) runtimeContext() context.Context {
+	if b != nil && b.ctx != nil {
+		return b.ctx
+	}
+	return context.Background()
 }
 
 func (b *GatewayBridge) collectHosts() []string {

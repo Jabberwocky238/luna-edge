@@ -32,6 +32,7 @@ type K8sBridge struct {
 	dynamicClient dynamic.Interface
 	factory       dynamicinformer.DynamicSharedInformerFactory
 	stopCh        chan struct{}
+	ctx           context.Context
 	onChange      func([]metadata.DNSRecord)
 
 	mu      sync.RWMutex
@@ -148,11 +149,23 @@ func (b *K8sBridge) LoadInitial(ctx context.Context) error {
 	return nil
 }
 
-func (b *K8sBridge) Listen() {
+func (b *K8sBridge) Listen(runCtx ...context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.ctx = ctx
 	b.factory.Start(b.stopCh)
+	go func() {
+		<-ctx.Done()
+		_ = b.Stop()
+	}()
 }
 
 func (b *K8sBridge) Stop() error {

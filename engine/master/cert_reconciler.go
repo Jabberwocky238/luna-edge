@@ -28,7 +28,6 @@ type CertReconciler struct {
 	renewBefore time.Duration
 
 	notifyCh chan string
-	stopCh   chan struct{}
 	doneCh   chan struct{}
 
 	mu       sync.Mutex
@@ -49,28 +48,26 @@ func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, int
 		interval:    interval,
 		renewBefore: renewBefore,
 		notifyCh:    make(chan string, 128),
-		stopCh:      make(chan struct{}),
 		doneCh:      make(chan struct{}),
 		inFlight:    map[string]struct{}{},
 		now:         func() time.Time { return time.Now().UTC() },
 	}
 }
 
-func (r *CertReconciler) Start() {
+func (r *CertReconciler) Start(runCtx ...context.Context) {
 	if r == nil {
 		return
 	}
-	go r.run()
+	ctx := context.Background()
+	if len(runCtx) > 0 && runCtx[0] != nil {
+		ctx = runCtx[0]
+	}
+	go r.run(ctx)
 }
 
 func (r *CertReconciler) Stop() {
 	if r == nil {
 		return
-	}
-	select {
-	case <-r.stopCh:
-	default:
-		close(r.stopCh)
 	}
 	<-r.doneCh
 }
@@ -95,20 +92,20 @@ func (r *CertReconciler) Notify(fqdn string) {
 	}
 }
 
-func (r *CertReconciler) run() {
+func (r *CertReconciler) run(ctx context.Context) {
 	defer close(r.doneCh)
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
-	_ = r.scan(context.Background())
+	_ = r.scan(ctx)
 	for {
 		select {
-		case <-r.stopCh:
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = r.scan(context.Background())
+			_ = r.scan(ctx)
 		case fqdn := <-r.notifyCh:
-			_ = r.reconcileHostname(context.Background(), fqdn)
+			_ = r.reconcileHostname(ctx, fqdn)
 		}
 	}
 }

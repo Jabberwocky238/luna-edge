@@ -28,6 +28,8 @@ type Engine struct {
 	udpServer *mdns.Server
 	tcpServer *mdns.Server
 	mu        sync.Mutex
+	ctx       context.Context
+	k8sLoaded bool
 }
 
 type EngineOptions struct {
@@ -86,6 +88,23 @@ func (e *Engine) RestoreRecords(records []metadata.DNSRecord) {
 	e.store.Restore(merged)
 }
 
+func (e *Engine) BindContext(ctx context.Context) error {
+	if e == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	e.ctx = ctx
+	if e.k8sBridge != nil && !e.k8sLoaded {
+		if err := e.k8sBridge.LoadInitial(ctx); err != nil {
+			return err
+		}
+		e.k8sLoaded = true
+	}
+	return nil
+}
+
 // Listen 启动 DNS 监听。
 //
 // 它会同时启动 UDP 和 TCP 两个 DNS 服务端，并把查询转发到 Engine.Lookup。
@@ -122,7 +141,7 @@ func (e *Engine) Listen(listenAddr string) error {
 		_ = e.tcpServer.ListenAndServe()
 	}()
 	if e.k8sBridge != nil {
-		e.k8sBridge.Listen()
+		e.k8sBridge.Listen(e.runtimeContext())
 	}
 
 	return nil
@@ -154,7 +173,6 @@ func (e *Engine) Stop() error {
 		if err := e.k8sBridge.Stop(); err != nil {
 			return err
 		}
-		e.k8sBridge = nil
 	}
 	if e.geoDriver != nil {
 		if err := e.geoDriver.Close(); err != nil {
@@ -176,10 +194,6 @@ func (e *Engine) initK8sBridge(opts EngineOptions) {
 	bridge.SetOnChange(func(records []metadata.DNSRecord) {
 		e.replaceK8sRecords(records)
 	})
-	if err := bridge.LoadInitial(context.Background()); err != nil {
-		_ = bridge.Stop()
-		return
-	}
 	e.k8sBridge = bridge
 }
 
@@ -204,7 +218,7 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	}
 
 	for _, q := range req.Question {
-		result, err := e.Lookup(context.Background(), DNSQuestion{
+		result, err := e.Lookup(e.runtimeContext(), DNSQuestion{
 			FQDN:       q.Name,
 			RecordType: metadata.DNSRecordType(mdns.TypeToString[q.Qtype]),
 		})
@@ -233,6 +247,13 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 		resp.Rcode = mdns.RcodeNameError
 	}
 	_ = w.WriteMsg(resp)
+}
+
+func (e *Engine) runtimeContext() context.Context {
+	if e != nil && e.ctx != nil {
+		return e.ctx
+	}
+	return context.Background()
 }
 
 func toRR(record metadata.DNSRecord) ([]mdns.RR, error) {

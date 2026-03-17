@@ -37,6 +37,8 @@ type Engine struct {
 	middlewares []Middleware
 	memory      *memoryStore
 	mu          sync.Mutex
+	ctx         context.Context
+	k8sLoaded   bool
 }
 
 const acmeHTTP01Prefix = "/.well-known/acme-challenge/"
@@ -96,9 +98,6 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 		if err != nil {
 			return nil, err
 		}
-		if err := bridge.LoadInitial(context.Background()); err != nil {
-			return nil, err
-		}
 		engine.k8sBridge = bridge
 		if engine.tlsEngine != nil {
 			engine.tlsEngine.SetK8sBridge(bridge)
@@ -109,6 +108,23 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 }
 
 // Listen 启动已经挂接到 Engine 的 HTTP/TLS 子引擎。
+func (e *Engine) BindContext(ctx context.Context) error {
+	if e == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	e.ctx = ctx
+	if e.k8sBridge != nil && !e.k8sLoaded {
+		if err := e.k8sBridge.LoadInitial(ctx); err != nil {
+			return err
+		}
+		e.k8sLoaded = true
+	}
+	return nil
+}
+
 func (e *Engine) Listen() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -127,7 +143,7 @@ func (e *Engine) Listen() error {
 		}
 	}
 	if e.k8sBridge != nil {
-		e.k8sBridge.Listen()
+		e.k8sBridge.Listen(e.runtimeContext())
 	}
 	return nil
 }
@@ -157,6 +173,13 @@ func (e *Engine) Stop(ctx context.Context) error {
 		return fmt.Errorf("ingress stop failed: %s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func (e *Engine) runtimeContext() context.Context {
+	if e != nil && e.ctx != nil {
+		return e.ctx
+	}
+	return context.Background()
 }
 
 // Route 根据请求 Host 和 Path 查找上游。

@@ -25,6 +25,7 @@ type IngressBridge struct {
 	client       kubernetes.Interface
 	factory      informers.SharedInformerFactory
 	stopCh       chan struct{}
+	ctx          context.Context
 	repo         repository.Repository
 
 	ingresses map[string]*networkingv1.Ingress
@@ -90,11 +91,23 @@ func (b *IngressBridge) LoadInitial(ctx context.Context) error {
 	return b.syncHosts(ctx, mapKeys(affected), nil)
 }
 
-func (b *IngressBridge) Listen() {
+func (b *IngressBridge) Listen(runCtx ...context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
+	var ctx context.Context
+	if len(runCtx) > 0 {
+		ctx = runCtx[0]
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	b.ctx = ctx
 	b.factory.Start(b.stopCh)
+	go func() {
+		<-ctx.Done()
+		_ = b.Stop()
+	}()
 }
 
 func (b *IngressBridge) Stop() error {
@@ -144,7 +157,7 @@ func (b *IngressBridge) storeIngress(obj interface{}) {
 	}
 	if !b.matchesIngressClass(ing) {
 		delete(b.ingresses, key)
-		_ = b.syncHosts(context.Background(), nil, mapKeys(oldHosts))
+		_ = b.syncHosts(b.runtimeContext(), nil, mapKeys(oldHosts))
 		return
 	}
 	b.ingresses[key] = ing.DeepCopy()
@@ -153,7 +166,7 @@ func (b *IngressBridge) storeIngress(obj interface{}) {
 		newHosts[host] = struct{}{}
 		oldHosts[host] = struct{}{}
 	}
-	_ = b.syncHosts(context.Background(), mapKeys(newHosts), diffKeys(oldHosts, newHosts))
+	_ = b.syncHosts(b.runtimeContext(), mapKeys(newHosts), diffKeys(oldHosts, newHosts))
 }
 
 func (b *IngressBridge) deleteIngress(obj interface{}) {
@@ -166,8 +179,15 @@ func (b *IngressBridge) deleteIngress(obj interface{}) {
 			}
 		}
 		delete(b.ingresses, key)
-		_ = b.syncHosts(context.Background(), nil, mapKeys(oldHosts))
+		_ = b.syncHosts(b.runtimeContext(), nil, mapKeys(oldHosts))
 	})
+}
+
+func (b *IngressBridge) runtimeContext() context.Context {
+	if b != nil && b.ctx != nil {
+		return b.ctx
+	}
+	return context.Background()
 }
 
 func (b *IngressBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
