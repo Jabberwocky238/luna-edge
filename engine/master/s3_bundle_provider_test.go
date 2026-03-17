@@ -16,22 +16,21 @@ import (
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
 func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 	t.Parallel()
 
 	objects := map[string][]byte{
-		"/cert-bucket/bundles/app.example.com/tls.crt":       []byte("crt-bytes"),
-		"/cert-bucket/bundles/app.example.com/tls.key":       []byte("key-bytes"),
-		"/cert-bucket/bundles/app.example.com/metadata.json": []byte(`{"hostname":"app.example.com","revision":3}`),
+		"/lunaedge/app.example.com/3/tls.crt":       []byte("crt-bytes"),
+		"/lunaedge/app.example.com/3/tls.key":       []byte("key-bytes"),
+		"/lunaedge/app.example.com/3/metadata.json": []byte(`{"hostname":"app.example.com","revision":3}`),
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" {
 			t.Errorf("expected Authorization header")
 		}
-		if strings.HasPrefix(r.URL.Path, "/cert-bucket") && (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.Contains(r.URL.RawQuery, "location") {
+		if strings.HasPrefix(r.URL.Path, "/lunaedge") && (r.Method == http.MethodGet || r.Method == http.MethodHead) && strings.Contains(r.URL.RawQuery, "location") {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -63,7 +62,6 @@ func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 	defer server.Close()
 
 	repo := newBundleTestRepository(t)
-	seedBundleLocation(t, repo)
 	ctx := context.Background()
 
 	provider, err := NewS3CertificateBundleProvider(repo, S3Config{
@@ -100,13 +98,22 @@ func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 		t.Fatalf("put certificate bundle: %v", err)
 	}
 
-	if got := string(objects["/cert-bucket/bundles/app.example.com/tls.crt"]); got != "updated-crt" {
+	if got := string(objects["/lunaedge/app.example.com/tls.crt"]); got != "updated-crt" {
 		t.Fatalf("unexpected updated crt: %q", got)
 	}
-	if got := string(objects["/cert-bucket/bundles/app.example.com/tls.key"]); got != "updated-key" {
+	if got := string(objects["/lunaedge/app.example.com/tls.key"]); got != "updated-key" {
 		t.Fatalf("unexpected updated key: %q", got)
 	}
-	if got := string(objects["/cert-bucket/bundles/app.example.com/metadata.json"]); !strings.Contains(got, `"updated":true`) {
+	if got := string(objects["/lunaedge/app.example.com/metadata.json"]); !strings.Contains(got, `"updated":true`) {
+		t.Fatalf("unexpected updated metadata: %q", got)
+	}
+	if got := string(objects["/lunaedge/app.example.com/3/tls.crt"]); got != "updated-crt" {
+		t.Fatalf("unexpected revision crt: %q", got)
+	}
+	if got := string(objects["/lunaedge/app.example.com/3/tls.key"]); got != "updated-key" {
+		t.Fatalf("unexpected revision key: %q", got)
+	}
+	if got := string(objects["/lunaedge/app.example.com/3/metadata.json"]); !strings.Contains(got, `"updated":true`) {
 		t.Fatalf("unexpected updated metadata: %q", got)
 	}
 }
@@ -125,25 +132,6 @@ func newBundleTestRepository(t *testing.T) repository.Repository {
 	return factory.Repository()
 }
 
-func seedBundleLocation(t *testing.T, repo repository.Repository) {
-	t.Helper()
-	ctx := context.Background()
-	mustUpsertBundleResource(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:          "domain-1",
-		Hostname:    "app.example.com",
-		BackendType: metadata.BackendTypeL7HTTP,
-		CertID:      "cert-1",
-	}))
-	mustUpsertBundleResource(t, repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
-		ID:               "cert-1",
-		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
-		Revision:         3,
-		ArtifactBucket:   "cert-bucket",
-		ArtifactPrefix:   "bundles/app.example.com",
-	}))
-}
-
 func readAllTest(t *testing.T, r *http.Request) []byte {
 	t.Helper()
 	defer func() { _ = r.Body.Close() }()
@@ -152,13 +140,6 @@ func readAllTest(t *testing.T, r *http.Request) []byte {
 		t.Fatal(err)
 	}
 	return body
-}
-
-func mustUpsertBundleResource(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func decodeAWSChunked(body []byte) ([]byte, error) {

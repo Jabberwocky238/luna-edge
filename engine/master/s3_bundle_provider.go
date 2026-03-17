@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,8 @@ type S3CertificateBundleProvider struct {
 	cfg    S3Config
 	client *minio.Client
 }
+
+const defaultCertificateBucket = "lunaedge"
 
 func NewS3CertificateBundleProvider(repo repository.Repository, cfg S3Config) (*S3CertificateBundleProvider, error) {
 	if repo == nil {
@@ -127,7 +130,7 @@ func buildMinioTransport(secure, insecureSkipVerify bool) http.RoundTripper {
 }
 
 func (p *S3CertificateBundleProvider) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*enginepkg.CertificateBundle, error) {
-	location, err := p.certificateLocation(ctx, hostname, revision)
+	location, err := p.certificateLocation(hostname, revision)
 	if err != nil {
 		return nil, err
 	}
@@ -135,14 +138,17 @@ func (p *S3CertificateBundleProvider) FetchCertificateBundle(ctx context.Context
 		Hostname: hostname,
 		Revision: revision,
 	}
-	if bundle.TLSCrt, err = p.readObject(ctx, location.bucket, objectKey(location.prefix, "tls.crt")); err != nil {
+	if bundle.TLSCrt, err = p.readObject(ctx, location.bucket, objectKey(location.revisionPrefix, "tls.crt")); err != nil {
 		return nil, err
 	}
-	if bundle.TLSKey, err = p.readObject(ctx, location.bucket, objectKey(location.prefix, "tls.key")); err != nil {
+	if bundle.TLSKey, err = p.readObject(ctx, location.bucket, objectKey(location.revisionPrefix, "tls.key")); err != nil {
 		return nil, err
 	}
-	if bundle.MetadataJSON, err = p.readObject(ctx, location.bucket, objectKey(location.prefix, "metadata.json")); err != nil {
-		return nil, err
+	if bundle.MetadataJSON, err = p.readObject(ctx, location.bucket, objectKey(location.revisionPrefix, "metadata.json")); err != nil {
+		bundle.MetadataJSON, err = p.readObject(ctx, location.bucket, objectKey(location.latestPrefix, "metadata.json"))
+		if err != nil {
+			return nil, err
+		}
 	}
 	return bundle, nil
 }
@@ -154,15 +160,25 @@ func (p *S3CertificateBundleProvider) PutCertificateBundle(ctx context.Context, 
 	if bundle == nil {
 		return fmt.Errorf("certificate bundle is nil")
 	}
-	location, err := p.certificateLocation(ctx, hostname, revision)
+	location, err := p.certificateLocation(hostname, revision)
 	if err != nil {
 		return err
 	}
-	if err := p.writeObject(ctx, location.bucket, objectKey(location.prefix, "tls.crt"), bundle.TLSCrt, "application/x-pem-file"); err != nil {
-		return err
+	for _, key := range []string{
+		objectKey(location.latestPrefix, "tls.crt"),
+		objectKey(location.revisionPrefix, "tls.crt"),
+	} {
+		if err := p.writeObject(ctx, location.bucket, key, bundle.TLSCrt, "application/x-pem-file"); err != nil {
+			return err
+		}
 	}
-	if err := p.writeObject(ctx, location.bucket, objectKey(location.prefix, "tls.key"), bundle.TLSKey, "application/x-pem-file"); err != nil {
-		return err
+	for _, key := range []string{
+		objectKey(location.latestPrefix, "tls.key"),
+		objectKey(location.revisionPrefix, "tls.key"),
+	} {
+		if err := p.writeObject(ctx, location.bucket, key, bundle.TLSKey, "application/x-pem-file"); err != nil {
+			return err
+		}
 	}
 	metadataJSON := bundle.MetadataJSON
 	if len(metadataJSON) == 0 {
@@ -174,37 +190,38 @@ func (p *S3CertificateBundleProvider) PutCertificateBundle(ctx context.Context, 
 			return err
 		}
 	}
-	return p.writeObject(ctx, location.bucket, objectKey(location.prefix, "metadata.json"), metadataJSON, "application/json")
+	for _, key := range []string{
+		objectKey(location.latestPrefix, "metadata.json"),
+		objectKey(location.revisionPrefix, "metadata.json"),
+	} {
+		if err := p.writeObject(ctx, location.bucket, key, metadataJSON, "application/json"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type certificateLocation struct {
-	bucket string
-	prefix string
+	bucket         string
+	latestPrefix   string
+	revisionPrefix string
 }
 
-func (p *S3CertificateBundleProvider) certificateLocation(ctx context.Context, hostname string, revision uint64) (*certificateLocation, error) {
+func (p *S3CertificateBundleProvider) certificateLocation(hostname string, revision uint64) (*certificateLocation, error) {
 	if p == nil {
 		return nil, fmt.Errorf("s3 provider is nil")
 	}
-	domain, err := p.repo.GetDomainEndpointByHostname(ctx, hostname)
-	if err != nil {
-		return nil, fmt.Errorf("load domain endpoint by hostname %q: %w", hostname, err)
+	normalized := strings.Trim(strings.ToLower(strings.TrimSpace(hostname)), "/")
+	normalized = strings.TrimSuffix(normalized, ".")
+	if normalized == "" {
+		return nil, fmt.Errorf("hostname is required")
 	}
-	cert, err := p.repo.GetCertificateRevision(ctx, domain.ID, revision)
-	if err != nil {
-		return nil, fmt.Errorf("load certificate revision for hostname %q revision %d: %w", hostname, revision, err)
-	}
-	if cert == nil {
-		return nil, fmt.Errorf("certificate revision not found for hostname %q revision %d", hostname, revision)
-	}
-	bucket := strings.TrimSpace(cert.ArtifactBucket)
-	prefix := strings.Trim(strings.TrimSpace(cert.ArtifactPrefix), "/")
-	if bucket == "" {
-		return nil, fmt.Errorf("certificate artifact bucket is empty for hostname %q revision %d", hostname, revision)
-	}
+	latestPrefix := normalized
+	revisionPrefix := path.Join(normalized, strconv.FormatUint(revision, 10))
 	return &certificateLocation{
-		bucket: bucket,
-		prefix: prefix,
+		bucket:         defaultCertificateBucket,
+		latestPrefix:   latestPrefix,
+		revisionPrefix: revisionPrefix,
 	}, nil
 }
 
