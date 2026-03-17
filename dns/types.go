@@ -36,22 +36,22 @@ type DNSAnswerSet struct {
 	Records []metadata.DNSRecord
 }
 
+type ChangeEffectAction string
+
+const (
+	ChangeEffectActionAdd ChangeEffectAction = "add"
+	ChangeEffectActionMod ChangeEffectAction = "mod"
+	ChangeEffectActionDel ChangeEffectAction = "del"
+)
+
 // ChangeEffect 描述某次 DNS 变更的影响结果。
 type ChangeEffect struct {
-	// DomainID 是受影响的域名入口对象 ID。
-	DomainID string
-	// ZoneID 是受影响的 Zone ID。
-	ZoneID string
 	// FQDN 是受影响的完整域名。
 	FQDN string
 	// RecordType 是受影响的记录类型。
 	RecordType metadata.DNSRecordType
 	// Action 是执行的动作，例如 add、mod、del。
-	Action string
-	// OldVersion 是变更前版本号。
-	OldVersion uint64
-	// NewVersion 是变更后版本号。
-	NewVersion uint64
+	Action ChangeEffectAction
 	// RecordsAffected 是本次操作影响的记录条数。
 	RecordsAffected int
 }

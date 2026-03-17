@@ -53,13 +53,12 @@ func (e *Engine) ModifyRecord(_ context.Context, input ModifyRecordInput) (*Chan
 		return nil, err
 	}
 
-	updated, answerSet, err := e.store.Modify(input.DomainID, input.RecordID, func(record *metadata.DNSRecord) error {
+	_, answerSet, err := e.store.Modify(input.DomainID, input.RecordID, func(record *metadata.DNSRecord) error {
 		record.FQDN = normalizeFQDN(input.FQDN)
 		record.RecordType = normalizeRecordType(input.RecordType)
 		record.TTLSeconds = input.TTLSeconds
 		record.ValuesJSON = input.ValuesJSON
 		record.Enabled = input.Enabled
-		record.Version++
 		return nil
 	})
 	if err != nil {
@@ -67,13 +66,9 @@ func (e *Engine) ModifyRecord(_ context.Context, input ModifyRecordInput) (*Chan
 	}
 
 	return &ChangeEffect{
-		DomainID:        input.DomainID,
-		ZoneID:          updated.ZoneID,
 		FQDN:            answerSet.Question.FQDN,
 		RecordType:      answerSet.Question.RecordType,
 		Action:          "mod",
-		OldVersion:      updated.Version - 1,
-		NewVersion:      updated.Version,
 		RecordsAffected: 1,
 	}, nil
 }

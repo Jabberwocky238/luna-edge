@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
@@ -28,7 +27,7 @@ const (
 // - 提供 Listen / Stop 生命周期控制
 type Engine struct {
 	opts        EngineOptions
-	repo        ServiceBindingReader
+	repo        ProjectionReader
 	slave       ReplicaReader
 	httpEngine  *HTTPEngine
 	tlsEngine   *TLSEngine
@@ -159,14 +158,14 @@ func (e *Engine) Stop(ctx context.Context) error {
 
 // Route 根据请求 Host 和 Path 查找上游。
 func (e *Engine) Route(ctx context.Context, host, requestPath string) (*RouteResult, error) {
-	return e.routeByKind(ctx, host, requestPath, metadata.ServiceBindingRouteKindHTTP)
+	return e.routeByKind(ctx, host, requestPath, RouteKindHTTP)
 }
 
 func (e *Engine) RouteHTTPS(ctx context.Context, host, requestPath string) (*RouteResult, error) {
-	return e.routeByKind(ctx, host, requestPath, metadata.ServiceBindingRouteKindHTTPS)
+	return e.routeByKind(ctx, host, requestPath, RouteKindHTTPS)
 }
 
-func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind metadata.ServiceBindingRouteKind) (*RouteResult, error) {
+func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind RouteKind) (*RouteResult, error) {
 	hostname := normalizeHost(host)
 	if hostname == "" {
 		return nil, fmt.Errorf("host is required")
@@ -174,7 +173,7 @@ func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind
 
 	if e.k8sBridge != nil {
 		switch kind {
-		case metadata.ServiceBindingRouteKindHTTPS:
+		case RouteKindHTTPS:
 			if resolved, ok := e.k8sBridge.ResolveHTTPS(hostname, requestPath); ok {
 				return e.resultFromBinding(hostname, resolved.Binding)
 			}
@@ -190,32 +189,23 @@ func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind
 	}
 
 	if e.slave != nil {
-		route, err := lookupRouteFromReadOnlyCache(ctx, e.slave, hostname)
-		if err == nil && route != nil {
-			return e.resultFromReplicaRoute(hostname, route)
+		entry, err := lookupRouteFromReadOnlyCache(ctx, e.slave, hostname)
+		if err == nil && entry != nil {
+			return e.resultFromProjection(hostname, requestPath, kind, entry)
 		}
 		return nil, err
 	}
 
 	if e.repo != nil {
-		route, err := e.repo.GetHTTPRouteByHostname(ctx, hostname, requestPath)
-		if err == nil && route != nil {
-			binding, bindErr := e.repo.GetServiceBindingByDomainID(ctx, route.DomainID)
-			if bindErr == nil && binding != nil {
-				copyBinding := *binding
-				copyBinding.BackendJSON = route.RouteJSON
-				copyBinding.Hostname = route.Hostname
-				return e.resultFromBinding(hostname, binding)
-			}
-		}
-		if binding, err := e.repo.GetServiceBindingByHostname(ctx, hostname); err == nil && binding != nil {
-			return e.resultFromBinding(hostname, binding)
+		entry, err := e.repo.GetDomainEntryProjectionByDomain(ctx, hostname)
+		if err == nil && entry != nil {
+			return e.resultFromProjection(hostname, requestPath, kind, entry)
 		}
 	}
 	return &RouteResult{Found: false}, nil
 }
 
-func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBinding) (*RouteResult, error) {
+func (e *Engine) resultFromBinding(hostname string, binding *BackendBinding) (*RouteResult, error) {
 	if static, ok := parseStaticResponse(binding); ok {
 		return &RouteResult{
 			Found:          true,
@@ -238,7 +228,7 @@ func (e *Engine) resultFromBinding(hostname string, binding *metadata.ServiceBin
 	return result, nil
 }
 
-func parseStaticResponse(binding *metadata.ServiceBinding) (*StaticResponse, bool) {
+func parseStaticResponse(binding *BackendBinding) (*StaticResponse, bool) {
 	if binding == nil {
 		return nil, false
 	}
@@ -259,34 +249,16 @@ func parseStaticResponse(binding *metadata.ServiceBinding) (*StaticResponse, boo
 	}, true
 }
 
-func (e *Engine) resultFromReplicaRoute(hostname string, route *enginepkg.RouteRecord) (*RouteResult, error) {
-	upstreamURL := buildUpstreamURL(route.UpstreamProtocol, route.UpstreamAddress, route.UpstreamPort)
-	if upstreamURL == "" {
-		return nil, fmt.Errorf("replica route %q has no valid upstream", route.BindingID)
+func (e *Engine) resultFromProjection(hostname, requestPath string, kind RouteKind, entry *metadata.DomainEntryProjection) (*RouteResult, error) {
+	binding := bindingFromProjection(entry, requestPath, kind)
+	if binding == nil {
+		return &RouteResult{Found: false}, nil
 	}
-	result := &RouteResult{
-		Found: true,
-		Target: ProxyTarget{
-			Hostname:    hostname,
-			UpstreamURL: upstreamURL,
-			Protocol:    route.Protocol,
-		},
-	}
-	e.memory.Put(&metadata.ServiceBinding{
-		ID:           route.BindingID,
-		DomainID:     route.DomainID,
-		Hostname:     route.Hostname,
-		Address:      route.UpstreamAddress,
-		Port:         route.UpstreamPort,
-		Protocol:     metadata.ServiceBindingRouteKind(route.UpstreamProtocol),
-		RouteVersion: route.RouteVersion,
-		BackendJSON:  route.BackendJSON,
-	})
-	return result, nil
+	return e.resultFromBinding(hostname, binding)
 }
 
-// InjectRepository 在初始化后注入只读 service binding 仓储。
-func (e *Engine) InjectRepository(repo ServiceBindingReader) {
+// InjectRepository 在初始化后注入只读 projection 仓储。
+func (e *Engine) InjectRepository(repo ProjectionReader) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.repo = repo
@@ -324,4 +296,74 @@ func (e *Engine) RefreshCertificateHost(hostname string) {
 	if resolver, ok := e.tlsResolver.(*LunaTLSCertResolver); ok {
 		resolver.DeleteCandidates(hostname)
 	}
+}
+
+func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath string, kind RouteKind) *BackendBinding {
+	if entry == nil {
+		return nil
+	}
+	switch kind {
+	case RouteKindHTTP, RouteKindHTTPS, RouteKindGRPC:
+		route := selectHTTPRoute(entry.HTTPRoutes, requestPath)
+		if route == nil || route.BackendRef == nil {
+			return nil
+		}
+		return &BackendBinding{
+			ID:            route.ID,
+			DomainID:      entry.ID,
+			Hostname:      entry.Hostname,
+			Namespace:     route.BackendRef.ServiceNamespace,
+			Name:          route.BackendRef.ServiceName,
+			Address:       buildServiceAddress(route.BackendRef.ServiceName, route.BackendRef.ServiceNamespace),
+			Port:          route.BackendRef.ServicePort,
+			Protocol:      kind,
+			RouteVersion:  1,
+			Path:          route.Path,
+			Priority:      route.Priority,
+			BackendRef:    route.BackendRef,
+			DomainEntryID: entry.ID,
+		}
+	case RouteKindTLSTerminate, RouteKindTLSPassthrough, RouteKindTCP, RouteKindUDP:
+		if entry.BindedBackendRef == nil {
+			return nil
+		}
+		return &BackendBinding{
+			ID:            entry.BindedBackendRef.ID,
+			DomainID:      entry.ID,
+			Hostname:      entry.Hostname,
+			Namespace:     entry.BindedBackendRef.ServiceNamespace,
+			Name:          entry.BindedBackendRef.ServiceName,
+			Address:       buildServiceAddress(entry.BindedBackendRef.ServiceName, entry.BindedBackendRef.ServiceNamespace),
+			Port:          entry.BindedBackendRef.ServicePort,
+			Protocol:      kind,
+			BackendRef:    entry.BindedBackendRef,
+			DomainEntryID: entry.ID,
+		}
+	default:
+		return nil
+	}
+}
+
+func selectHTTPRoute(routes []metadata.HTTPRouteProjection, requestPath string) *metadata.HTTPRouteProjection {
+	var selected *metadata.HTTPRouteProjection
+	for i := range routes {
+		route := &routes[i]
+		if !httpRouteMatches(route.Path, requestPath) {
+			continue
+		}
+		if selected == nil || route.Priority > selected.Priority || (route.Priority == selected.Priority && len(route.Path) > len(selected.Path)) {
+			selected = route
+		}
+	}
+	return selected
+}
+
+func httpRouteMatches(path, requestPath string) bool {
+	if path == "" || path == "/" {
+		return true
+	}
+	if requestPath == "" {
+		requestPath = "/"
+	}
+	return strings.HasPrefix(requestPath, path)
 }

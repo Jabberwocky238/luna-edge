@@ -14,8 +14,6 @@ func TestResolveUsesDirectDNSLookup(t *testing.T) {
 	engine := NewEngine(EngineOptions{})
 	engine.RestoreRecords([]metadata.DNSRecord{{
 		ID:         "dns-1",
-		ZoneID:     "zone-1",
-		DomainID:   "domain-1",
 		FQDN:       "app.example.com.",
 		RecordType: "A",
 		TTLSeconds: 60,
@@ -23,8 +21,6 @@ func TestResolveUsesDirectDNSLookup(t *testing.T) {
 		Enabled:    true,
 	}, {
 		ID:         "dns-2",
-		ZoneID:     "zone-1",
-		DomainID:   "domain-2",
 		FQDN:       "other.example.com.",
 		RecordType: "A",
 		TTLSeconds: 60,
@@ -32,8 +28,6 @@ func TestResolveUsesDirectDNSLookup(t *testing.T) {
 		Enabled:    true,
 	}, {
 		ID:         "dns-3",
-		ZoneID:     "zone-1",
-		DomainID:   "domain-3",
 		FQDN:       "app.example.com.",
 		RecordType: "AAAA",
 		TTLSeconds: 60,
@@ -62,8 +56,6 @@ func TestResolveUsesRestoredMemoryRecords(t *testing.T) {
 	engine := NewEngine(EngineOptions{})
 	engine.RestoreRecords([]metadata.DNSRecord{{
 		ID:         "dns-1",
-		ZoneID:     "zone-1",
-		DomainID:   "domain-1",
 		FQDN:       "app.example.com.",
 		RecordType: "A",
 		TTLSeconds: 60,
@@ -80,8 +72,6 @@ func TestResolveUsesRestoredMemoryRecords(t *testing.T) {
 
 	engine.RestoreRecords([]metadata.DNSRecord{{
 		ID:         "dns-1",
-		ZoneID:     "zone-1",
-		DomainID:   "domain-1",
 		FQDN:       "app.example.com.",
 		RecordType: "A",
 		TTLSeconds: 60,

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -36,12 +35,12 @@ func TestEngineHTTPProxyToService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
-	engine.memory.Put(&metadata.ServiceBinding{
+	engine.memory.Put(&BackendBinding{
 		ID:       "binding-http",
 		Hostname: "app.example.com",
 		Address:  host,
 		Port:     port,
-		Protocol: "http",
+		Protocol: RouteKindHTTP,
 	})
 	if err := engine.Listen(); err != nil {
 		t.Fatalf("listen: %v", err)
@@ -93,12 +92,12 @@ func TestEngineTLSOffloadProxyToService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
-	engine.memory.Put(&metadata.ServiceBinding{
+	engine.memory.Put(&BackendBinding{
 		ID:       "binding-tls",
 		Hostname: serverName,
 		Address:  host,
 		Port:     port,
-		Protocol: "http",
+		Protocol: RouteKindHTTP,
 	})
 	if err := engine.Listen(); err != nil {
 		t.Fatalf("listen: %v", err)
@@ -266,12 +265,12 @@ func TestEngineRouteUsesMemoryStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
-	engine.memory.Put(&metadata.ServiceBinding{
+	engine.memory.Put(&BackendBinding{
 		ID:       "binding-memory",
 		Hostname: "cached.example.com",
 		Address:  "127.0.0.1",
 		Port:     9000,
-		Protocol: "http",
+		Protocol: RouteKindHTTP,
 	})
 
 	first, err := engine.Route(context.Background(), "cached.example.com", "/")

@@ -23,8 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
-
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
 var hostnameLabelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -143,7 +141,7 @@ func deleteByNamespaceName(obj interface{}, deleter func(namespace, name string)
 	}
 }
 
-func cloneBinding(in *metadata.ServiceBinding) *metadata.ServiceBinding {
+func cloneBinding(in *BackendBinding) *BackendBinding {
 	if in == nil {
 		return nil
 	}

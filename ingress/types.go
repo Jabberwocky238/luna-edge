@@ -8,6 +8,36 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
+type RouteKind string
+
+const (
+	RouteKindHTTP           RouteKind = "http"
+	RouteKindHTTPS          RouteKind = "https"
+	RouteKindGRPC           RouteKind = "grpc"
+	RouteKindTLSTerminate   RouteKind = "tls-terminate"
+	RouteKindTLSPassthrough RouteKind = "tls-passthrough"
+	RouteKindTCP            RouteKind = "tcp"
+	RouteKindUDP            RouteKind = "udp"
+)
+
+type BackendBinding struct {
+	ID            string
+	DomainID      string
+	Hostname      string
+	ServiceID     string
+	Namespace     string
+	Name          string
+	Address       string
+	Port          uint32
+	Protocol      RouteKind
+	RouteVersion  uint64
+	Path          string
+	Priority      int32
+	BackendJSON   string
+	BackendRef    *metadata.ServiceBackendRef
+	DomainEntryID string
+}
+
 // EngineOptions 定义主 ingress 引擎的初始化参数。
 type EngineOptions struct {
 	// HTTPListenAddr 是 HTTP 监听地址，例如 :80。
@@ -55,10 +85,10 @@ type StaticResponse struct {
 
 // K8sResolvedBackend 表示 bridge 对外暴露的一次 Kubernetes 路由解析结果。
 type K8sResolvedBackend struct {
-	Kind     metadata.ServiceBindingRouteKind
+	Kind     RouteKind
 	Hostname string
 	Port     uint32
-	Binding  *metadata.ServiceBinding
+	Binding  *BackendBinding
 	Route    *ResolvedRoute
 }
 
@@ -67,7 +97,7 @@ type ResolvedRoute struct {
 	DomainID     string
 	Hostname     string
 	RouteVersion uint64
-	Protocol     metadata.ServiceBindingRouteKind
+	Protocol     RouteKind
 	RouteJSON    string
 	BindingID    string
 }
@@ -82,9 +112,7 @@ type CertificatePaths struct {
 	PrivateKey  string
 }
 
-// ServiceBindingReader 定义 ingress 所需的最小仓储读取能力。
-type ServiceBindingReader interface {
-	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)
-	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBinding, error)
-	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBinding, error)
+// ProjectionReader 定义 ingress 所需的最小仓储读取能力。
+type ProjectionReader interface {
+	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
 }

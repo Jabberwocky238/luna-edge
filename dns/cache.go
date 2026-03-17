@@ -116,11 +116,15 @@ func (s *dnsMemoryStore) Clear() {
 
 func (s *dnsMemoryStore) upsertLocked(record metadata.DNSRecord) {
 	record.FQDN = normalizeFQDN(record.FQDN)
-	if s.byDomain[record.DomainID] == nil {
-		s.byDomain[record.DomainID] = map[string]metadata.DNSRecord{}
+	if s.byDomain[record.FQDN] == nil {
+		// FQDN not exist, create new entry
+		s.byDomain[record.FQDN] = map[string]metadata.DNSRecord{}
+	} else if existing, ok := s.byDomain[record.FQDN][record.ID]; ok {
+		delete(s.byDomain[record.FQDN], record.ID)
+		s.rebuildQuestionLocked(existing.FQDN, existing.RecordType)
+	} else {
+		// no existing record, do nothing
 	}
-	s.byDomain[record.DomainID][record.ID] = record
-	s.rebuildQuestionLocked(record.FQDN, record.RecordType)
 }
 
 func (s *dnsMemoryStore) rebuildQuestionLocked(fqdn string, recordType metadata.DNSRecordType) {

@@ -2,26 +2,24 @@ package ingress
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
 type memoryStore struct {
 	mu       sync.RWMutex
-	bindings map[string][]*metadata.ServiceBinding
+	bindings map[string][]*BackendBinding
 }
 
 func newMemoryStore() *memoryStore {
 	return &memoryStore{
-		bindings: map[string][]*metadata.ServiceBinding{},
+		bindings: map[string][]*BackendBinding{},
 	}
 }
 
-func (s *memoryStore) Get(hostname, requestPath string) (*metadata.ServiceBinding, bool) {
+func (s *memoryStore) Get(hostname, requestPath string) (*BackendBinding, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	bindings, ok := s.bindings[normalizeHost(hostname)]
@@ -38,7 +36,7 @@ func (s *memoryStore) Get(hostname, requestPath string) (*metadata.ServiceBindin
 	return &copyBinding, true
 }
 
-func (s *memoryStore) Put(binding *metadata.ServiceBinding) {
+func (s *memoryStore) Put(binding *BackendBinding) {
 	if binding == nil {
 		return
 	}
@@ -58,10 +56,10 @@ func (s *memoryStore) Delete(hostname string) {
 func (s *memoryStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.bindings = map[string][]*metadata.ServiceBinding{}
+	s.bindings = map[string][]*BackendBinding{}
 }
 
-func betterBinding(left, right *metadata.ServiceBinding, requestPath string) bool {
+func betterBinding(left, right *BackendBinding, requestPath string) bool {
 	if right == nil {
 		return true
 	}
@@ -78,32 +76,24 @@ func betterBinding(left, right *metadata.ServiceBinding, requestPath string) boo
 	return bindingMatchesPath(left, requestPath) && !bindingMatchesPath(right, requestPath)
 }
 
-func parseBindingPath(binding *metadata.HTTPRouteProjection) string {
+func parseBindingPath(binding *BackendBinding) string {
 	if binding == nil {
 		return "/"
 	}
-	var payload struct {
-		Path string `json:"path"`
-	}
-	_ = json.Unmarshal([]byte(binding.BackendJSON), &payload)
-	if payload.Path == "" {
+	if binding.Path == "" {
 		return "/"
 	}
-	return payload.Path
+	return binding.Path
 }
 
-func parseBindingPriority(binding *metadata.HTTPRouteProjection) int32 {
+func parseBindingPriority(binding *BackendBinding) int32 {
 	if binding == nil {
 		return 0
 	}
-	var payload struct {
-		Priority int32 `json:"priority"`
-	}
-	_ = json.Unmarshal([]byte(binding.BackendJSON), &payload)
-	return payload.Priority
+	return binding.Priority
 }
 
-func bindingMatchesPath(binding *metadata.HTTPRouteProjection, requestPath string) bool {
+func bindingMatchesPath(binding *BackendBinding, requestPath string) bool {
 	path := parseBindingPath(binding)
 	if path == "/" || path == "" {
 		return true
@@ -128,7 +118,7 @@ func lookupRouteFromReadOnlyCache(ctx context.Context, slave ReplicaReader, host
 	}
 	cache := slave.ReadCache()
 	if cache == nil {
-		return nil, fmt.Errorf("slave cache is nil")
+		return nil, nil
 	}
-	return cache.GetRouteByHostname(ctx, hostname)
+	return cache.GetDomainEntryByHostname(ctx, hostname)
 }

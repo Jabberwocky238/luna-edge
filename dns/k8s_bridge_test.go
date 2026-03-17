@@ -43,32 +43,23 @@ func TestParseDNSDomainRecordState(t *testing.T) {
 	if state.records[1].FQDN != "www.example.com" {
 		t.Fatalf("unexpected child fqdn: %s", state.records[1].FQDN)
 	}
-	if state.records[0].Version != 3 {
-		t.Fatalf("unexpected version: %d", state.records[0].Version)
-	}
 }
 
 func TestEngineMergesRepositoryAndK8sRecords(t *testing.T) {
 	engine := NewEngine(EngineOptions{})
 	engine.RestoreRecords([]metadata.DNSRecord{{
 		ID:         "repo-1",
-		DomainID:   "repo",
-		ZoneID:     "repo",
 		FQDN:       "repo.example.com",
 		RecordType: "A",
 		ValuesJSON: `["2.2.2.2"]`,
 		Enabled:    true,
-		Version:    1,
 	}})
 	engine.replaceK8sRecords([]metadata.DNSRecord{{
 		ID:         "k8s-1",
-		DomainID:   "k8s",
-		ZoneID:     "k8s",
 		FQDN:       "example.com",
 		RecordType: "A",
 		ValuesJSON: `["1.1.1.1"]`,
 		Enabled:    true,
-		Version:    1,
 	}})
 
 	repoResult, err := engine.Lookup(t.Context(), DNSQuestion{FQDN: "repo.example.com", RecordType: metadata.DNSTypeA})

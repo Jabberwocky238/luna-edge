@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -143,10 +142,10 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 				routeJSON, _ := json.Marshal(path)
 
 				b.httpResolved[host] = append(b.httpResolved[host], k8sMaterializedRoute{
-					kind:     metadata.ServiceBindingRouteKindHTTP,
+					kind:     RouteKindHTTP,
 					hostname: host,
 					port:     80,
-					binding: &metadata.ServiceBinding{
+					binding: &BackendBinding{
 						ID:           bindingID,
 						DomainID:     bindingID,
 						Hostname:     host,
@@ -155,15 +154,16 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 						Name:         service.Name,
 						Address:      buildServiceAddress(service.Name, ing.Namespace),
 						Port:         servicePort,
-						Protocol:     "http",
+						Protocol:     RouteKindHTTP,
 						RouteVersion: routeVersion,
+						Path:         normalizedPath,
 						BackendJSON:  string(routeJSON),
 					},
 					route: &ResolvedRoute{
 						DomainID:     bindingID,
 						Hostname:     host,
 						RouteVersion: routeVersion,
-						Protocol:     metadata.ServiceBindingRouteKindHTTP,
+						Protocol:     RouteKindHTTP,
 						RouteJSON:    string(routeJSON),
 						BindingID:    bindingID,
 					},

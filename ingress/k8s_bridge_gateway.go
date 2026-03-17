@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,7 +35,7 @@ type k8sGatewayListenerState struct {
 	hostname  string
 	port      uint32
 	tlsMode   string
-	routeKind metadata.ServiceBindingRouteKind
+	routeKind RouteKind
 }
 
 type k8sBackendRef struct {
@@ -141,13 +140,13 @@ func (b *K8sBridge) rebuildGatewayRoutesLocked() {
 		b.materializeGRPCFamilyLocked(route.namespace, route.name, route.hostnames, route.parentRefs, route.rules)
 	}
 	for _, route := range b.tlsRoutes {
-		b.materializeL4Locked(metadata.ServiceBindingRouteKindTLSTerminate, route)
+		b.materializeL4Locked(RouteKindTLSTerminate, route)
 	}
 	for _, route := range b.tcpRoutes {
-		b.materializeL4Locked(metadata.ServiceBindingRouteKindTCP, route)
+		b.materializeL4Locked(RouteKindTCP, route)
 	}
 	for _, route := range b.udpRoutes {
-		b.materializeL4Locked(metadata.ServiceBindingRouteKindUDP, route)
+		b.materializeL4Locked(RouteKindUDP, route)
 	}
 }
 
@@ -158,7 +157,7 @@ func (b *K8sBridge) materializeHTTPFamilyLocked(namespace, routeName string, hos
 			continue
 		}
 		for _, listener := range gateway.listeners {
-			if listener.routeKind != metadata.ServiceBindingRouteKindHTTP && listener.routeKind != metadata.ServiceBindingRouteKindHTTPS {
+			if listener.routeKind != RouteKindHTTP && listener.routeKind != RouteKindHTTPS {
 				continue
 			}
 			emittedKind := listener.routeKind
@@ -170,11 +169,11 @@ func (b *K8sBridge) materializeHTTPFamilyLocked(namespace, routeName string, hos
 					materialized.pathKind = rule.pathKind
 					materialized.listener = listener.name
 					switch emittedKind {
-					case metadata.ServiceBindingRouteKindHTTP:
+					case RouteKindHTTP:
 						b.httpResolved[host] = append(b.httpResolved[host], materialized)
-					case metadata.ServiceBindingRouteKindHTTPS:
+					case RouteKindHTTPS:
 						b.httpsResolved[host] = append(b.httpsResolved[host], materialized)
-					case metadata.ServiceBindingRouteKindGRPC:
+					case RouteKindGRPC:
 						b.grpcResolved[host] = append(b.grpcResolved[host], materialized)
 					}
 				}
@@ -190,13 +189,13 @@ func (b *K8sBridge) materializeGRPCFamilyLocked(namespace, routeName string, hos
 			continue
 		}
 		for _, listener := range gateway.listeners {
-			if !listenerAllowsKind(listener, metadata.ServiceBindingRouteKindGRPC) {
+			if !listenerAllowsKind(listener, RouteKindGRPC) {
 				continue
 			}
 			for _, host := range effectiveHosts(hostnames, listener.hostname) {
 				for idx, rule := range rules {
 					routeJSON, _ := json.Marshal(rule)
-					materialized := b.newMaterializedRoute(metadata.ServiceBindingRouteKindGRPC, namespace, routeName, host, listener.port, rule.backend, routeJSON, idx)
+					materialized := b.newMaterializedRoute(RouteKindGRPC, namespace, routeName, host, listener.port, rule.backend, routeJSON, idx)
 					materialized.path = rule.path
 					materialized.pathKind = rule.pathKind
 					materialized.listener = listener.name
@@ -207,7 +206,7 @@ func (b *K8sBridge) materializeGRPCFamilyLocked(namespace, routeName string, hos
 	}
 }
 
-func (b *K8sBridge) materializeL4Locked(kind metadata.ServiceBindingRouteKind, route *k8sL4RouteState) {
+func (b *K8sBridge) materializeL4Locked(kind RouteKind, route *k8sL4RouteState) {
 	for _, parentRef := range route.parentRefs {
 		gateway := b.gateways[parentRef]
 		if gateway == nil {
@@ -225,17 +224,17 @@ func (b *K8sBridge) materializeL4Locked(kind metadata.ServiceBindingRouteKind, r
 				routeJSON, _ := json.Marshal(route.backend)
 				materialized := b.newMaterializedRoute(kind, route.namespace, route.name, host, listener.port, route.backend, routeJSON, 0)
 				materialized.listener = listener.name
-				if kind == metadata.ServiceBindingRouteKindTLSTerminate && strings.EqualFold(listener.tlsMode, "Passthrough") {
-					materialized.kind = metadata.ServiceBindingRouteKindTLSPassthrough
+				if kind == RouteKindTLSTerminate && strings.EqualFold(listener.tlsMode, "Passthrough") {
+					materialized.kind = RouteKindTLSPassthrough
 				}
 				switch materialized.kind {
-				case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
+				case RouteKindTLSTerminate, RouteKindTLSPassthrough:
 					if host != "" {
 						b.tlsResolved[host] = append(b.tlsResolved[host], materialized)
 					}
-				case metadata.ServiceBindingRouteKindTCP:
+				case RouteKindTCP:
 					b.tcpResolved[listener.port] = append(b.tcpResolved[listener.port], materialized)
-				case metadata.ServiceBindingRouteKindUDP:
+				case RouteKindUDP:
 					b.udpResolved[listener.port] = append(b.udpResolved[listener.port], materialized)
 				}
 			}
@@ -243,7 +242,7 @@ func (b *K8sBridge) materializeL4Locked(kind metadata.ServiceBindingRouteKind, r
 	}
 }
 
-func (b *K8sBridge) newMaterializedRoute(kind metadata.ServiceBindingRouteKind, namespace, routeName, host string, port uint32, backend k8sBackendRef, raw []byte, order int) k8sMaterializedRoute {
+func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, host string, port uint32, backend k8sBackendRef, raw []byte, order int) k8sMaterializedRoute {
 	bindingID := fmt.Sprintf("k8s:%s:%s:%s:%s:%d", kind, namespace, routeName, backend.name, order)
 	return k8sMaterializedRoute{
 		kind:     kind,
@@ -251,7 +250,7 @@ func (b *K8sBridge) newMaterializedRoute(kind metadata.ServiceBindingRouteKind, 
 		port:     port,
 		path:     "/",
 		pathKind: k8sRoutePathPrefix,
-		binding: &metadata.ServiceBinding{
+		binding: &BackendBinding{
 			ID:           bindingID,
 			DomainID:     bindingID,
 			Hostname:     host,
@@ -276,20 +275,20 @@ func (b *K8sBridge) newMaterializedRoute(kind metadata.ServiceBindingRouteKind, 
 	}
 }
 
-func listenerAllowsKind(listener k8sGatewayListenerState, kind metadata.ServiceBindingRouteKind) bool {
+func listenerAllowsKind(listener k8sGatewayListenerState, kind RouteKind) bool {
 	switch kind {
-	case metadata.ServiceBindingRouteKindHTTP:
-		return listener.routeKind == metadata.ServiceBindingRouteKindHTTP
-	case metadata.ServiceBindingRouteKindHTTPS:
-		return listener.routeKind == metadata.ServiceBindingRouteKindHTTPS
-	case metadata.ServiceBindingRouteKindGRPC:
-		return listener.routeKind == metadata.ServiceBindingRouteKindGRPC || listener.routeKind == metadata.ServiceBindingRouteKindHTTP
-	case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
-		return listener.routeKind == metadata.ServiceBindingRouteKindTLSTerminate
-	case metadata.ServiceBindingRouteKindTCP:
-		return listener.routeKind == metadata.ServiceBindingRouteKindTCP
-	case metadata.ServiceBindingRouteKindUDP:
-		return listener.routeKind == metadata.ServiceBindingRouteKindUDP
+	case RouteKindHTTP:
+		return listener.routeKind == RouteKindHTTP
+	case RouteKindHTTPS:
+		return listener.routeKind == RouteKindHTTPS
+	case RouteKindGRPC:
+		return listener.routeKind == RouteKindGRPC || listener.routeKind == RouteKindHTTP
+	case RouteKindTLSTerminate, RouteKindTLSPassthrough:
+		return listener.routeKind == RouteKindTLSTerminate
+	case RouteKindTCP:
+		return listener.routeKind == RouteKindTCP
+	case RouteKindUDP:
+		return listener.routeKind == RouteKindUDP
 	default:
 		return false
 	}
@@ -459,28 +458,28 @@ func parseGatewayState(obj *unstructured.Unstructured) *k8sGatewayState {
 	return state
 }
 
-func routeKindFromListener(name, protocol, tlsMode string) metadata.ServiceBindingRouteKind {
+func routeKindFromListener(name, protocol, tlsMode string) RouteKind {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "web":
-		return metadata.ServiceBindingRouteKindHTTP
+		return RouteKindHTTP
 	case "websecure":
-		return metadata.ServiceBindingRouteKindHTTPS
+		return RouteKindHTTPS
 	}
 	switch strings.ToUpper(strings.TrimSpace(protocol)) {
 	case "HTTP":
-		return metadata.ServiceBindingRouteKindHTTP
+		return RouteKindHTTP
 	case "HTTPS":
-		return metadata.ServiceBindingRouteKindHTTPS
+		return RouteKindHTTPS
 	case "GRPC", "HTTPS+GRPC":
-		return metadata.ServiceBindingRouteKindGRPC
+		return RouteKindGRPC
 	case "TLS":
-		return metadata.ServiceBindingRouteKindTLSTerminate
+		return RouteKindTLSTerminate
 	case "TCP":
-		return metadata.ServiceBindingRouteKindTCP
+		return RouteKindTCP
 	case "UDP":
-		return metadata.ServiceBindingRouteKindUDP
+		return RouteKindUDP
 	default:
-		return metadata.ServiceBindingRouteKindHTTP
+		return RouteKindHTTP
 	}
 }
 

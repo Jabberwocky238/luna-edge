@@ -18,9 +18,6 @@ func (in AddRecordInput) Validate() error {
 	if in.Record.ID == "" {
 		return fmt.Errorf("record id is required")
 	}
-	if in.Record.DomainID == "" {
-		return fmt.Errorf("domain id is required")
-	}
 	if normalizeFQDN(in.Record.FQDN) == "" {
 		return fmt.Errorf("fqdn is required")
 	}
@@ -44,19 +41,12 @@ func (e *Engine) AddRecord(_ context.Context, input AddRecordInput) (*ChangeEffe
 	record := input.Record
 	record.FQDN = normalizeFQDN(record.FQDN)
 	record.RecordType = normalizeRecordType(record.RecordType)
-	if record.Version == 0 {
-		record.Version = 1
-	}
 	answerSet := e.store.Add(record)
 
 	return &ChangeEffect{
-		DomainID:        record.DomainID,
-		ZoneID:          record.ZoneID,
 		FQDN:            answerSet.Question.FQDN,
 		RecordType:      answerSet.Question.RecordType,
 		Action:          "add",
-		OldVersion:      0,
-		NewVersion:      record.Version,
 		RecordsAffected: 1,
 	}, nil
 }

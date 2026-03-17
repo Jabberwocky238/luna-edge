@@ -278,15 +278,12 @@ func parseDNSDomainRecordState(obj *unstructured.Unstructured) *k8sDNSDomainReco
 		valuesJSON, _ := json.Marshal(values)
 		records = append(records, metadata.DNSRecord{
 			ID:           fmt.Sprintf("%s:%d", domainID, idx),
-			ZoneID:       domainID,
-			DomainID:     domainID,
 			FQDN:         buildRecordFQDN(domain, label),
 			RecordType:   recordType,
 			RoutingClass: "simple",
 			TTLSeconds:   ttl,
 			ValuesJSON:   string(valuesJSON),
 			Enabled:      true,
-			Version:      generation,
 		})
 	}
 	return &k8sDNSDomainRecordState{

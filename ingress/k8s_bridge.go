@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"k8s.io/client-go/dynamic"
 	dynamicinformer "k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
@@ -46,8 +45,8 @@ type K8sBridge struct {
 }
 
 type k8sMaterializedRoute struct {
-	kind       metadata.ServiceBindingRouteKind
-	binding    *metadata.ServiceBinding
+	kind       RouteKind
+	binding    *BackendBinding
 	route      *ResolvedRoute
 	hostname   string
 	port       uint32
@@ -170,12 +169,12 @@ func (b *K8sBridge) Namespace() string {
 }
 
 // ResolveHost 兼容旧接口，等价于 HTTP `/` 命中。
-func (b *K8sBridge) ResolveHost(host string) (*metadata.ServiceBinding, *ResolvedRoute, bool) {
+func (b *K8sBridge) ResolveHost(host string) (*BackendBinding, *ResolvedRoute, bool) {
 	return b.ResolveRequest(host, "/")
 }
 
 // ResolveRequest 兼容旧接口，等价于 HTTPRoute / Ingress 解析。
-func (b *K8sBridge) ResolveRequest(host, requestPath string) (*metadata.ServiceBinding, *ResolvedRoute, bool) {
+func (b *K8sBridge) ResolveRequest(host, requestPath string) (*BackendBinding, *ResolvedRoute, bool) {
 	resolved, ok := b.ResolveHTTP(host, requestPath)
 	if !ok {
 		return nil, nil, false
@@ -184,34 +183,34 @@ func (b *K8sBridge) ResolveRequest(host, requestPath string) (*metadata.ServiceB
 }
 
 func (b *K8sBridge) ResolveHTTP(host, requestPath string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindHTTP, host, requestPath)
+	return b.resolveHostPath(RouteKindHTTP, host, requestPath)
 }
 
 func (b *K8sBridge) ResolveGRPC(host, requestPath string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindGRPC, host, requestPath)
+	return b.resolveHostPath(RouteKindGRPC, host, requestPath)
 }
 
 func (b *K8sBridge) ResolveHTTPS(host, requestPath string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindHTTPS, host, requestPath)
+	return b.resolveHostPath(RouteKindHTTPS, host, requestPath)
 }
 
 func (b *K8sBridge) ResolveTLS(serverName string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindTLSTerminate, serverName, "/")
+	return b.resolveHostPath(RouteKindTLSTerminate, serverName, "/")
 }
 
 func (b *K8sBridge) ResolveTLSPassthrough(serverName string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindTLSPassthrough, serverName, "/")
+	return b.resolveHostPath(RouteKindTLSPassthrough, serverName, "/")
 }
 
 func (b *K8sBridge) ResolveTCP(port uint32) (*K8sResolvedBackend, bool) {
-	return b.resolvePort(metadata.ServiceBindingRouteKindTCP, port)
+	return b.resolvePort(RouteKindTCP, port)
 }
 
 func (b *K8sBridge) ResolveUDP(port uint32) (*K8sResolvedBackend, bool) {
-	return b.resolvePort(metadata.ServiceBindingRouteKindUDP, port)
+	return b.resolvePort(RouteKindUDP, port)
 }
 
-func (b *K8sBridge) resolveHostPath(kind metadata.ServiceBindingRouteKind, host, requestPath string) (*K8sResolvedBackend, bool) {
+func (b *K8sBridge) resolveHostPath(kind RouteKind, host, requestPath string) (*K8sResolvedBackend, bool) {
 	host = normalizeHost(host)
 	if host == "" {
 		return nil, false
@@ -223,13 +222,13 @@ func (b *K8sBridge) resolveHostPath(kind metadata.ServiceBindingRouteKind, host,
 
 	var routes []k8sMaterializedRoute
 	switch kind {
-	case metadata.ServiceBindingRouteKindHTTP:
+	case RouteKindHTTP:
 		routes = b.httpResolved[host]
-	case metadata.ServiceBindingRouteKindHTTPS:
+	case RouteKindHTTPS:
 		routes = b.httpsResolved[host]
-	case metadata.ServiceBindingRouteKindGRPC:
+	case RouteKindGRPC:
 		routes = b.grpcResolved[host]
-	case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
+	case RouteKindTLSTerminate, RouteKindTLSPassthrough:
 		routes = b.tlsResolved[host]
 	default:
 		return nil, false
@@ -242,15 +241,15 @@ func (b *K8sBridge) resolveHostPath(kind metadata.ServiceBindingRouteKind, host,
 	return materializedToResolved(selected), true
 }
 
-func (b *K8sBridge) resolvePort(kind metadata.ServiceBindingRouteKind, port uint32) (*K8sResolvedBackend, bool) {
+func (b *K8sBridge) resolvePort(kind RouteKind, port uint32) (*K8sResolvedBackend, bool) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
 	var routes []k8sMaterializedRoute
 	switch kind {
-	case metadata.ServiceBindingRouteKindTCP:
+	case RouteKindTCP:
 		routes = b.tcpResolved[port]
-	case metadata.ServiceBindingRouteKindUDP:
+	case RouteKindUDP:
 		routes = b.udpResolved[port]
 	default:
 		return nil, false
@@ -291,7 +290,7 @@ func normalizeIngressPath(path string) string {
 	return path
 }
 
-func selectK8sRoute(routes []k8sMaterializedRoute, requestPath string, kind metadata.ServiceBindingRouteKind) (k8sMaterializedRoute, bool) {
+func selectK8sRoute(routes []k8sMaterializedRoute, requestPath string, kind RouteKind) (k8sMaterializedRoute, bool) {
 	var (
 		selected k8sMaterializedRoute
 		found    bool
