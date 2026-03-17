@@ -613,15 +613,13 @@ func (x *ServiceBackendRef) GetServicePort() uint32 {
 }
 
 type HTTPRouteProjection struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DomainEndpointId string                 `protobuf:"bytes,2,opt,name=domain_endpoint_id,json=domainEndpointId,proto3" json:"domain_endpoint_id,omitempty"`
-	Hostname         string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Path             string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
-	Priority         int32                  `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
-	BackendRef       *ServiceBackendRef     `protobuf:"bytes,6,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Priority      int32                  `protobuf:"varint,3,opt,name=priority,proto3" json:"priority,omitempty"`
+	BackendRef    *ServiceBackendRef     `protobuf:"bytes,4,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HTTPRouteProjection) Reset() {
@@ -657,20 +655,6 @@ func (*HTTPRouteProjection) Descriptor() ([]byte, []int) {
 func (x *HTTPRouteProjection) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *HTTPRouteProjection) GetDomainEndpointId() string {
-	if x != nil {
-		return x.DomainEndpointId
-	}
-	return ""
-}
-
-func (x *HTTPRouteProjection) GetHostname() string {
-	if x != nil {
-		return x.Hostname
 	}
 	return ""
 }
@@ -975,14 +959,12 @@ const file_replication_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
 	"\x11service_namespace\x18\x02 \x01(\tR\x10serviceNamespace\x12!\n" +
 	"\fservice_name\x18\x03 \x01(\tR\vserviceName\x12!\n" +
-	"\fservice_port\x18\x04 \x01(\rR\vservicePort\"\xe8\x01\n" +
+	"\fservice_port\x18\x04 \x01(\rR\vservicePort\"\x9e\x01\n" +
 	"\x13HTTPRouteProjection\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
-	"\x12domain_endpoint_id\x18\x02 \x01(\tR\x10domainEndpointId\x12\x1a\n" +
-	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x12\n" +
-	"\x04path\x18\x04 \x01(\tR\x04path\x12\x1a\n" +
-	"\bpriority\x18\x05 \x01(\x05R\bpriority\x12G\n" +
-	"\vbackend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1a\n" +
+	"\bpriority\x18\x03 \x01(\x05R\bpriority\x12G\n" +
+	"\vbackend_ref\x18\x04 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\n" +
 	"backendRef\"\xd2\x03\n" +
 	"\x13CertificateRevision\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +

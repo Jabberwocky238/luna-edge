@@ -68,11 +68,9 @@ message ServiceBackendRef {
 
 message HTTPRouteProjection {
   string id = 1;
-  string domain_endpoint_id = 2;
-  string hostname = 3;
-  string path = 4;
-  int32 priority = 5;
-  ServiceBackendRef backend_ref = 6;
+  string path = 2;
+  int32 priority = 3;
+  ServiceBackendRef backend_ref = 4;
 }
 
 message CertificateRevision {
