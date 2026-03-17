@@ -7,6 +7,11 @@ data:
   LUNA_REPLICATION_LISTEN: ":50051"
   LUNA_MANAGE_LISTEN: ":8080"
   LUNA_AUTO_MIGRATE: "1"
+  LUNA_K8S_BRIDGE_ENABLED: "1"
+  LUNA_K8S_NAMESPACE: "luna-edge"
+  LUNA_K8S_INGRESS_CLASS: "luna-edge"
+  LUNA_ACME_DEFAULT_EMAIL: ""
+  LUNA_ACME_EAB_KID: ""
   LUNA_S3_ENDPOINT: "http://minio.default.svc.cluster.local:9000"
   LUNA_S3_REGION: "us-east-1"
   LUNA_S3_PATH_STYLE: "1"
@@ -21,6 +26,7 @@ metadata:
 type: Opaque
 stringData:
   LUNA_POSTGRES_DSN: "postgres://lunaedge:lunaedge@postgres.default.svc.cluster.local:5432/lunaedge?sslmode=disable"
+  LUNA_ACME_EAB_HMAC_KEY: ""
   LUNA_S3_ACCESS_KEY_ID: "lunaedge"
   LUNA_S3_SECRET_ACCESS_KEY: "lunaedge"
   LUNA_S3_SESSION_TOKEN: ""

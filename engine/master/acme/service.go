@@ -12,7 +12,7 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
-func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore, issuer IssuerFactory) *Service {
+func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore, issuer IssuerFactory, http01 http01ChallengeStore) *Service {
 	if cfg.DNS01TTL == 0 {
 		cfg.DNS01TTL = 60
 	}
@@ -31,6 +31,7 @@ func NewService(cfg Config, repo repository.Repository, publish publisher, bundl
 		publish:  publish,
 		bundles:  bundles,
 		issuers:  issuer,
+		http01:   http01,
 		now:      func() time.Time { return time.Now().UTC() },
 		idSuffix: randomID,
 	}
@@ -139,12 +140,20 @@ func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
 	case ProviderLetsEncrypt:
 		cfg.Directory = lego.LEDirectoryProduction
 	case ProviderZeroSSL:
-		if strings.TrimSpace(req.EABKID) == "" || strings.TrimSpace(req.EABHMACKey) == "" {
+		eabKID := strings.TrimSpace(req.EABKID)
+		if eabKID == "" {
+			eabKID = strings.TrimSpace(s.cfg.DefaultEABKID)
+		}
+		eabHMACKey := strings.TrimSpace(req.EABHMACKey)
+		if eabHMACKey == "" {
+			eabHMACKey = strings.TrimSpace(s.cfg.DefaultEABHMACKey)
+		}
+		if eabKID == "" || eabHMACKey == "" {
 			return IssuerConfig{}, fmt.Errorf("zerossl requires eab kid and hmac key")
 		}
 		cfg.Directory = zeroSSLDirectoryURL
-		cfg.EABKID = strings.TrimSpace(req.EABKID)
-		cfg.EABHMACKey = strings.TrimSpace(req.EABHMACKey)
+		cfg.EABKID = eabKID
+		cfg.EABHMACKey = eabHMACKey
 	default:
 		return IssuerConfig{}, fmt.Errorf("unsupported acme provider %q", provider)
 	}

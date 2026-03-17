@@ -39,6 +39,8 @@ type Engine struct {
 	mu          sync.Mutex
 }
 
+const acmeHTTP01Prefix = "/.well-known/acme-challenge/"
+
 // NewEngine 创建一个基础 ingress 引擎。
 func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...Middleware) (*Engine, error) {
 	if strings.TrimSpace(opts.HTTPListenAddr) == "" && strings.TrimSpace(opts.TLSListenAddr) == "" {

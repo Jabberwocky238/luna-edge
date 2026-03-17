@@ -42,6 +42,21 @@ func (s *fakeBundleStore) PutCertificateBundle(_ context.Context, hostname strin
 	return nil
 }
 
+type fakeHTTP01Store struct {
+	items map[string]string
+}
+
+func (s *fakeHTTP01Store) SetHTTP01Challenge(token, keyAuthorization string) {
+	if s.items == nil {
+		s.items = map[string]string{}
+	}
+	s.items[token] = keyAuthorization
+}
+
+func (s *fakeHTTP01Store) DeleteHTTP01Challenge(token string) {
+	delete(s.items, token)
+}
+
 type fakeIssuerFactory struct {
 	t            *testing.T
 	expectedType metadata.ChallengeType
@@ -85,7 +100,7 @@ func TestIssueCertificateDNS01(t *testing.T) {
 	svc := NewService(Config{
 		DefaultEmail: "ops@example.com",
 		DNS01TTL:     120,
-	}, repo, publisher, bundles, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01})
+	}, repo, publisher, bundles, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01}, nil)
 
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
@@ -131,10 +146,11 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	seedACMEDomain(t, repo, "domain-1", "app.example.com", metadata.BackendTypeL7HTTP)
 
 	publisher := &fakePublisher{}
+	http01 := &fakeHTTP01Store{}
 	svc := NewService(Config{
 		DefaultEmail:   "ops@example.com",
 		HTTP01Priority: 999,
-	}, repo, publisher, &fakeBundleStore{}, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01})
+	}, repo, publisher, &fakeBundleStore{}, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01}, http01)
 
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
@@ -145,20 +161,8 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 		t.Fatalf("issue certificate: %v", err)
 	}
 
-	routes, err := repo.ListHTTPRoutesByDomainID(ctx, "domain-1")
-	if err != nil {
-		t.Fatalf("list http routes: %v", err)
-	}
-	if len(routes) != 0 {
-		t.Fatalf("expected http01 routes to be cleaned, got %+v", routes)
-	}
-
-	backends, err := repo.ListServiceBindingsByDomainID(ctx, "domain-1")
-	if err != nil {
-		t.Fatalf("list backends: %v", err)
-	}
-	if len(backends) != 0 {
-		t.Fatalf("expected http01 backend cleanup, got %+v", backends)
+	if len(http01.items) != 0 {
+		t.Fatalf("expected http01 registry to be cleaned, got %+v", http01.items)
 	}
 
 	domain, err := repo.GetDomainEndpointByID(ctx, "domain-1")
@@ -168,8 +172,8 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	if domain.CertID != cert.ID {
 		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
-	if len(publisher.nodes) != 4 {
-		t.Fatalf("expected 4 publishes, got %d", len(publisher.nodes))
+	if len(publisher.nodes) != 2 {
+		t.Fatalf("expected 2 publishes, got %d", len(publisher.nodes))
 	}
 }
 
@@ -185,7 +189,7 @@ func TestPresentDNS01WritesAndBroadcasts(t *testing.T) {
 	}
 
 	publisher := &fakePublisher{}
-	svc := NewService(Config{DNS01TTL: 90}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01})
+	svc := NewService(Config{DNS01TTL: 90}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01}, nil)
 	provider := &masterChallengeProvider{
 		service:       svc,
 		domain:        domain,
@@ -220,7 +224,8 @@ func TestPresentHTTP01WritesAndBroadcasts(t *testing.T) {
 	}
 
 	publisher := &fakePublisher{}
-	svc := NewService(Config{HTTP01Priority: 999}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01})
+	http01 := &fakeHTTP01Store{}
+	svc := NewService(Config{HTTP01Priority: 999}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01}, http01)
 	provider := &masterChallengeProvider{
 		service:       svc,
 		domain:        domain,
@@ -231,22 +236,10 @@ func TestPresentHTTP01WritesAndBroadcasts(t *testing.T) {
 		t.Fatalf("present http01: %v", err)
 	}
 
-	routes, err := repo.ListHTTPRoutesByDomainID(ctx, "domain-1")
-	if err != nil {
-		t.Fatalf("list routes: %v", err)
+	if got := http01.items["token-1"]; got != "token-1.key-auth" {
+		t.Fatalf("unexpected http01 token content: %q", got)
 	}
-	if len(routes) != 1 || routes[0].Path != http01Path("token-1") {
-		t.Fatalf("unexpected routes: %+v", routes)
-	}
-
-	backend := &metadata.ServiceBackendRef{}
-	if err := repo.ServiceBindingRefs().GetResourceByField(ctx, backend, "id", provider.http01BackendID("token-1")); err != nil {
-		t.Fatalf("get backend ref: %v", err)
-	}
-	if backend.ServiceName != "http01" {
-		t.Fatalf("unexpected backend: %+v", backend)
-	}
-	if len(publisher.nodes) != 1 || publisher.nodes[0] != "" {
+	if len(publisher.nodes) != 0 {
 		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
 	}
 }

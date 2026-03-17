@@ -52,6 +52,8 @@ type EngineOptions struct {
 	K8sIngressClass string
 	// LRUSize 是 ingress 运行时 LRU 缓冲大小；<=0 时默认 4096。
 	LRUSize int
+	// MasterHTTP01ProxyURL 是 HTTP-01 challenge 请求转发到 master 的基础 URL。
+	MasterHTTP01ProxyURL string
 }
 
 // ProxyTarget 表示一个可转发的上游目标。

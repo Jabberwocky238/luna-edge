@@ -20,6 +20,8 @@ const (
 
 type Config struct {
 	DefaultEmail          string
+	DefaultEABKID         string
+	DefaultEABHMACKey     string
 	DefaultArtifactBucket string
 	ArtifactPrefix        string
 	DNS01TTL              uint32
@@ -38,13 +40,14 @@ type IssueRequest struct {
 }
 
 type Service struct {
-	cfg      Config
-	repo     repository.Repository
-	publish  publisher
-	bundles  bundleStore
-	issuers  IssuerFactory
-	now      func() time.Time
-	idSuffix func() string
+	cfg        Config
+	repo       repository.Repository
+	publish    publisher
+	bundles    bundleStore
+	issuers    IssuerFactory
+	http01     http01ChallengeStore
+	now        func() time.Time
+	idSuffix   func() string
 }
 
 type publisher interface {
@@ -53,6 +56,11 @@ type publisher interface {
 
 type bundleStore interface {
 	PutCertificateBundle(ctx context.Context, hostname string, revision uint64, bundle *enginepkg.CertificateBundle) error
+}
+
+type http01ChallengeStore interface {
+	SetHTTP01Challenge(token, keyAuthorization string)
+	DeleteHTTP01Challenge(token string)
 }
 
 type IssuerFactory interface {

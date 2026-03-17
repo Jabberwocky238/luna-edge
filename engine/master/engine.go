@@ -82,6 +82,7 @@ func New(cfg Config) (*Engine, error) {
 	}
 	wrapper := manage.NewWrapper(repo, engine, engine)
 	engine.Repo = wrapper
+	engine.Manage = manage.NewAPI(wrapper)
 	if cfg.S3.Enabled() {
 		bundles, err := NewS3CertificateBundleProvider(wrapper, cfg.S3)
 		if err != nil {
@@ -90,7 +91,7 @@ func New(cfg Config) (*Engine, error) {
 		}
 		engine.Bundles = bundles
 	}
-	engine.ACME = acme.NewService(cfg.ACME, wrapper, engine, engine.Bundles, acme.LegoIssuerFactory{})
+	engine.ACME = acme.NewService(cfg.ACME, wrapper, engine, engine.Bundles, acme.LegoIssuerFactory{}, engine.Manage)
 	engine.Certs = NewCertReconciler(wrapper, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
 	if cfg.K8sBridgeEnabled {
 		bridge, err := masterk8s.New(masterk8s.Config{
@@ -104,7 +105,6 @@ func New(cfg Config) (*Engine, error) {
 		}
 		engine.K8sBridge = bridge
 	}
-	engine.Manage = manage.NewAPI(wrapper)
 	return engine, nil
 }
 

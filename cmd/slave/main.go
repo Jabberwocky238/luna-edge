@@ -21,6 +21,7 @@ func main() {
 	var cacheRoot string
 	flag.StringVar(&cfg.NodeID, "node-id", envOr("LUNA_NODE_ID", ""), "slave node id")
 	flag.StringVar(&cfg.MasterAddress, "master-address", envOr("LUNA_MASTER_ADDRESS", "127.0.0.1:50051"), "master replication address")
+	flag.StringVar(&cfg.MasterManageURL, "master-manage-url", envOr("LUNA_MASTER_MANAGE_URL", "http://127.0.0.1:8080"), "master manage http base url")
 	flag.BoolVar(&cfg.SubscribeSnapshot, "subscribe-snapshot", envOr("LUNA_SUBSCRIBE_SNAPSHOT", "1") != "0", "request initial snapshot")
 	flag.DurationVar(&cfg.RetryMinBackoff, "retry-min-backoff", envDuration("LUNA_RETRY_MIN_BACKOFF", time.Second), "minimum retry backoff")
 	flag.DurationVar(&cfg.RetryMaxBackoff, "retry-max-backoff", envDuration("LUNA_RETRY_MAX_BACKOFF", 30*time.Second), "maximum retry backoff")

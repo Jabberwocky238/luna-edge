@@ -72,6 +72,11 @@ func (e *Engine) NewHTTPHandler() http.Handler {
 }
 
 func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, acmeHTTP01Prefix) && strings.TrimSpace(e.opts.MasterHTTP01ProxyURL) != "" {
+		e.serveACMEHTTP01Proxy(w, r)
+		return
+	}
+
 	var (
 		result *RouteResult
 		err    error
@@ -112,6 +117,27 @@ func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
+		req.Host = targetURL.Host
+	}
+	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
+		http.Error(rw, proxyErr.Error(), http.StatusBadGateway)
+	}
+	proxy.ServeHTTP(w, r)
+}
+
+func (e *Engine) serveACMEHTTP01Proxy(w http.ResponseWriter, r *http.Request) {
+	targetURL, err := url.Parse(strings.TrimRight(e.opts.MasterHTTP01ProxyURL, "/"))
+	if err != nil {
+		http.Error(w, "invalid acme http01 proxy url", http.StatusInternalServerError)
+		return
+	}
+	proxy := httputil.NewSingleHostReverseProxy(targetURL)
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.URL.Path = r.URL.Path
+		req.URL.RawPath = r.URL.RawPath
+		req.URL.RawQuery = r.URL.RawQuery
 		req.Host = targetURL.Host
 	}
 	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, proxyErr error) {

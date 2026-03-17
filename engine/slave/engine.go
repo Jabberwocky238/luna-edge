@@ -39,6 +39,7 @@ type Config struct {
 	IngressK8sNS      string
 	IngressK8sClass   string
 	IngressLRUSize    int
+	MasterManageURL   string
 	HealthListenAddr  string
 }
 
@@ -164,6 +165,7 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 			K8sNamespace:    cfg.IngressK8sNS,
 			K8sIngressClass: cfg.IngressK8sClass,
 			LRUSize:         cfg.IngressLRUSize,
+			MasterHTTP01ProxyURL: cfg.MasterManageURL,
 		}, resolver)
 		if err != nil {
 			_ = conn.Close()
