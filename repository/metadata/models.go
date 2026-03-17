@@ -14,6 +14,7 @@ func AllModels() []interface{} {
 		&HTTPRoute{},
 		&DNSRecord{},
 		&CertificateRevision{},
+		&SnapshotRecord{},
 	}
 }
 

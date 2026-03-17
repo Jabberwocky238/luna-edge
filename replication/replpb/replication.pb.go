@@ -7,7 +7,6 @@
 package replpb
 
 import (
-	_ "github.com/golang/protobuf/ptypes/empty"
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -23,586 +22,20 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type RouteRecord struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	DomainId            string                 `protobuf:"bytes,1,opt,name=domain_id,json=domainId,proto3" json:"domain_id,omitempty"`
-	Hostname            string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	BindingId           string                 `protobuf:"bytes,3,opt,name=binding_id,json=bindingId,proto3" json:"binding_id,omitempty"`
-	RouteVersion        uint64                 `protobuf:"varint,4,opt,name=route_version,json=routeVersion,proto3" json:"route_version,omitempty"`
-	CertificateRevision uint64                 `protobuf:"varint,5,opt,name=certificate_revision,json=certificateRevision,proto3" json:"certificate_revision,omitempty"`
-	Listener            string                 `protobuf:"bytes,6,opt,name=listener,proto3" json:"listener,omitempty"`
-	Protocol            string                 `protobuf:"bytes,7,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	UpstreamAddress     string                 `protobuf:"bytes,8,opt,name=upstream_address,json=upstreamAddress,proto3" json:"upstream_address,omitempty"`
-	UpstreamPort        uint32                 `protobuf:"varint,9,opt,name=upstream_port,json=upstreamPort,proto3" json:"upstream_port,omitempty"`
-	UpstreamProtocol    string                 `protobuf:"bytes,10,opt,name=upstream_protocol,json=upstreamProtocol,proto3" json:"upstream_protocol,omitempty"`
-	BackendJson         string                 `protobuf:"bytes,11,opt,name=backend_json,json=backendJson,proto3" json:"backend_json,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
-}
-
-func (x *RouteRecord) Reset() {
-	*x = RouteRecord{}
-	mi := &file_replication_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RouteRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RouteRecord) ProtoMessage() {}
-
-func (x *RouteRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RouteRecord.ProtoReflect.Descriptor instead.
-func (*RouteRecord) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *RouteRecord) GetDomainId() string {
-	if x != nil {
-		return x.DomainId
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetBindingId() string {
-	if x != nil {
-		return x.BindingId
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetRouteVersion() uint64 {
-	if x != nil {
-		return x.RouteVersion
-	}
-	return 0
-}
-
-func (x *RouteRecord) GetCertificateRevision() uint64 {
-	if x != nil {
-		return x.CertificateRevision
-	}
-	return 0
-}
-
-func (x *RouteRecord) GetListener() string {
-	if x != nil {
-		return x.Listener
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetProtocol() string {
-	if x != nil {
-		return x.Protocol
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetUpstreamAddress() string {
-	if x != nil {
-		return x.UpstreamAddress
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetUpstreamPort() uint32 {
-	if x != nil {
-		return x.UpstreamPort
-	}
-	return 0
-}
-
-func (x *RouteRecord) GetUpstreamProtocol() string {
-	if x != nil {
-		return x.UpstreamProtocol
-	}
-	return ""
-}
-
-func (x *RouteRecord) GetBackendJson() string {
-	if x != nil {
-		return x.BackendJson
-	}
-	return ""
-}
-
-type BindingRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DomainId      string                 `protobuf:"bytes,2,opt,name=domain_id,json=domainId,proto3" json:"domain_id,omitempty"`
-	Hostname      string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	ServiceId     string                 `protobuf:"bytes,4,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
-	Namespace     string                 `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"`
-	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	Address       string                 `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
-	Port          uint32                 `protobuf:"varint,8,opt,name=port,proto3" json:"port,omitempty"`
-	Protocol      string                 `protobuf:"bytes,9,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	RouteVersion  uint64                 `protobuf:"varint,10,opt,name=route_version,json=routeVersion,proto3" json:"route_version,omitempty"`
-	BackendJson   string                 `protobuf:"bytes,11,opt,name=backend_json,json=backendJson,proto3" json:"backend_json,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *BindingRecord) Reset() {
-	*x = BindingRecord{}
-	mi := &file_replication_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *BindingRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*BindingRecord) ProtoMessage() {}
-
-func (x *BindingRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use BindingRecord.ProtoReflect.Descriptor instead.
-func (*BindingRecord) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *BindingRecord) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetDomainId() string {
-	if x != nil {
-		return x.DomainId
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetServiceId() string {
-	if x != nil {
-		return x.ServiceId
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetNamespace() string {
-	if x != nil {
-		return x.Namespace
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetAddress() string {
-	if x != nil {
-		return x.Address
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetPort() uint32 {
-	if x != nil {
-		return x.Port
-	}
-	return 0
-}
-
-func (x *BindingRecord) GetProtocol() string {
-	if x != nil {
-		return x.Protocol
-	}
-	return ""
-}
-
-func (x *BindingRecord) GetRouteVersion() uint64 {
-	if x != nil {
-		return x.RouteVersion
-	}
-	return 0
-}
-
-func (x *BindingRecord) GetBackendJson() string {
-	if x != nil {
-		return x.BackendJson
-	}
-	return ""
-}
-
-type CertificateRecord struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DomainId       string                 `protobuf:"bytes,2,opt,name=domain_id,json=domainId,proto3" json:"domain_id,omitempty"`
-	ZoneId         string                 `protobuf:"bytes,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
-	Hostname       string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Revision       uint64                 `protobuf:"varint,5,opt,name=revision,proto3" json:"revision,omitempty"`
-	Status         string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
-	ArtifactBucket string                 `protobuf:"bytes,7,opt,name=artifact_bucket,json=artifactBucket,proto3" json:"artifact_bucket,omitempty"`
-	ArtifactPrefix string                 `protobuf:"bytes,8,opt,name=artifact_prefix,json=artifactPrefix,proto3" json:"artifact_prefix,omitempty"`
-	Sha256Crt      string                 `protobuf:"bytes,9,opt,name=sha256_crt,json=sha256Crt,proto3" json:"sha256_crt,omitempty"`
-	Sha256Key      string                 `protobuf:"bytes,10,opt,name=sha256_key,json=sha256Key,proto3" json:"sha256_key,omitempty"`
-	NotBefore      *timestamp.Timestamp   `protobuf:"bytes,11,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
-	NotAfter       *timestamp.Timestamp   `protobuf:"bytes,12,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *CertificateRecord) Reset() {
-	*x = CertificateRecord{}
-	mi := &file_replication_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CertificateRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CertificateRecord) ProtoMessage() {}
-
-func (x *CertificateRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CertificateRecord.ProtoReflect.Descriptor instead.
-func (*CertificateRecord) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *CertificateRecord) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetDomainId() string {
-	if x != nil {
-		return x.DomainId
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetZoneId() string {
-	if x != nil {
-		return x.ZoneId
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetRevision() uint64 {
-	if x != nil {
-		return x.Revision
-	}
-	return 0
-}
-
-func (x *CertificateRecord) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetArtifactBucket() string {
-	if x != nil {
-		return x.ArtifactBucket
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetArtifactPrefix() string {
-	if x != nil {
-		return x.ArtifactPrefix
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetSha256Crt() string {
-	if x != nil {
-		return x.Sha256Crt
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetSha256Key() string {
-	if x != nil {
-		return x.Sha256Key
-	}
-	return ""
-}
-
-func (x *CertificateRecord) GetNotBefore() *timestamp.Timestamp {
-	if x != nil {
-		return x.NotBefore
-	}
-	return nil
-}
-
-func (x *CertificateRecord) GetNotAfter() *timestamp.Timestamp {
-	if x != nil {
-		return x.NotAfter
-	}
-	return nil
-}
-
-type AssignmentRecord struct {
-	state                      protoimpl.MessageState `protogen:"open.v1"`
-	Id                         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	NodeId                     string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	DomainId                   string                 `protobuf:"bytes,3,opt,name=domain_id,json=domainId,proto3" json:"domain_id,omitempty"`
-	Hostname                   string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Listener                   string                 `protobuf:"bytes,5,opt,name=listener,proto3" json:"listener,omitempty"`
-	BindingId                  string                 `protobuf:"bytes,6,opt,name=binding_id,json=bindingId,proto3" json:"binding_id,omitempty"`
-	DesiredRouteVersion        uint64                 `protobuf:"varint,7,opt,name=desired_route_version,json=desiredRouteVersion,proto3" json:"desired_route_version,omitempty"`
-	DesiredCertificateRevision uint64                 `protobuf:"varint,8,opt,name=desired_certificate_revision,json=desiredCertificateRevision,proto3" json:"desired_certificate_revision,omitempty"`
-	DesiredDnsVersion          uint64                 `protobuf:"varint,9,opt,name=desired_dns_version,json=desiredDnsVersion,proto3" json:"desired_dns_version,omitempty"`
-	State                      string                 `protobuf:"bytes,10,opt,name=state,proto3" json:"state,omitempty"`
-	LastError                  string                 `protobuf:"bytes,11,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
-}
-
-func (x *AssignmentRecord) Reset() {
-	*x = AssignmentRecord{}
-	mi := &file_replication_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AssignmentRecord) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AssignmentRecord) ProtoMessage() {}
-
-func (x *AssignmentRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AssignmentRecord.ProtoReflect.Descriptor instead.
-func (*AssignmentRecord) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *AssignmentRecord) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetNodeId() string {
-	if x != nil {
-		return x.NodeId
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetDomainId() string {
-	if x != nil {
-		return x.DomainId
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetHostname() string {
-	if x != nil {
-		return x.Hostname
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetListener() string {
-	if x != nil {
-		return x.Listener
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetBindingId() string {
-	if x != nil {
-		return x.BindingId
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetDesiredRouteVersion() uint64 {
-	if x != nil {
-		return x.DesiredRouteVersion
-	}
-	return 0
-}
-
-func (x *AssignmentRecord) GetDesiredCertificateRevision() uint64 {
-	if x != nil {
-		return x.DesiredCertificateRevision
-	}
-	return 0
-}
-
-func (x *AssignmentRecord) GetDesiredDnsVersion() uint64 {
-	if x != nil {
-		return x.DesiredDnsVersion
-	}
-	return 0
-}
-
-func (x *AssignmentRecord) GetState() string {
-	if x != nil {
-		return x.State
-	}
-	return ""
-}
-
-func (x *AssignmentRecord) GetLastError() string {
-	if x != nil {
-		return x.LastError
-	}
-	return ""
-}
-
-type VersionVector struct {
-	state                      protoimpl.MessageState `protogen:"open.v1"`
-	DesiredRouteVersion        uint64                 `protobuf:"varint,1,opt,name=desired_route_version,json=desiredRouteVersion,proto3" json:"desired_route_version,omitempty"`
-	DesiredCertificateRevision uint64                 `protobuf:"varint,2,opt,name=desired_certificate_revision,json=desiredCertificateRevision,proto3" json:"desired_certificate_revision,omitempty"`
-	DesiredDnsVersion          uint64                 `protobuf:"varint,3,opt,name=desired_dns_version,json=desiredDnsVersion,proto3" json:"desired_dns_version,omitempty"`
-	unknownFields              protoimpl.UnknownFields
-	sizeCache                  protoimpl.SizeCache
-}
-
-func (x *VersionVector) Reset() {
-	*x = VersionVector{}
-	mi := &file_replication_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *VersionVector) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*VersionVector) ProtoMessage() {}
-
-func (x *VersionVector) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use VersionVector.ProtoReflect.Descriptor instead.
-func (*VersionVector) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *VersionVector) GetDesiredRouteVersion() uint64 {
-	if x != nil {
-		return x.DesiredRouteVersion
-	}
-	return 0
-}
-
-func (x *VersionVector) GetDesiredCertificateRevision() uint64 {
-	if x != nil {
-		return x.DesiredCertificateRevision
-	}
-	return 0
-}
-
-func (x *VersionVector) GetDesiredDnsVersion() uint64 {
-	if x != nil {
-		return x.DesiredDnsVersion
-	}
-	return 0
-}
-
 type Snapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	CreatedAt     *timestamp.Timestamp   `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	Versions      *VersionVector         `protobuf:"bytes,3,opt,name=versions,proto3" json:"versions,omitempty"`
-	Routes        []*RouteRecord         `protobuf:"bytes,4,rep,name=routes,proto3" json:"routes,omitempty"`
-	Bindings      []*BindingRecord       `protobuf:"bytes,5,rep,name=bindings,proto3" json:"bindings,omitempty"`
-	Certificates  []*CertificateRecord   `protobuf:"bytes,6,rep,name=certificates,proto3" json:"certificates,omitempty"`
-	Assignments   []*AssignmentRecord    `protobuf:"bytes,7,rep,name=assignments,proto3" json:"assignments,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState   `protogen:"open.v1"`
+	NodeId           string                   `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	CreatedAt        *timestamp.Timestamp     `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	DnsRecords       []*DNSRecord             `protobuf:"bytes,3,rep,name=dns_records,json=dnsRecords,proto3" json:"dns_records,omitempty"`
+	DomainEntries    []*DomainEntryProjection `protobuf:"bytes,4,rep,name=domain_entries,json=domainEntries,proto3" json:"domain_entries,omitempty"`
+	SnapshotRecordId uint64                   `protobuf:"varint,5,opt,name=snapshot_record_id,json=snapshotRecordId,proto3" json:"snapshot_record_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_replication_proto_msgTypes[5]
+	mi := &file_replication_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -614,7 +47,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[5]
+	mi := &file_replication_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -627,7 +60,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{5}
+	return file_replication_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Snapshot) GetNodeId() string {
@@ -644,51 +77,38 @@ func (x *Snapshot) GetCreatedAt() *timestamp.Timestamp {
 	return nil
 }
 
-func (x *Snapshot) GetVersions() *VersionVector {
+func (x *Snapshot) GetDnsRecords() []*DNSRecord {
 	if x != nil {
-		return x.Versions
+		return x.DnsRecords
 	}
 	return nil
 }
 
-func (x *Snapshot) GetRoutes() []*RouteRecord {
+func (x *Snapshot) GetDomainEntries() []*DomainEntryProjection {
 	if x != nil {
-		return x.Routes
+		return x.DomainEntries
 	}
 	return nil
 }
 
-func (x *Snapshot) GetBindings() []*BindingRecord {
+func (x *Snapshot) GetSnapshotRecordId() uint64 {
 	if x != nil {
-		return x.Bindings
+		return x.SnapshotRecordId
 	}
-	return nil
-}
-
-func (x *Snapshot) GetCertificates() []*CertificateRecord {
-	if x != nil {
-		return x.Certificates
-	}
-	return nil
-}
-
-func (x *Snapshot) GetAssignments() []*AssignmentRecord {
-	if x != nil {
-		return x.Assignments
-	}
-	return nil
+	return 0
 }
 
 type SnapshotRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NodeId           string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SnapshotRecordId uint64                 `protobuf:"varint,2,opt,name=snapshot_record_id,json=snapshotRecordId,proto3" json:"snapshot_record_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SnapshotRequest) Reset() {
 	*x = SnapshotRequest{}
-	mi := &file_replication_proto_msgTypes[6]
+	mi := &file_replication_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -700,7 +120,7 @@ func (x *SnapshotRequest) String() string {
 func (*SnapshotRequest) ProtoMessage() {}
 
 func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[6]
+	mi := &file_replication_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -713,7 +133,7 @@ func (x *SnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapshotRequest.ProtoReflect.Descriptor instead.
 func (*SnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{6}
+	return file_replication_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SnapshotRequest) GetNodeId() string {
@@ -723,17 +143,23 @@ func (x *SnapshotRequest) GetNodeId() string {
 	return ""
 }
 
+func (x *SnapshotRequest) GetSnapshotRecordId() uint64 {
+	if x != nil {
+		return x.SnapshotRecordId
+	}
+	return 0
+}
+
 type SubscriptionRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	KnownVersions *VersionVector         `protobuf:"bytes,2,opt,name=known_versions,json=knownVersions,proto3" json:"known_versions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SubscriptionRequest) Reset() {
 	*x = SubscriptionRequest{}
-	mi := &file_replication_proto_msgTypes[7]
+	mi := &file_replication_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -745,7 +171,7 @@ func (x *SubscriptionRequest) String() string {
 func (*SubscriptionRequest) ProtoMessage() {}
 
 func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[7]
+	mi := &file_replication_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -758,7 +184,7 @@ func (x *SubscriptionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscriptionRequest.ProtoReflect.Descriptor instead.
 func (*SubscriptionRequest) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{7}
+	return file_replication_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *SubscriptionRequest) GetNodeId() string {
@@ -768,25 +194,17 @@ func (x *SubscriptionRequest) GetNodeId() string {
 	return ""
 }
 
-func (x *SubscriptionRequest) GetKnownVersions() *VersionVector {
-	if x != nil {
-		return x.KnownVersions
-	}
-	return nil
-}
-
 type ChangeNotification struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Versions      *VersionVector         `protobuf:"bytes,2,opt,name=versions,proto3" json:"versions,omitempty"`
-	CreatedAt     *timestamp.Timestamp   `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt     *timestamp.Timestamp   `protobuf:"bytes,2,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChangeNotification) Reset() {
 	*x = ChangeNotification{}
-	mi := &file_replication_proto_msgTypes[8]
+	mi := &file_replication_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -798,7 +216,7 @@ func (x *ChangeNotification) String() string {
 func (*ChangeNotification) ProtoMessage() {}
 
 func (x *ChangeNotification) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[8]
+	mi := &file_replication_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -811,7 +229,7 @@ func (x *ChangeNotification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChangeNotification.ProtoReflect.Descriptor instead.
 func (*ChangeNotification) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{8}
+	return file_replication_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ChangeNotification) GetNodeId() string {
@@ -819,13 +237,6 @@ func (x *ChangeNotification) GetNodeId() string {
 		return x.NodeId
 	}
 	return ""
-}
-
-func (x *ChangeNotification) GetVersions() *VersionVector {
-	if x != nil {
-		return x.Versions
-	}
-	return nil
 }
 
 func (x *ChangeNotification) GetCreatedAt() *timestamp.Timestamp {
@@ -845,7 +256,7 @@ type CertificateBundleRequest struct {
 
 func (x *CertificateBundleRequest) Reset() {
 	*x = CertificateBundleRequest{}
-	mi := &file_replication_proto_msgTypes[9]
+	mi := &file_replication_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -857,7 +268,7 @@ func (x *CertificateBundleRequest) String() string {
 func (*CertificateBundleRequest) ProtoMessage() {}
 
 func (x *CertificateBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[9]
+	mi := &file_replication_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -870,7 +281,7 @@ func (x *CertificateBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertificateBundleRequest.ProtoReflect.Descriptor instead.
 func (*CertificateBundleRequest) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{9}
+	return file_replication_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CertificateBundleRequest) GetHostname() string {
@@ -900,7 +311,7 @@ type CertificateBundleResponse struct {
 
 func (x *CertificateBundleResponse) Reset() {
 	*x = CertificateBundleResponse{}
-	mi := &file_replication_proto_msgTypes[10]
+	mi := &file_replication_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -912,7 +323,7 @@ func (x *CertificateBundleResponse) String() string {
 func (*CertificateBundleResponse) ProtoMessage() {}
 
 func (x *CertificateBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_replication_proto_msgTypes[10]
+	mi := &file_replication_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -925,7 +336,7 @@ func (x *CertificateBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertificateBundleResponse.ProtoReflect.Descriptor instead.
 func (*CertificateBundleResponse) Descriptor() ([]byte, []int) {
-	return file_replication_proto_rawDescGZIP(), []int{10}
+	return file_replication_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *CertificateBundleResponse) GetHostname() string {
@@ -963,46 +374,538 @@ func (x *CertificateBundleResponse) GetMetadataJson() []byte {
 	return nil
 }
 
+type DNSRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Fqdn          string                 `protobuf:"bytes,2,opt,name=fqdn,proto3" json:"fqdn,omitempty"`
+	RecordType    string                 `protobuf:"bytes,3,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"`
+	RoutingClass  string                 `protobuf:"bytes,4,opt,name=routing_class,json=routingClass,proto3" json:"routing_class,omitempty"`
+	TtlSeconds    uint32                 `protobuf:"varint,5,opt,name=ttl_seconds,json=ttlSeconds,proto3" json:"ttl_seconds,omitempty"`
+	ValuesJson    string                 `protobuf:"bytes,6,opt,name=values_json,json=valuesJson,proto3" json:"values_json,omitempty"`
+	RoutingKey    string                 `protobuf:"bytes,7,opt,name=routing_key,json=routingKey,proto3" json:"routing_key,omitempty"`
+	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DNSRecord) Reset() {
+	*x = DNSRecord{}
+	mi := &file_replication_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DNSRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DNSRecord) ProtoMessage() {}
+
+func (x *DNSRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_replication_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DNSRecord.ProtoReflect.Descriptor instead.
+func (*DNSRecord) Descriptor() ([]byte, []int) {
+	return file_replication_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DNSRecord) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetFqdn() string {
+	if x != nil {
+		return x.Fqdn
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetRoutingClass() string {
+	if x != nil {
+		return x.RoutingClass
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetTtlSeconds() uint32 {
+	if x != nil {
+		return x.TtlSeconds
+	}
+	return 0
+}
+
+func (x *DNSRecord) GetValuesJson() string {
+	if x != nil {
+		return x.ValuesJson
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetRoutingKey() string {
+	if x != nil {
+		return x.RoutingKey
+	}
+	return ""
+}
+
+func (x *DNSRecord) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type ServiceBackendRef struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ServiceNamespace string                 `protobuf:"bytes,2,opt,name=service_namespace,json=serviceNamespace,proto3" json:"service_namespace,omitempty"`
+	ServiceName      string                 `protobuf:"bytes,3,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	ServicePort      uint32                 `protobuf:"varint,4,opt,name=service_port,json=servicePort,proto3" json:"service_port,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ServiceBackendRef) Reset() {
+	*x = ServiceBackendRef{}
+	mi := &file_replication_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceBackendRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceBackendRef) ProtoMessage() {}
+
+func (x *ServiceBackendRef) ProtoReflect() protoreflect.Message {
+	mi := &file_replication_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceBackendRef.ProtoReflect.Descriptor instead.
+func (*ServiceBackendRef) Descriptor() ([]byte, []int) {
+	return file_replication_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ServiceBackendRef) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ServiceBackendRef) GetServiceNamespace() string {
+	if x != nil {
+		return x.ServiceNamespace
+	}
+	return ""
+}
+
+func (x *ServiceBackendRef) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+func (x *ServiceBackendRef) GetServicePort() uint32 {
+	if x != nil {
+		return x.ServicePort
+	}
+	return 0
+}
+
+type HTTPRouteProjection struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DomainEndpointId string                 `protobuf:"bytes,2,opt,name=domain_endpoint_id,json=domainEndpointId,proto3" json:"domain_endpoint_id,omitempty"`
+	Hostname         string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Path             string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
+	Priority         int32                  `protobuf:"varint,5,opt,name=priority,proto3" json:"priority,omitempty"`
+	BackendRef       *ServiceBackendRef     `protobuf:"bytes,6,opt,name=backend_ref,json=backendRef,proto3" json:"backend_ref,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *HTTPRouteProjection) Reset() {
+	*x = HTTPRouteProjection{}
+	mi := &file_replication_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HTTPRouteProjection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HTTPRouteProjection) ProtoMessage() {}
+
+func (x *HTTPRouteProjection) ProtoReflect() protoreflect.Message {
+	mi := &file_replication_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HTTPRouteProjection.ProtoReflect.Descriptor instead.
+func (*HTTPRouteProjection) Descriptor() ([]byte, []int) {
+	return file_replication_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *HTTPRouteProjection) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *HTTPRouteProjection) GetDomainEndpointId() string {
+	if x != nil {
+		return x.DomainEndpointId
+	}
+	return ""
+}
+
+func (x *HTTPRouteProjection) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *HTTPRouteProjection) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *HTTPRouteProjection) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *HTTPRouteProjection) GetBackendRef() *ServiceBackendRef {
+	if x != nil {
+		return x.BackendRef
+	}
+	return nil
+}
+
+type CertificateRevision struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DomainEndpointId string                 `protobuf:"bytes,2,opt,name=domain_endpoint_id,json=domainEndpointId,proto3" json:"domain_endpoint_id,omitempty"`
+	Hostname         string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Revision         uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
+	Provider         string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
+	ChallengeType    string                 `protobuf:"bytes,6,opt,name=challenge_type,json=challengeType,proto3" json:"challenge_type,omitempty"`
+	ArtifactBucket   string                 `protobuf:"bytes,7,opt,name=artifact_bucket,json=artifactBucket,proto3" json:"artifact_bucket,omitempty"`
+	ArtifactPrefix   string                 `protobuf:"bytes,8,opt,name=artifact_prefix,json=artifactPrefix,proto3" json:"artifact_prefix,omitempty"`
+	Sha256Crt        string                 `protobuf:"bytes,9,opt,name=sha256_crt,json=sha256Crt,proto3" json:"sha256_crt,omitempty"`
+	Sha256Key        string                 `protobuf:"bytes,10,opt,name=sha256_key,json=sha256Key,proto3" json:"sha256_key,omitempty"`
+	NotBefore        *timestamp.Timestamp   `protobuf:"bytes,11,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
+	NotAfter         *timestamp.Timestamp   `protobuf:"bytes,12,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CertificateRevision) Reset() {
+	*x = CertificateRevision{}
+	mi := &file_replication_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CertificateRevision) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CertificateRevision) ProtoMessage() {}
+
+func (x *CertificateRevision) ProtoReflect() protoreflect.Message {
+	mi := &file_replication_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CertificateRevision.ProtoReflect.Descriptor instead.
+func (*CertificateRevision) Descriptor() ([]byte, []int) {
+	return file_replication_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *CertificateRevision) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetDomainEndpointId() string {
+	if x != nil {
+		return x.DomainEndpointId
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *CertificateRevision) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetChallengeType() string {
+	if x != nil {
+		return x.ChallengeType
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetArtifactBucket() string {
+	if x != nil {
+		return x.ArtifactBucket
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetArtifactPrefix() string {
+	if x != nil {
+		return x.ArtifactPrefix
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetSha256Crt() string {
+	if x != nil {
+		return x.Sha256Crt
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetSha256Key() string {
+	if x != nil {
+		return x.Sha256Key
+	}
+	return ""
+}
+
+func (x *CertificateRevision) GetNotBefore() *timestamp.Timestamp {
+	if x != nil {
+		return x.NotBefore
+	}
+	return nil
+}
+
+func (x *CertificateRevision) GetNotAfter() *timestamp.Timestamp {
+	if x != nil {
+		return x.NotAfter
+	}
+	return nil
+}
+
+type DomainEntryProjection struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	BackendType      string                 `protobuf:"bytes,3,opt,name=backend_type,json=backendType,proto3" json:"backend_type,omitempty"`
+	Cert             *CertificateRevision   `protobuf:"bytes,4,opt,name=cert,proto3" json:"cert,omitempty"`
+	HttpRoutes       []*HTTPRouteProjection `protobuf:"bytes,5,rep,name=http_routes,json=httpRoutes,proto3" json:"http_routes,omitempty"`
+	BindedBackendRef *ServiceBackendRef     `protobuf:"bytes,6,opt,name=binded_backend_ref,json=bindedBackendRef,proto3" json:"binded_backend_ref,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *DomainEntryProjection) Reset() {
+	*x = DomainEntryProjection{}
+	mi := &file_replication_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DomainEntryProjection) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DomainEntryProjection) ProtoMessage() {}
+
+func (x *DomainEntryProjection) ProtoReflect() protoreflect.Message {
+	mi := &file_replication_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DomainEntryProjection.ProtoReflect.Descriptor instead.
+func (*DomainEntryProjection) Descriptor() ([]byte, []int) {
+	return file_replication_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *DomainEntryProjection) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DomainEntryProjection) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *DomainEntryProjection) GetBackendType() string {
+	if x != nil {
+		return x.BackendType
+	}
+	return ""
+}
+
+func (x *DomainEntryProjection) GetCert() *CertificateRevision {
+	if x != nil {
+		return x.Cert
+	}
+	return nil
+}
+
+func (x *DomainEntryProjection) GetHttpRoutes() []*HTTPRouteProjection {
+	if x != nil {
+		return x.HttpRoutes
+	}
+	return nil
+}
+
+func (x *DomainEntryProjection) GetBindedBackendRef() *ServiceBackendRef {
+	if x != nil {
+		return x.BindedBackendRef
+	}
+	return nil
+}
+
 var File_replication_proto protoreflect.FileDescriptor
 
 const file_replication_proto_rawDesc = "" +
 	"\n" +
-	"\x11replication.proto\x12\x13luna.replication.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x95\x03\n" +
-	"\vRouteRecord\x12\x1b\n" +
-	"\tdomain_id\x18\x01 \x01(\tR\bdomainId\x12\x1a\n" +
-	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1d\n" +
+	"\x11replication.proto\x12\x13luna.replication.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa0\x02\n" +
+	"\bSnapshot\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x129\n" +
 	"\n" +
-	"binding_id\x18\x03 \x01(\tR\tbindingId\x12#\n" +
-	"\rroute_version\x18\x04 \x01(\x04R\frouteVersion\x121\n" +
-	"\x14certificate_revision\x18\x05 \x01(\x04R\x13certificateRevision\x12\x1a\n" +
-	"\blistener\x18\x06 \x01(\tR\blistener\x12\x1a\n" +
-	"\bprotocol\x18\a \x01(\tR\bprotocol\x12)\n" +
-	"\x10upstream_address\x18\b \x01(\tR\x0fupstreamAddress\x12#\n" +
-	"\rupstream_port\x18\t \x01(\rR\fupstreamPort\x12+\n" +
-	"\x11upstream_protocol\x18\n" +
-	" \x01(\tR\x10upstreamProtocol\x12!\n" +
-	"\fbackend_json\x18\v \x01(\tR\vbackendJson\"\xbb\x02\n" +
-	"\rBindingRecord\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\tdomain_id\x18\x02 \x01(\tR\bdomainId\x12\x1a\n" +
-	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x1d\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12?\n" +
+	"\vdns_records\x18\x03 \x03(\v2\x1e.luna.replication.v1.DNSRecordR\n" +
+	"dnsRecords\x12Q\n" +
+	"\x0edomain_entries\x18\x04 \x03(\v2*.luna.replication.v1.DomainEntryProjectionR\rdomainEntries\x12,\n" +
+	"\x12snapshot_record_id\x18\x05 \x01(\x04R\x10snapshotRecordId\"X\n" +
+	"\x0fSnapshotRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12,\n" +
+	"\x12snapshot_record_id\x18\x02 \x01(\x04R\x10snapshotRecordId\".\n" +
+	"\x13SubscriptionRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"h\n" +
+	"\x12ChangeNotification\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x129\n" +
 	"\n" +
-	"service_id\x18\x04 \x01(\tR\tserviceId\x12\x1c\n" +
-	"\tnamespace\x18\x05 \x01(\tR\tnamespace\x12\x12\n" +
-	"\x04name\x18\x06 \x01(\tR\x04name\x12\x18\n" +
-	"\aaddress\x18\a \x01(\tR\aaddress\x12\x12\n" +
-	"\x04port\x18\b \x01(\rR\x04port\x12\x1a\n" +
-	"\bprotocol\x18\t \x01(\tR\bprotocol\x12#\n" +
-	"\rroute_version\x18\n" +
-	" \x01(\x04R\frouteVersion\x12!\n" +
-	"\fbackend_json\x18\v \x01(\tR\vbackendJson\"\xad\x03\n" +
-	"\x11CertificateRecord\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
-	"\tdomain_id\x18\x02 \x01(\tR\bdomainId\x12\x17\n" +
-	"\azone_id\x18\x03 \x01(\tR\x06zoneId\x12\x1a\n" +
-	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x04R\brevision\x12\x16\n" +
-	"\x06status\x18\x06 \x01(\tR\x06status\x12'\n" +
+	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"R\n" +
+	"\x18CertificateBundleRequest\x12\x1a\n" +
+	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x04R\brevision\"\xaa\x01\n" +
+	"\x19CertificateBundleResponse\x12\x1a\n" +
+	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1a\n" +
+	"\brevision\x18\x02 \x01(\x04R\brevision\x12\x17\n" +
+	"\atls_crt\x18\x03 \x01(\fR\x06tlsCrt\x12\x17\n" +
+	"\atls_key\x18\x04 \x01(\fR\x06tlsKey\x12#\n" +
+	"\rmetadata_json\x18\x05 \x01(\fR\fmetadataJson\"\xf2\x01\n" +
+	"\tDNSRecord\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04fqdn\x18\x02 \x01(\tR\x04fqdn\x12\x1f\n" +
+	"\vrecord_type\x18\x03 \x01(\tR\n" +
+	"recordType\x12#\n" +
+	"\rrouting_class\x18\x04 \x01(\tR\froutingClass\x12\x1f\n" +
+	"\vttl_seconds\x18\x05 \x01(\rR\n" +
+	"ttlSeconds\x12\x1f\n" +
+	"\vvalues_json\x18\x06 \x01(\tR\n" +
+	"valuesJson\x12\x1f\n" +
+	"\vrouting_key\x18\a \x01(\tR\n" +
+	"routingKey\x12\x18\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\"\x96\x01\n" +
+	"\x11ServiceBackendRef\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
+	"\x11service_namespace\x18\x02 \x01(\tR\x10serviceNamespace\x12!\n" +
+	"\fservice_name\x18\x03 \x01(\tR\vserviceName\x12!\n" +
+	"\fservice_port\x18\x04 \x01(\rR\vservicePort\"\xe8\x01\n" +
+	"\x13HTTPRouteProjection\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
+	"\x12domain_endpoint_id\x18\x02 \x01(\tR\x10domainEndpointId\x12\x1a\n" +
+	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x12\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\x1a\n" +
+	"\bpriority\x18\x05 \x01(\x05R\bpriority\x12G\n" +
+	"\vbackend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\n" +
+	"backendRef\"\xd2\x03\n" +
+	"\x13CertificateRevision\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
+	"\x12domain_endpoint_id\x18\x02 \x01(\tR\x10domainEndpointId\x12\x1a\n" +
+	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x1a\n" +
+	"\brevision\x18\x04 \x01(\x04R\brevision\x12\x1a\n" +
+	"\bprovider\x18\x05 \x01(\tR\bprovider\x12%\n" +
+	"\x0echallenge_type\x18\x06 \x01(\tR\rchallengeType\x12'\n" +
 	"\x0fartifact_bucket\x18\a \x01(\tR\x0eartifactBucket\x12'\n" +
 	"\x0fartifact_prefix\x18\b \x01(\tR\x0eartifactPrefix\x12\x1d\n" +
 	"\n" +
@@ -1012,54 +915,15 @@ const file_replication_proto_rawDesc = "" +
 	" \x01(\tR\tsha256Key\x129\n" +
 	"\n" +
 	"not_before\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\x127\n" +
-	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\x8a\x03\n" +
-	"\x10AssignmentRecord\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
-	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1b\n" +
-	"\tdomain_id\x18\x03 \x01(\tR\bdomainId\x12\x1a\n" +
-	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1a\n" +
-	"\blistener\x18\x05 \x01(\tR\blistener\x12\x1d\n" +
-	"\n" +
-	"binding_id\x18\x06 \x01(\tR\tbindingId\x122\n" +
-	"\x15desired_route_version\x18\a \x01(\x04R\x13desiredRouteVersion\x12@\n" +
-	"\x1cdesired_certificate_revision\x18\b \x01(\x04R\x1adesiredCertificateRevision\x12.\n" +
-	"\x13desired_dns_version\x18\t \x01(\x04R\x11desiredDnsVersion\x12\x14\n" +
-	"\x05state\x18\n" +
-	" \x01(\tR\x05state\x12\x1d\n" +
-	"\n" +
-	"last_error\x18\v \x01(\tR\tlastError\"\xb5\x01\n" +
-	"\rVersionVector\x122\n" +
-	"\x15desired_route_version\x18\x01 \x01(\x04R\x13desiredRouteVersion\x12@\n" +
-	"\x1cdesired_certificate_revision\x18\x02 \x01(\x04R\x1adesiredCertificateRevision\x12.\n" +
-	"\x13desired_dns_version\x18\x03 \x01(\x04R\x11desiredDnsVersion\"\xad\x03\n" +
-	"\bSnapshot\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x129\n" +
-	"\n" +
-	"created_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12>\n" +
-	"\bversions\x18\x03 \x01(\v2\".luna.replication.v1.VersionVectorR\bversions\x128\n" +
-	"\x06routes\x18\x04 \x03(\v2 .luna.replication.v1.RouteRecordR\x06routes\x12>\n" +
-	"\bbindings\x18\x05 \x03(\v2\".luna.replication.v1.BindingRecordR\bbindings\x12J\n" +
-	"\fcertificates\x18\x06 \x03(\v2&.luna.replication.v1.CertificateRecordR\fcertificates\x12G\n" +
-	"\vassignments\x18\a \x03(\v2%.luna.replication.v1.AssignmentRecordR\vassignments\"*\n" +
-	"\x0fSnapshotRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"y\n" +
-	"\x13SubscriptionRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12I\n" +
-	"\x0eknown_versions\x18\x02 \x01(\v2\".luna.replication.v1.VersionVectorR\rknownVersions\"\xa8\x01\n" +
-	"\x12ChangeNotification\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12>\n" +
-	"\bversions\x18\x02 \x01(\v2\".luna.replication.v1.VersionVectorR\bversions\x129\n" +
-	"\n" +
-	"created_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"R\n" +
-	"\x18CertificateBundleRequest\x12\x1a\n" +
-	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1a\n" +
-	"\brevision\x18\x02 \x01(\x04R\brevision\"\xaa\x01\n" +
-	"\x19CertificateBundleResponse\x12\x1a\n" +
-	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x1a\n" +
-	"\brevision\x18\x02 \x01(\x04R\brevision\x12\x17\n" +
-	"\atls_crt\x18\x03 \x01(\fR\x06tlsCrt\x12\x17\n" +
-	"\atls_key\x18\x04 \x01(\fR\x06tlsKey\x12#\n" +
-	"\rmetadata_json\x18\x05 \x01(\fR\fmetadataJson2\xc3\x02\n" +
+	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\xc5\x02\n" +
+	"\x15DomainEntryProjection\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
+	"\fbackend_type\x18\x03 \x01(\tR\vbackendType\x12<\n" +
+	"\x04cert\x18\x04 \x01(\v2(.luna.replication.v1.CertificateRevisionR\x04cert\x12I\n" +
+	"\vhttp_routes\x18\x05 \x03(\v2(.luna.replication.v1.HTTPRouteProjectionR\n" +
+	"httpRoutes\x12T\n" +
+	"\x12binded_backend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\x10bindedBackendRef2\xc3\x02\n" +
 	"\x12ReplicationService\x12R\n" +
 	"\vGetSnapshot\x12$.luna.replication.v1.SnapshotRequest\x1a\x1d.luna.replication.v1.Snapshot\x12`\n" +
 	"\tSubscribe\x12(.luna.replication.v1.SubscriptionRequest\x1a'.luna.replication.v1.ChangeNotification0\x01\x12w\n" +
@@ -1079,42 +943,41 @@ func file_replication_proto_rawDescGZIP() []byte {
 
 var file_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_replication_proto_goTypes = []any{
-	(*RouteRecord)(nil),               // 0: luna.replication.v1.RouteRecord
-	(*BindingRecord)(nil),             // 1: luna.replication.v1.BindingRecord
-	(*CertificateRecord)(nil),         // 2: luna.replication.v1.CertificateRecord
-	(*AssignmentRecord)(nil),          // 3: luna.replication.v1.AssignmentRecord
-	(*VersionVector)(nil),             // 4: luna.replication.v1.VersionVector
-	(*Snapshot)(nil),                  // 5: luna.replication.v1.Snapshot
-	(*SnapshotRequest)(nil),           // 6: luna.replication.v1.SnapshotRequest
-	(*SubscriptionRequest)(nil),       // 7: luna.replication.v1.SubscriptionRequest
-	(*ChangeNotification)(nil),        // 8: luna.replication.v1.ChangeNotification
-	(*CertificateBundleRequest)(nil),  // 9: luna.replication.v1.CertificateBundleRequest
-	(*CertificateBundleResponse)(nil), // 10: luna.replication.v1.CertificateBundleResponse
+	(*Snapshot)(nil),                  // 0: luna.replication.v1.Snapshot
+	(*SnapshotRequest)(nil),           // 1: luna.replication.v1.SnapshotRequest
+	(*SubscriptionRequest)(nil),       // 2: luna.replication.v1.SubscriptionRequest
+	(*ChangeNotification)(nil),        // 3: luna.replication.v1.ChangeNotification
+	(*CertificateBundleRequest)(nil),  // 4: luna.replication.v1.CertificateBundleRequest
+	(*CertificateBundleResponse)(nil), // 5: luna.replication.v1.CertificateBundleResponse
+	(*DNSRecord)(nil),                 // 6: luna.replication.v1.DNSRecord
+	(*ServiceBackendRef)(nil),         // 7: luna.replication.v1.ServiceBackendRef
+	(*HTTPRouteProjection)(nil),       // 8: luna.replication.v1.HTTPRouteProjection
+	(*CertificateRevision)(nil),       // 9: luna.replication.v1.CertificateRevision
+	(*DomainEntryProjection)(nil),     // 10: luna.replication.v1.DomainEntryProjection
 	(*timestamp.Timestamp)(nil),       // 11: google.protobuf.Timestamp
 }
 var file_replication_proto_depIdxs = []int32{
-	11, // 0: luna.replication.v1.CertificateRecord.not_before:type_name -> google.protobuf.Timestamp
-	11, // 1: luna.replication.v1.CertificateRecord.not_after:type_name -> google.protobuf.Timestamp
-	11, // 2: luna.replication.v1.Snapshot.created_at:type_name -> google.protobuf.Timestamp
-	4,  // 3: luna.replication.v1.Snapshot.versions:type_name -> luna.replication.v1.VersionVector
-	0,  // 4: luna.replication.v1.Snapshot.routes:type_name -> luna.replication.v1.RouteRecord
-	1,  // 5: luna.replication.v1.Snapshot.bindings:type_name -> luna.replication.v1.BindingRecord
-	2,  // 6: luna.replication.v1.Snapshot.certificates:type_name -> luna.replication.v1.CertificateRecord
-	3,  // 7: luna.replication.v1.Snapshot.assignments:type_name -> luna.replication.v1.AssignmentRecord
-	4,  // 8: luna.replication.v1.SubscriptionRequest.known_versions:type_name -> luna.replication.v1.VersionVector
-	4,  // 9: luna.replication.v1.ChangeNotification.versions:type_name -> luna.replication.v1.VersionVector
-	11, // 10: luna.replication.v1.ChangeNotification.created_at:type_name -> google.protobuf.Timestamp
-	6,  // 11: luna.replication.v1.ReplicationService.GetSnapshot:input_type -> luna.replication.v1.SnapshotRequest
-	7,  // 12: luna.replication.v1.ReplicationService.Subscribe:input_type -> luna.replication.v1.SubscriptionRequest
-	9,  // 13: luna.replication.v1.ReplicationService.FetchCertificateBundle:input_type -> luna.replication.v1.CertificateBundleRequest
-	5,  // 14: luna.replication.v1.ReplicationService.GetSnapshot:output_type -> luna.replication.v1.Snapshot
-	8,  // 15: luna.replication.v1.ReplicationService.Subscribe:output_type -> luna.replication.v1.ChangeNotification
-	10, // 16: luna.replication.v1.ReplicationService.FetchCertificateBundle:output_type -> luna.replication.v1.CertificateBundleResponse
-	14, // [14:17] is the sub-list for method output_type
-	11, // [11:14] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	11, // 0: luna.replication.v1.Snapshot.created_at:type_name -> google.protobuf.Timestamp
+	6,  // 1: luna.replication.v1.Snapshot.dns_records:type_name -> luna.replication.v1.DNSRecord
+	10, // 2: luna.replication.v1.Snapshot.domain_entries:type_name -> luna.replication.v1.DomainEntryProjection
+	11, // 3: luna.replication.v1.ChangeNotification.created_at:type_name -> google.protobuf.Timestamp
+	7,  // 4: luna.replication.v1.HTTPRouteProjection.backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
+	11, // 5: luna.replication.v1.CertificateRevision.not_before:type_name -> google.protobuf.Timestamp
+	11, // 6: luna.replication.v1.CertificateRevision.not_after:type_name -> google.protobuf.Timestamp
+	9,  // 7: luna.replication.v1.DomainEntryProjection.cert:type_name -> luna.replication.v1.CertificateRevision
+	8,  // 8: luna.replication.v1.DomainEntryProjection.http_routes:type_name -> luna.replication.v1.HTTPRouteProjection
+	7,  // 9: luna.replication.v1.DomainEntryProjection.binded_backend_ref:type_name -> luna.replication.v1.ServiceBackendRef
+	1,  // 10: luna.replication.v1.ReplicationService.GetSnapshot:input_type -> luna.replication.v1.SnapshotRequest
+	2,  // 11: luna.replication.v1.ReplicationService.Subscribe:input_type -> luna.replication.v1.SubscriptionRequest
+	4,  // 12: luna.replication.v1.ReplicationService.FetchCertificateBundle:input_type -> luna.replication.v1.CertificateBundleRequest
+	0,  // 13: luna.replication.v1.ReplicationService.GetSnapshot:output_type -> luna.replication.v1.Snapshot
+	3,  // 14: luna.replication.v1.ReplicationService.Subscribe:output_type -> luna.replication.v1.ChangeNotification
+	5,  // 15: luna.replication.v1.ReplicationService.FetchCertificateBundle:output_type -> luna.replication.v1.CertificateBundleResponse
+	13, // [13:16] is the sub-list for method output_type
+	10, // [10:13] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_replication_proto_init() }

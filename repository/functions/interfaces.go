@@ -9,6 +9,7 @@ import (
 type SpecRepository interface {
 	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
+	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
 	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBackendRef, error)
 	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBackendRef, error)
 	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
@@ -20,6 +21,7 @@ type SpecRepository interface {
 	GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error)
 	GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error)
 	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
+	AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error
 }
 
 type GenericRepository[M any] interface {
@@ -36,4 +38,5 @@ type Repository interface {
 	HTTPRoutes() GenericRepository[*metadata.HTTPRoute]
 	DNSRecords() GenericRepository[*metadata.DNSRecord]
 	CertificateRevisions() GenericRepository[*metadata.CertificateRevision]
+	SnapshotRecords() GenericRepository[*metadata.SnapshotRecord]
 }
