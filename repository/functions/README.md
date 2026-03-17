@@ -1,14 +1,23 @@
 # repository/functions
 
 ## 职责
-基于 Gorm 的 repository 实现，包括 generic CRUD 和少量特化查询。
+
+基于 Gorm 的 repository 实现。
 
 ## 架构
-- `gorm_generic_repository.go` 提供通用 CRUD 基座。
-- 其余 `gorm_*_repository.go` 提供资源特化查询。
-- `gorm_repository.go` 负责聚合总仓储。
-- `interfaces.go` 定义仓储接口。
+
+- `gorm_generic_repository.go`: 通用 CRUD 基座
+- `gorm_repository.go`: 聚合总 repository
+- 其余 `gorm_*_repository.go`: 特化查询
+- `interfaces.go`: 仓储接口
+
+## 当前设计
+
+- 新架构尽量复用 generic repository
+- manage wrapper 只在外层增加副作用，不重复实现一套 repository
+- 逻辑删除由共享查询约束统一处理
 
 ## 存在的问题
-- 特化查询和 generic CRUD 的边界需要持续控制。
-- 逻辑删除已经引入，后续所有查询都必须持续遵循同一约束。
+
+- 特化查询仍然分散
+- 如果引入事务包装，接口层还需要继续整理

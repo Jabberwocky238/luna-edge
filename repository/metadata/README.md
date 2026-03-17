@@ -1,14 +1,26 @@
 # repository/metadata
 
 ## 职责
-定义主库元数据模型和只读投影结构。
 
-## 架构
-- `domain_endpoint.go`、`http_route.go`、`service_binding.go`、`dns_record.go` 定义核心资源。
-- `certificate_revision.go`、`snapshot_record.go` 定义证书和复制记录。
-- `domain_entry_projection.go` 定义查询投影。
-- `models.go` 放共享字段。
+定义主库持久化模型、复制记录模型和只读投影结构。
+
+## 核心对象
+
+- `DomainEndpoint`
+- `HTTPRoute`
+- `ServiceBackendRef`
+- `DNSRecord`
+- `CertificateRevision`
+- `SnapshotRecord`
+- `DomainEntryProjection`
+
+## 当前语义
+
+- `Shared` 提供逻辑删除和时间戳
+- `DNSRecord` 复制时使用 `Deleted`
+- `DomainEntryProjection` 是只读投影，也带 `Deleted`，用于 slave 删除域名缓存
 
 ## 存在的问题
-- 数据模型正处于架构迁移期，字段和语义需要继续收紧。
-- 持久化模型与查询投影的边界需要保持明确，避免重新物化膨胀。
+
+- 当前正处于架构迁移期，字段语义还在收紧
+- 持久化模型和投影模型必须继续保持边界

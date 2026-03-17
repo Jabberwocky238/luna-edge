@@ -101,6 +101,10 @@ func (w *Wrapper) GetLatestCertificateRevision(ctx context.Context, domainID str
 	return w.raw.GetLatestCertificateRevision(ctx, domainID)
 }
 
+func (w *Wrapper) GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error) {
+	return w.raw.GetActiveCertificateForDomain(ctx, domain)
+}
+
 func (w *Wrapper) ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error) {
 	return w.raw.ListCertificateRevisions(ctx, domainID)
 }

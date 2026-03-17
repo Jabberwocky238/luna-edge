@@ -162,11 +162,8 @@ func (r *CertReconciler) reconcileDomain(ctx context.Context, domain *metadata.D
 }
 
 func (r *CertReconciler) shouldIssue(ctx context.Context, domain *metadata.DomainEndpoint) bool {
-	if domain.CertID == "" {
-		return true
-	}
-	cert := &metadata.CertificateRevision{}
-	if err := r.repo.CertificateRevisions().GetResourceByField(ctx, cert, "id", domain.CertID); err != nil {
+	cert, err := r.repo.GetActiveCertificateForDomain(ctx, domain)
+	if err != nil || cert == nil {
 		return true
 	}
 	if cert.NotAfter.IsZero() {

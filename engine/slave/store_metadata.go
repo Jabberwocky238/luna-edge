@@ -106,7 +106,7 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 		certHostname := ""
 		var certRevision uint64
 		if snapshot.DomainEntries[i].Cert != nil {
-			certHostname = snapshot.DomainEntries[i].Cert.Hostname
+			certHostname = snapshot.DomainEntries[i].Hostname
 			certRevision = snapshot.DomainEntries[i].Cert.Revision
 		}
 		row := &domainEntryCacheRow{

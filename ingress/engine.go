@@ -312,7 +312,6 @@ func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath st
 		}
 		return &BackendBinding{
 			ID:            route.ID,
-			DomainID:      entry.ID,
 			Hostname:      entry.Hostname,
 			Namespace:     route.BackendRef.ServiceNamespace,
 			Name:          route.BackendRef.ServiceName,
@@ -331,7 +330,6 @@ func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath st
 		}
 		return &BackendBinding{
 			ID:            entry.BindedBackendRef.ID,
-			DomainID:      entry.ID,
 			Hostname:      entry.Hostname,
 			Namespace:     entry.BindedBackendRef.ServiceNamespace,
 			Name:          entry.BindedBackendRef.ServiceName,

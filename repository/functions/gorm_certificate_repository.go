@@ -2,8 +2,10 @@ package functions
 
 import (
 	"context"
+	"strings"
 
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
+	"gorm.io/gorm"
 )
 
 func (r *GormRepository) CertificateRevisions() GenericRepository[*metadata.CertificateRevision] {
@@ -30,6 +32,29 @@ func (r *GormRepository) GetLatestCertificateRevision(ctx context.Context, domai
 		Where("deleted = ?", false).
 		Order("revision desc").
 		First(cert, "domain_endpoint_id = ?", domainID).Error; err != nil {
+		return nil, err
+	}
+	return cert, nil
+}
+
+func (r *GormRepository) GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error) {
+	if domain == nil {
+		return nil, nil
+	}
+	domainID := strings.TrimSpace(domain.ID)
+	if domainID == "" {
+		return nil, nil
+	}
+	cert := &metadata.CertificateRevision{}
+	err := r.db.WithContext(ctx).
+		Where("deleted = ?", false).
+		Where("domain_endpoint_id = ?", domainID).
+		Order("revision desc").
+		First(cert).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return cert, nil

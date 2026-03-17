@@ -235,28 +235,28 @@ func serviceBackendRefFromProto(in *replpb.ServiceBackendRef) *metadata.ServiceB
 }
 
 func httpRouteProjectionToProto(in metadata.HTTPRouteProjection) *replpb.HTTPRouteProjection {
-	return &replpb.HTTPRouteProjection{Id: in.ID, DomainEndpointId: in.DomainEndpointID, Hostname: in.Hostname, Path: in.Path, Priority: in.Priority, BackendRef: serviceBackendRefToProto(in.BackendRef)}
+	return &replpb.HTTPRouteProjection{Id: in.ID, Path: in.Path, Priority: in.Priority, BackendRef: serviceBackendRefToProto(in.BackendRef)}
 }
 
 func httpRouteProjectionFromProto(in *replpb.HTTPRouteProjection) metadata.HTTPRouteProjection {
 	if in == nil {
 		return metadata.HTTPRouteProjection{}
 	}
-	return metadata.HTTPRouteProjection{ID: in.GetId(), DomainEndpointID: in.GetDomainEndpointId(), Hostname: in.GetHostname(), Path: in.GetPath(), Priority: in.GetPriority(), BackendRef: serviceBackendRefFromProto(in.GetBackendRef())}
+	return metadata.HTTPRouteProjection{ID: in.GetId(), Path: in.GetPath(), Priority: in.GetPriority(), BackendRef: serviceBackendRefFromProto(in.GetBackendRef())}
 }
 
 func certificateRevisionToProto(in *metadata.CertificateRevision) *replpb.CertificateRevision {
 	if in == nil {
 		return nil
 	}
-	return &replpb.CertificateRevision{Id: in.ID, DomainEndpointId: in.DomainEndpointID, Hostname: in.Hostname, Revision: in.Revision, Provider: string(in.Provider), ChallengeType: string(in.ChallengeType), ArtifactBucket: in.ArtifactBucket, ArtifactPrefix: in.ArtifactPrefix, Sha256Crt: in.SHA256Crt, Sha256Key: in.SHA256Key, NotBefore: timeToProto(in.NotBefore), NotAfter: timeToProto(in.NotAfter)}
+	return &replpb.CertificateRevision{Id: in.ID, DomainEndpointId: in.DomainEndpointID, Revision: in.Revision, Provider: string(in.Provider), ChallengeType: string(in.ChallengeType), ArtifactBucket: in.ArtifactBucket, ArtifactPrefix: in.ArtifactPrefix, Sha256Crt: in.SHA256Crt, Sha256Key: in.SHA256Key, NotBefore: timeToProto(in.NotBefore), NotAfter: timeToProto(in.NotAfter)}
 }
 
 func certificateRevisionFromProto(in *replpb.CertificateRevision) *metadata.CertificateRevision {
 	if in == nil {
 		return nil
 	}
-	return &metadata.CertificateRevision{ID: in.GetId(), DomainEndpointID: in.GetDomainEndpointId(), Hostname: in.GetHostname(), Revision: in.GetRevision(), Provider: metadata.ACMEProvider(in.GetProvider()), ChallengeType: metadata.ChallengeType(in.GetChallengeType()), ArtifactBucket: in.GetArtifactBucket(), ArtifactPrefix: in.GetArtifactPrefix(), SHA256Crt: in.GetSha256Crt(), SHA256Key: in.GetSha256Key(), NotBefore: timeFromProto(in.GetNotBefore()), NotAfter: timeFromProto(in.GetNotAfter())}
+	return &metadata.CertificateRevision{ID: in.GetId(), DomainEndpointID: in.GetDomainEndpointId(), Revision: in.GetRevision(), Provider: metadata.ACMEProvider(in.GetProvider()), ChallengeType: metadata.ChallengeType(in.GetChallengeType()), ArtifactBucket: in.GetArtifactBucket(), ArtifactPrefix: in.GetArtifactPrefix(), SHA256Crt: in.GetSha256Crt(), SHA256Key: in.GetSha256Key(), NotBefore: timeFromProto(in.GetNotBefore()), NotAfter: timeFromProto(in.GetNotAfter())}
 }
 
 func domainEntryProjectionToProto(in metadata.DomainEntryProjection) *replpb.DomainEntryProjection {

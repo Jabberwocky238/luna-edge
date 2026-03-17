@@ -18,6 +18,7 @@ type SpecRepository interface {
 	ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error)
 	GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error)
 	GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error)
+	GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error)
 	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
 	AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error
 	ListSnapshotRecordsAfter(ctx context.Context, afterID uint64) ([]metadata.SnapshotRecord, error)

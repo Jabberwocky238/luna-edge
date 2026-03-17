@@ -21,16 +21,17 @@ func (s *LocalStore) SyncSnapshotCertificates(ctx context.Context, snapshot *eng
 	log.Printf("slave-store: sync certificates begin snapshot_record_id=%d domains=%d", snapshot.SnapshotRecordID, len(snapshot.DomainEntries))
 	activeHosts := make([]string, 0, len(snapshot.DomainEntries))
 	for i := range snapshot.DomainEntries {
+		hostname := strings.TrimSpace(snapshot.DomainEntries[i].Hostname)
 		cert := snapshot.DomainEntries[i].Cert
-		if cert == nil || strings.TrimSpace(cert.Hostname) == "" {
+		if cert == nil || hostname == "" {
 			continue
 		}
-		activeHosts = append(activeHosts, cert.Hostname)
-		if err := s.SyncCertificateBundle(ctx, &engine.CertificateBundle{Hostname: cert.Hostname, Revision: cert.Revision}); err != nil {
-			log.Printf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", snapshot.SnapshotRecordID, cert.Hostname, cert.Revision, err)
+		activeHosts = append(activeHosts, hostname)
+		if err := s.SyncCertificateBundle(ctx, &engine.CertificateBundle{Hostname: hostname, Revision: cert.Revision}); err != nil {
+			log.Printf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", snapshot.SnapshotRecordID, hostname, cert.Revision, err)
 			return err
 		}
-		log.Printf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", snapshot.SnapshotRecordID, cert.Hostname, cert.Revision)
+		log.Printf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", snapshot.SnapshotRecordID, hostname, cert.Revision)
 	}
 	if err := s.pruneInactiveCertificates(activeHosts); err != nil {
 		log.Printf("slave-store: prune inactive certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)

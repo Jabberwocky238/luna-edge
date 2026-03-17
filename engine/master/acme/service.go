@@ -55,7 +55,7 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	if domain == nil {
 		return nil, fmt.Errorf("domain endpoint %q not found", req.DomainID)
 	}
-	log.Printf("acme: resolved domain domain_id=%s hostname=%s backend_type=%s cert_id=%s", domain.ID, domain.Hostname, domain.BackendType, domain.CertID)
+	log.Printf("acme: resolved domain domain_id=%s hostname=%s backend_type=%s", domain.ID, domain.Hostname, domain.BackendType)
 
 	issuerCfg, err := s.resolveIssuerConfig(req)
 	if err != nil {
@@ -72,7 +72,6 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	cert := &metadata.CertificateRevision{
 		ID:               certID,
 		DomainEndpointID: domain.ID,
-		Hostname:         domain.Hostname,
 		Revision:         revisionNumber,
 		Provider:         issuerCfg.Provider,
 		ChallengeType:    req.ChallengeType,
@@ -127,12 +126,6 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	}
 	log.Printf("acme: final cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, cert.ID, cert.Revision)
 
-	domain.CertID = cert.ID
-	if err := s.repo.DomainEndpoints().UpsertResource(ctx, domain); err != nil {
-		log.Printf("acme: update domain cert binding failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
-		return nil, err
-	}
-	log.Printf("acme: domain cert binding updated hostname=%s cert_id=%s", domain.Hostname, cert.ID)
 	if s.bundles != nil {
 		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
 			log.Printf("acme: store bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
@@ -141,16 +134,16 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		log.Printf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
 	}
 	if err := s.publishChange(ctx, domain.Hostname); err != nil {
-		log.Printf("acme: publish final cert change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
+		log.Printf("acme: publish final cert change failed hostname=%s cert_revision_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
-	log.Printf("acme: publish final cert change done hostname=%s cert_id=%s", domain.Hostname, cert.ID)
+	log.Printf("acme: publish final cert change done hostname=%s cert_revision_id=%s", domain.Hostname, cert.ID)
 	if err := s.publishChange(ctx, domain.Hostname); err != nil {
-		log.Printf("acme: publish post-issue extra change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
+		log.Printf("acme: publish post-issue extra change failed hostname=%s cert_revision_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
-	log.Printf("acme: publish post-issue extra change done hostname=%s cert_id=%s", domain.Hostname, cert.ID)
-	log.Printf("acme: issue completed hostname=%s provider=%s challenge=%s cert_id=%s revision=%d", domain.Hostname, issuerCfg.Provider, req.ChallengeType, cert.ID, cert.Revision)
+	log.Printf("acme: publish post-issue extra change done hostname=%s cert_revision_id=%s", domain.Hostname, cert.ID)
+	log.Printf("acme: issue completed hostname=%s provider=%s challenge=%s cert_revision_id=%s revision=%d", domain.Hostname, issuerCfg.Provider, req.ChallengeType, cert.ID, cert.Revision)
 	return cert, nil
 }
 

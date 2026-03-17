@@ -1,15 +1,24 @@
 # repository
 
 ## 职责
-仓储层总入口，负责连接、通用 repository 接口、元数据模型和 gorm 实现。
+
+仓储层总入口，负责数据库连接、元数据模型、Gorm repository 和少量投影查询。
 
 ## 架构
-- `factory.go` 负责创建统一 repository factory。
-- `connection/` 管理数据库连接。
-- `functions/` 提供 gorm repository 实现。
-- `metadata/` 定义持久化模型和投影结构。
-- `utiltypes/` 提供少量辅助类型。
+
+- `factory.go`: 创建 repository factory
+- `connection/`: 数据库连接
+- `functions/`: Gorm repository 实现
+- `metadata/`: 持久化模型和投影结构
+- `utiltypes/`: 小型辅助类型
+
+## 当前边界
+
+- 主库真实写入模型在这里
+- 控制面副作用不在这里做，而是在 `engine/master/manage`
+- slave 运行时拿到的是投影结果，不是 repository 直接暴露
 
 ## 存在的问题
-- 当前 repository 同时承担原始持久化和少量特化查询，边界仍在调整。
-- 与 manage wrapper 的职责分层需要继续保持清晰。
+
+- 仓储接口既承担通用 CRUD，又承担少量特化查询
+- 后续如果引入统一事务，接口还要继续收敛

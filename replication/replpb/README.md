@@ -1,12 +1,19 @@
 # replication/replpb
 
 ## 职责
+
 保存 replication proto 生成后的 Go 代码。
 
-## 架构
-- `replication.pb.go` 是消息定义。
-- `replication_grpc.pb.go` 是 gRPC stub。
+## 文件
 
-## 存在的问题
-- 该目录是生成产物，不应手改。
-- 生成脚本、`go_package` 和输出目录稍有不一致就容易污染路径结构。
+- `replication.pb.go`: 消息定义
+- `replication_grpc.pb.go`: gRPC stub
+
+## 约束
+
+- 这里原则上不应手改
+- 修改 `proto` 后应尽快重新生成
+
+## 当前风险
+
+- 如果 proto 已更新但生成文件未同步，会直接造成复制链路语义漂移

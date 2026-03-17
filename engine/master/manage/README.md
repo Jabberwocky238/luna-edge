@@ -1,15 +1,25 @@
 # engine/master/manage
 
 ## 职责
-manage API 与控制面写库包装层，负责 REST 管理接口和写库副作用编排。
+
+manage API 与主库写包装层，负责把“写数据库”扩展成“写数据库 + 副作用 + 复制广播”。
 
 ## 架构
-- `api.go`、`router.go` 暴露 HTTP API。
-- `wrapper.go` 基于底层 repository 做薄装饰。
-- `batch.go` 提供批量写入时的副作用合并。
-- `broadcast.go` 定义广播行为。
-- `descriptors_registry.go`、`resources.go` 管理资源路由表。
+
+- `api.go`、`router.go`: HTTP API
+- `wrapper.go`: repository 包装
+- `batch.go`: 批处理入口，合并副作用
+- `broadcast.go`: changelog 发布逻辑
+- `descriptors_registry.go`: 资源路由表
+
+## 当前设计
+
+- `Wrapper` 尽量复用 `repository/functions/gorm_generic_repository.go`
+- 正常写路径通过 `Wrapper` 触发副作用
+- delete 语义通过显式 `deleted` changelog 下发给 slave
+- `Batch(ctx, fn)` 用于把一组物化更新合成一次副作用收口
 
 ## 存在的问题
-- 现在已有批量 effect 合并，但事务边界还未完全纳入。
-- 某些资源的副作用仍然较隐式，后续可继续显式化。
+
+- 批处理已经解决副作用合并，但底层事务仍未完全统一
+- 某些资源的隐式联动仍然偏多

@@ -25,7 +25,6 @@ type DomainEndpoint struct {
 	// 是否需要证书
 	NeedCert bool `json:"need_cert" gorm:"column:need_cert;not null;default:false"`
 	// 最新证书
-	CertID          string      `json:"cert_id" gorm:"column:cert_id;not null;default:'';type:text"`
 	BackendType     BackendType `json:"backend_type" gorm:"column:backend_type;not null;type:text"`
 	BindedServiceID string      `json:"binded_service_ref" gorm:"column:binded_service_ref;type:text"`
 }

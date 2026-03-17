@@ -24,7 +24,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	domain := &metadata.DomainEndpoint{
 		ID:          "domain-1",
 		Hostname:    "app.example.com",
-		CertID:      "cert-1",
 		BackendType: metadata.BackendTypeL7HTTP,
 	}
 	if err := db.WithContext(ctx).Create(domain).Error; err != nil {
@@ -34,7 +33,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	cert := &metadata.CertificateRevision{
 		ID:               "cert-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Revision:         7,
 		Provider:         "acme",
 		ChallengeType:    metadata.ChallengeTypeHTTP01,
@@ -69,7 +67,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	route1 := &metadata.HTTPRoute{
 		ID:               "route-1",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Path:             "/api",
 		Priority:         20,
 		BackendRefID:     "backend-1",
@@ -77,7 +74,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	route2 := &metadata.HTTPRoute{
 		ID:               "route-2",
 		DomainEndpointID: "domain-1",
-		Hostname:         "app.example.com",
 		Path:             "/",
 		Priority:         10,
 		BackendRefID:     "backend-2",
@@ -145,10 +141,10 @@ func TestGetDomainEntryProjectionByDomain_L4UsesBindedBackendRef(t *testing.T) {
 	}
 
 	domain := &metadata.DomainEndpoint{
-		ID:               "domain-l4",
-		Hostname:         "tcp.example.com",
-		BackendType:      metadata.BackendTypeL4TLSPassthrough,
-		BindedServiceID:  "backend-l4",
+		ID:              "domain-l4",
+		Hostname:        "tcp.example.com",
+		BackendType:     metadata.BackendTypeL4TLSPassthrough,
+		BindedServiceID: "backend-l4",
 	}
 	if err := db.WithContext(ctx).Create(domain).Error; err != nil {
 		t.Fatalf("create domain: %v", err)

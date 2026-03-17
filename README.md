@@ -1,115 +1,77 @@
 # Luna Edge
 
 [中文说明](./README.zh-CN.md)
-1
-Luna Edge is a unified edge system for domain-facing traffic. It puts DNS, ingress, TLS, certificate distribution, and node activation behind one control model instead of treating them as unrelated products.
 
-## What It Does
+Luna Edge is a unified edge control plane for DNS, HTTP ingress, TLS, certificate issuance, and certificate distribution.
 
-先准备部署文件：
+## Current Architecture
 
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
-```
+- `master` is the single writer.
+- `master` stores desired state in SQLite or Postgres.
+- `master` watches Kubernetes resources through `engine/master/k8s_bridge`.
+- `master` materializes them into repository rows, triggers certificate side effects, then publishes replication changelogs.
+- `slave` keeps a local SQLite cache plus certificate files on disk.
+- `slave` serves DNS and ingress only from local state.
 
-For one hostname, Luna Edge can manage:
+## Replication Model
 
-- DNS publishing
-- traffic routing
-- upstream service binding
-- TLS termination
-- certificate issuance, renewal, and distribution
-- node-level activation
+Replication is now split into two explicit paths:
 
-## Core Idea
+- `Subscribe` is the primary realtime path.
+  It delivers one `ChangeNotification` per materialized DNS or domain change.
+- `GetSnapshot` is the recovery path.
+  It is used for initial catch-up or when a slave detects a gap in `snapshot_record_id`.
 
-Luna Edge models one domain entry as one coherent unit.
+Normal steady-state updates should not abuse full snapshot rebuilds.
 
-The `master` owns desired state and computes the materialized view each `slave` should run. A `slave` does not care about intermediate changes. It only cares about converging to the latest final state as fast as possible.
+Current payload model:
 
-That is why replication is version-based, not replay-based:
+- `DNSRecord` carries `deleted`
+- `DomainEntryProjection` carries `deleted`
+- slave applies these changes directly to local cache rows
 
-- each node tracks a `VersionVector`
-- subscription is kept for realtime push
-- actual recovery and reconciliation use `GetSnapshot`
-- there is no event log or cursor replay path in the active design
+## Certificate Flow
 
-## Architecture
+- `master` decides whether a hostname needs a certificate through the cert reconciler.
+- ACME http-01 challenge data is served directly by master HTTP endpoints.
+- Issued certificate metadata is stored in the main repository.
+- Actual bundle bytes are fetched by slaves through replication RPC `FetchCertificateBundle`.
+- slave writes `tls.crt`, `tls.key`, and `metadata.json` under its local certificate root.
 
-### Control Plane
+## Kubernetes Flow
 
-- `master` accepts writes
-- `master` stores metadata in SQLite or Postgres
-- `master` builds per-node snapshots from repository projections
-- `master` pushes lightweight change notifications to subscribed slaves
-- `master` serves certificate bundle download through `FetchCertificateBundle`
+`master` owns Kubernetes listening.
 
-### Data Plane
+- `engine/master/k8s_bridge/dns.go` watches DNS CRDs and writes `DNSRecord`
+- `engine/master/k8s_bridge/ingress.go` watches `Ingress` and writes `DomainEndpoint`, `HTTPRoute`, and `ServiceBackendRef`
+- `engine/master/k8s_bridge/gateway*.go` watches Gateway API resources and writes the same materialized model
 
-- `slave` keeps a local materialized store
-- `slave` subscribes to the master with its current `VersionVector`
-- when master reports a newer version, `slave` fetches the latest snapshot and replaces local state
-- `slave` runs DNS and ingress from local state
-- `slave` pulls certificate files from `master`, writes them to local cert root, and serves them locally
+The write order is:
 
-### Replication Model
+1. write master database
+2. trigger side effects such as certificate reconciliation
+3. publish replication changelog
 
-Replication is built around final state convergence:
+## Main Directories
 
-1. `slave` reads its local versions.
-2. `slave` opens `Subscribe(node_id, known_versions)`.
-3. `master` compares versions and pushes a `ChangeNotification` when the node should refresh.
-4. `slave` calls `GetSnapshot(node_id)`.
-5. `slave` replaces local snapshot state in one transaction.
-6. runtime components refresh from local state.
+- `cmd/master`: master binary entrypoint
+- `cmd/slave`: slave binary entrypoint
+- `cmd/lnctl`: CLI wrapper around the manage API
+- `engine/master`: control-plane runtime
+- `engine/slave`: slave runtime and local store
+- `dns`: authoritative DNS runtime
+- `ingress`: HTTP/TLS runtime
+- `replication`: protobuf and generated RPC bindings
+- `repository`: storage interfaces, models, and Gorm implementations
+- `deploy`: Kubernetes manifests
 
-This keeps realtime push without forcing slaves to replay every intermediate mutation.
+## Status Notes
 
-### Certificate Flow
-
-- `master` keeps certificate metadata in the repository
-- actual `tls.crt`, `tls.key`, and `metadata.json` are fetched through replication RPC
-- `slave` certificate sync is handled by `engine/slave/CertManager`
-- ingress loads certificates from local disk only
-
-### TLS Resolver
-
-The ingress TLS resolver is intentionally strict:
-
-- hostname input is sanitized before mapping to filesystem paths
-- certificate root must be a valid non-empty directory
-- filesystem watchers are used only to invalidate affected cache entries
-- watchers do not preload certificates and do not clear the whole cache
-- watcher implementation is split for Windows and non-Windows
-
-## Components
-
-- `cmd/master`: master binary
-- `cmd/slave`: slave binary
-- `engine/master`: control plane engine and replication service
-- `engine/slave`: replica engine, local store, cert manager
-- `dns/`: authoritative DNS runtime
-- `ingress/`: HTTP/TLS ingress runtime
-- `replication/`: protobuf definitions and generated gRPC bindings
-- `repository/`: metadata repositories and storage abstraction
-- `lnctl/`: control helpers and client utilities
-
-## Storage
-
-- `master`: SQLite for local/single-node setups, Postgres for centralized control plane
-- `slave`: SQLite for local materialized metadata
-- certificate payloads are stored outside the metadata DB and synced as files
-
-## Current Runtime Assumptions
-
-- `master` is the single writer
-- `slave` is read-only from the perspective of desired state
-- subscription is for latency, snapshot is the source of truth
-- local runtime should continue to work from local state during transient master disconnects
+- architecture is in active migration
+- compatibility is not the priority
+- read the module `README.md` files for the current responsibilities and known issues
 
 ## Development
-
-Run all tests with:
 
 ```bash
 go test ./...

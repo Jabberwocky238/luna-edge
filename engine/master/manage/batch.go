@@ -120,6 +120,10 @@ func (r batchRepository) GetLatestCertificateRevision(ctx context.Context, domai
 	return r.repo.GetLatestCertificateRevision(withBatchContext(ctx, r.ctx), domainID)
 }
 
+func (r batchRepository) GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error) {
+	return r.repo.GetActiveCertificateForDomain(withBatchContext(ctx, r.ctx), domain)
+}
+
 func (r batchRepository) ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error) {
 	return r.repo.ListCertificateRevisions(withBatchContext(ctx, r.ctx), domainID)
 }

@@ -25,7 +25,6 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 		BackendType            metadata.BackendType    `gorm:"column:backend_type"`
 		CertID                 *string                 `gorm:"column:cert_id"`
 		CertDomainID           *string                 `gorm:"column:cert_domain_endpoint_id"`
-		CertHostname           *string                 `gorm:"column:cert_hostname"`
 		CertRevision           *uint64                 `gorm:"column:cert_revision"`
 		CertProvider           *string                 `gorm:"column:cert_provider"`
 		CertType               *metadata.ChallengeType `gorm:"column:cert_challenge_type"`
@@ -56,7 +55,6 @@ SELECT
 	de.backend_type AS backend_type,
 	cr.id AS cert_id,
 	cr.domain_endpoint_id AS cert_domain_endpoint_id,
-	cr.hostname AS cert_hostname,
 	cr.revision AS cert_revision,
 	cr.provider AS cert_provider,
 	cr.challenge_type AS cert_challenge_type,
@@ -79,8 +77,14 @@ SELECT
 	binded_sbr.service_port AS binded_service_port
 FROM domain_endpoints AS de
 LEFT JOIN certificate_revisions AS cr
-	ON cr.id = de.cert_id
+	ON cr.domain_endpoint_id = de.id
 	AND cr.deleted = FALSE
+	AND cr.revision = (
+		SELECT MAX(cr2.revision)
+		FROM certificate_revisions AS cr2
+		WHERE cr2.deleted = FALSE
+			AND cr2.domain_endpoint_id = de.id
+	)
 LEFT JOIN http_routes AS hr
 	ON hr.domain_endpoint_id = de.id
 	AND hr.deleted = FALSE
@@ -112,7 +116,6 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 		projection.Cert = &metadata.CertificateRevision{
 			ID:               *first.CertID,
 			DomainEndpointID: derefString(first.CertDomainID),
-			Hostname:         derefString(first.CertHostname),
 			Revision:         derefUint64(first.CertRevision),
 			Provider:         metadata.ACMEProvider(derefString(first.CertProvider)),
 			ChallengeType:    derefChallengeType(first.CertType),
@@ -146,11 +149,9 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 		seenRoutes[*row.RouteID] = struct{}{}
 
 		route := metadata.HTTPRouteProjection{
-			ID:               *row.RouteID,
-			DomainEndpointID: derefString(row.RouteDomainID),
-			Hostname:         derefString(row.RouteHost),
-			Path:             derefString(row.RoutePath),
-			Priority:         derefInt32(row.RoutePriority),
+			ID:       *row.RouteID,
+			Path:     derefString(row.RoutePath),
+			Priority: derefInt32(row.RoutePriority),
 		}
 		if row.RouteBackendRefID != nil && *row.RouteBackendRefID != "" {
 			route.BackendRef = &metadata.ServiceBackendRef{

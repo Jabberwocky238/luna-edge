@@ -513,9 +513,6 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	if existing != nil {
-		item.domain.CertID = existing.CertID
-	}
 	if err := repo.DomainEndpoints().UpsertResource(ctx, &item.domain); err != nil {
 		return err
 	}
