@@ -16,7 +16,7 @@ type memoryStore struct {
 }
 
 func newMemoryStore() *memoryStore {
-		return &memoryStore{
+	return &memoryStore{
 		bindings: map[string][]*metadata.ServiceBinding{},
 	}
 }
@@ -78,7 +78,7 @@ func betterBinding(left, right *metadata.ServiceBinding, requestPath string) boo
 	return bindingMatchesPath(left, requestPath) && !bindingMatchesPath(right, requestPath)
 }
 
-func parseBindingPath(binding *metadata.ServiceBinding) string {
+func parseBindingPath(binding *metadata.HTTPRouteProjection) string {
 	if binding == nil {
 		return "/"
 	}
@@ -92,7 +92,7 @@ func parseBindingPath(binding *metadata.ServiceBinding) string {
 	return payload.Path
 }
 
-func parseBindingPriority(binding *metadata.ServiceBinding) int32 {
+func parseBindingPriority(binding *metadata.HTTPRouteProjection) int32 {
 	if binding == nil {
 		return 0
 	}
@@ -103,7 +103,7 @@ func parseBindingPriority(binding *metadata.ServiceBinding) int32 {
 	return payload.Priority
 }
 
-func bindingMatchesPath(binding *metadata.ServiceBinding, requestPath string) bool {
+func bindingMatchesPath(binding *metadata.HTTPRouteProjection, requestPath string) bool {
 	path := parseBindingPath(binding)
 	if path == "/" || path == "" {
 		return true
@@ -115,14 +115,14 @@ func bindingMatchesPath(binding *metadata.ServiceBinding, requestPath string) bo
 }
 
 type RouteLookupReader interface {
-	GetRouteByHostname(ctx context.Context, hostname string) (*enginepkg.RouteRecord, error)
+	GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
 }
 
 type ReplicaReader interface {
 	ReadCache() RouteLookupReader
 }
 
-func lookupRouteFromReadOnlyCache(ctx context.Context, slave ReplicaReader, hostname string) (*enginepkg.RouteRecord, error) {
+func lookupRouteFromReadOnlyCache(ctx context.Context, slave ReplicaReader, hostname string) (*metadata.DomainEntryProjection, error) {
 	if slave == nil {
 		return nil, fmt.Errorf("slave is nil")
 	}

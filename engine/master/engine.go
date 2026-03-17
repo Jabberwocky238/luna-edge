@@ -124,7 +124,7 @@ func (e *Engine) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot
 			return err
 		}
 		rec := snapshot.DNSRecords[i]
-		e.Hub.Publish(snapshot.NodeID, &enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
+		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
 	}
 	for i := range snapshot.DomainEntries {
 		recordID, err := e.appendSnapshotRecord(context.Background(), metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
@@ -132,7 +132,7 @@ func (e *Engine) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot
 			return err
 		}
 		entry := snapshot.DomainEntries[i]
-		e.Hub.Publish(snapshot.NodeID, &enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DomainEntry: &entry})
+		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DomainEntry: &entry})
 	}
 	return nil
 }

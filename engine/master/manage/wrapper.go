@@ -69,28 +69,18 @@ func castModel[M any](model any) (M, error) {
 
 func (w *Wrapper) resourceRepo(model any) (genericResourceRepository, error) {
 	switch model.(type) {
-	case *metadata.Zone:
-		return genericResourceAdapter[*metadata.Zone]{repo: w.repo.Zones(), cast: castModel[*metadata.Zone]}, nil
 	case *metadata.DomainEndpoint:
 		return genericResourceAdapter[*metadata.DomainEndpoint]{repo: w.repo.DomainEndpoints(), cast: castModel[*metadata.DomainEndpoint]}, nil
-	case *metadata.DomainEndpointStatus:
-		return genericResourceAdapter[*metadata.DomainEndpointStatus]{repo: w.repo.DomainEndpointStatuses(), cast: castModel[*metadata.DomainEndpointStatus]}, nil
-	case *metadata.ServiceBinding:
-		return genericResourceAdapter[*metadata.ServiceBinding]{repo: w.repo.ServiceBindings(), cast: castModel[*metadata.ServiceBinding]}, nil
+	case *metadata.ServiceBackendRef:
+		return genericResourceAdapter[*metadata.ServiceBackendRef]{repo: w.repo.ServiceBindingRefs(), cast: castModel[*metadata.ServiceBackendRef]}, nil
 	case *metadata.HTTPRoute:
 		return genericResourceAdapter[*metadata.HTTPRoute]{repo: w.repo.HTTPRoutes(), cast: castModel[*metadata.HTTPRoute]}, nil
 	case *metadata.DNSRecord:
 		return genericResourceAdapter[*metadata.DNSRecord]{repo: w.repo.DNSRecords(), cast: castModel[*metadata.DNSRecord]}, nil
 	case *metadata.CertificateRevision:
 		return genericResourceAdapter[*metadata.CertificateRevision]{repo: w.repo.CertificateRevisions(), cast: castModel[*metadata.CertificateRevision]}, nil
-	case *metadata.ACMEOrder:
-		return genericResourceAdapter[*metadata.ACMEOrder]{repo: w.repo.ACMEOrders(), cast: castModel[*metadata.ACMEOrder]}, nil
-	case *metadata.ACMEChallenge:
-		return genericResourceAdapter[*metadata.ACMEChallenge]{repo: w.repo.ACMEChallenges(), cast: castModel[*metadata.ACMEChallenge]}, nil
-	case *metadata.Node:
-		return genericResourceAdapter[*metadata.Node]{repo: w.repo.Nodes(), cast: castModel[*metadata.Node]}, nil
-	case *metadata.Attachment:
-		return genericResourceAdapter[*metadata.Attachment]{repo: w.repo.Attachments(), cast: castModel[*metadata.Attachment]}, nil
+	case *metadata.SnapshotRecord:
+		return genericResourceAdapter[*metadata.SnapshotRecord]{repo: w.repo.SnapshotRecords(), cast: castModel[*metadata.SnapshotRecord]}, nil
 	default:
 		return nil, fmt.Errorf("unsupported model type %T", model)
 	}

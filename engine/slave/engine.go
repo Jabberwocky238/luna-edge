@@ -175,6 +175,10 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 	return eng, nil
 }
 
+func (e *Engine) ReadCache() ingress.RouteLookupReader {
+	return e.Cache
+}
+
 // Subscribe 拉取 master 复制流。
 func (e *Engine) Subscribe(ctx context.Context) error {
 	if e.Subscriber == nil {

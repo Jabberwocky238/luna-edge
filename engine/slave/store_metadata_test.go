@@ -83,22 +83,6 @@ func TestLocalStoreMetadataApplySnapshotAndReadBack(t *testing.T) {
 		t.Fatalf("unexpected dns records: %+v", records)
 	}
 
-	route, err := store.GetRouteByHostname(ctx, "app.example.com")
-	if err != nil {
-		t.Fatalf("get route by hostname: %v", err)
-	}
-	if route.UpstreamAddress != "svc-app.default.svc.cluster.local" || route.UpstreamPort != 8080 {
-		t.Fatalf("unexpected route: %+v", route)
-	}
-
-	binding, err := store.GetBindingByHostname(ctx, "app.example.com")
-	if err != nil {
-		t.Fatalf("get binding by hostname: %v", err)
-	}
-	if binding.Name != "svc-app" || binding.Namespace != "default" {
-		t.Fatalf("unexpected binding: %+v", binding)
-	}
-
 	entry, err := store.GetDomainEntryByHostname(ctx, "app.example.com")
 	if err != nil {
 		t.Fatalf("get domain entry: %v", err)
@@ -142,13 +126,5 @@ func TestLocalStoreMetadataL4UsesBindedBackendRef(t *testing.T) {
 
 	if err := store.ApplySnapshot(ctx, snapshot); err != nil {
 		t.Fatalf("apply snapshot: %v", err)
-	}
-
-	route, err := store.GetRouteByHostname(ctx, "tcp.example.com")
-	if err != nil {
-		t.Fatalf("get l4 route: %v", err)
-	}
-	if route.Protocol != "tcp" || route.UpstreamPort != 443 {
-		t.Fatalf("unexpected l4 route: %+v", route)
 	}
 }

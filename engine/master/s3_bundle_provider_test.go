@@ -129,21 +129,18 @@ func seedBundleLocation(t *testing.T, repo repository.Repository) {
 	t.Helper()
 	ctx := context.Background()
 	mustUpsertBundleResource(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           "domain-1",
-		ZoneID:       "zone-1",
-		Hostname:     "app.example.com",
-		Generation:   1,
-		StateVersion: 1,
+		ID:          "domain-1",
+		Hostname:    "app.example.com",
+		BackendType: metadata.BackendTypeL7HTTP,
+		CertID:      "cert-1",
 	}))
 	mustUpsertBundleResource(t, repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
-		ID:             "cert-1",
-		DomainID:       "domain-1",
-		ZoneID:         "zone-1",
-		Hostname:       "app.example.com",
-		Revision:       3,
-		Status:         metadata.CertificateRevisionStatusActive,
-		ArtifactBucket: "cert-bucket",
-		ArtifactPrefix: "bundles/app.example.com",
+		ID:               "cert-1",
+		DomainEndpointID: "domain-1",
+		Hostname:         "app.example.com",
+		Revision:         3,
+		ArtifactBucket:   "cert-bucket",
+		ArtifactPrefix:   "bundles/app.example.com",
 	}))
 }
 

@@ -60,3 +60,17 @@ func (h *Hub) Publish(nodeID string, msg *enginepkg.ChangeNotification) {
 		ch <- msg
 	}
 }
+
+func (h *Hub) PublishAll(msg *enginepkg.ChangeNotification) {
+	h.mu.RLock()
+	targets := make([]chan *enginepkg.ChangeNotification, 0)
+	for _, nodeSubs := range h.subscribers {
+		for _, ch := range nodeSubs {
+			targets = append(targets, ch)
+		}
+	}
+	h.mu.RUnlock()
+	for _, ch := range targets {
+		ch <- msg
+	}
+}
