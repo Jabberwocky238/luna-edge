@@ -10,8 +10,6 @@ type SpecRepository interface {
 	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
 	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
-	GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBackendRef, error)
-	GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBackendRef, error)
 	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
 	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
 	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)

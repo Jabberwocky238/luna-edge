@@ -22,7 +22,9 @@ type TLSEngine struct {
 	handler  http.Handler
 	server   *http.Server
 	listener net.Listener
-	bridge   *K8sBridge
+	// 存储器
+	bridge *K8sBridge
+	memory *memoryStore
 }
 
 // NewTLSEngine 创建一个 TLS 执行引擎。
@@ -44,6 +46,10 @@ func NewTLSEngine(resolver TLSCertResolver, server *http.Server, bridge *K8sBrid
 
 func (e *TLSEngine) SetK8sBridge(bridge *K8sBridge) {
 	e.bridge = bridge
+}
+
+func (e *TLSEngine) SetMemoryStore(memory *memoryStore) {
+	e.memory = memory
 }
 
 // Listen 启动 TLS 监听。
@@ -135,18 +141,38 @@ func (e *TLSEngine) serveConn(conn net.Conn) {
 
 func (e *TLSEngine) resolveTLSPassthroughBackend(serverName string) (*K8sResolvedBackend, bool) {
 	if e.bridge == nil {
-		return nil, false
+		return e.resolveMemoryBackend(serverName, RouteKindTLSPassthrough)
 	}
 	backend, ok := e.bridge.ResolveTLSPassthrough(serverName)
-	return backend, ok
+	if ok {
+		return backend, true
+	}
+	return e.resolveMemoryBackend(serverName, RouteKindTLSPassthrough)
 }
 
 func (e *TLSEngine) resolveTLSRouteBackend(serverName string) (*K8sResolvedBackend, bool) {
-	if e.bridge == nil {
+	if e.bridge != nil {
+		backend, ok := e.bridge.ResolveTLS(serverName)
+		if ok {
+			return backend, true
+		}
+	}
+	return e.resolveMemoryBackend(serverName, RouteKindTLSTerminate)
+}
+
+func (e *TLSEngine) resolveMemoryBackend(serverName string, kind RouteKind) (*K8sResolvedBackend, bool) {
+	if e.memory == nil {
 		return nil, false
 	}
-	backend, ok := e.bridge.ResolveTLS(serverName)
-	return backend, ok
+	binding, ok := e.memory.GetByProtocol(serverName, "/", kind)
+	if !ok || binding == nil {
+		return nil, false
+	}
+	return &K8sResolvedBackend{
+		Kind:     kind,
+		Hostname: normalizeHost(serverName),
+		Binding:  binding,
+	}, true
 }
 
 // Stop 停止 TLS 监听。

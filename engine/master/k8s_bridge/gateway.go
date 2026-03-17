@@ -10,6 +10,7 @@ import (
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
+	"gorm.io/gorm"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,12 +18,12 @@ import (
 	dynamicinformer "k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
-	"gorm.io/gorm"
 )
 
 var (
 	gatewayGVR   = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "gateways"}
 	httpRouteGVR = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
+	tlsRouteGVR  = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tlsroutes"}
 )
 
 type certNotifier interface {
@@ -40,6 +41,7 @@ type GatewayBridge struct {
 	publisher     publisher
 	gateways      map[string]*gatewayState
 	httpRoutes    map[string]*httpRouteState
+	tlsRoutes     map[string]*tlsRouteState
 }
 
 func NewGatewayBridge(namespace string, repo repository.Repository, pub publisher) (*GatewayBridge, error) {
@@ -67,7 +69,7 @@ func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interfac
 	if namespace == "" {
 		namespace = "default"
 	}
-	return &GatewayBridge{
+	bridge := &GatewayBridge{
 		namespace:     namespace,
 		dynamicClient: dynamicClient,
 		stopCh:        make(chan struct{}),
@@ -75,7 +77,10 @@ func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interfac
 		publisher:     pub,
 		gateways:      map[string]*gatewayState{},
 		httpRoutes:    map[string]*httpRouteState{},
+		tlsRoutes:     map[string]*tlsRouteState{},
 	}
+	bridge.ensureInformer()
+	return bridge
 }
 
 func (b *GatewayBridge) LoadInitial(ctx context.Context) error {
@@ -86,6 +91,9 @@ func (b *GatewayBridge) LoadInitial(ctx context.Context) error {
 		return err
 	}
 	if err := b.loadHTTPRoutes(ctx); err != nil {
+		return err
+	}
+	if err := b.loadTLSRoutes(ctx); err != nil {
 		return err
 	}
 	return b.syncHosts(ctx, b.collectHosts(), nil)
@@ -117,14 +125,19 @@ func (b *GatewayBridge) ensureInformer() {
 	}
 	b.factory = dynamicinformer.NewFilteredDynamicSharedInformerFactory(b.dynamicClient, 30*time.Second, b.namespace, nil)
 	b.factory.ForResource(gatewayGVR).Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) { b.storeGateway(asUnstructured(obj)) },
+		AddFunc:    func(obj interface{}) { b.storeGateway(asUnstructured(obj)) },
 		UpdateFunc: func(_, newObj interface{}) { b.storeGateway(asUnstructured(newObj)) },
 		DeleteFunc: b.deleteGateway,
 	})
 	b.factory.ForResource(httpRouteGVR).Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) { b.storeHTTPRoute(asUnstructured(obj)) },
+		AddFunc:    func(obj interface{}) { b.storeHTTPRoute(asUnstructured(obj)) },
 		UpdateFunc: func(_, newObj interface{}) { b.storeHTTPRoute(asUnstructured(newObj)) },
 		DeleteFunc: b.deleteHTTPRoute,
+	})
+	b.factory.ForResource(tlsRouteGVR).Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) { b.storeTLSRoute(asUnstructured(obj)) },
+		UpdateFunc: func(_, newObj interface{}) { b.storeTLSRoute(asUnstructured(newObj)) },
+		DeleteFunc: b.deleteTLSRoute,
 	})
 }
 
@@ -142,51 +155,23 @@ func (b *GatewayBridge) loadGateways(ctx context.Context) error {
 	return nil
 }
 
-func (b *GatewayBridge) loadHTTPRoutes(ctx context.Context) error {
-	list, err := b.dynamicClient.Resource(httpRouteGVR).Namespace(b.namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	b.httpRoutes = map[string]*httpRouteState{}
-	for i := range list.Items {
-		if state := parseHTTPRouteState(list.Items[i].DeepCopy()); state != nil {
-			b.httpRoutes[state.key] = state
-		}
-	}
-	return nil
-}
-
 func (b *GatewayBridge) storeGateway(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
 	}
 	oldHosts := b.collectHosts()
+	var affected []string
 	if state := parseGatewayState(obj); state != nil {
 		b.gateways[state.key] = state
+		affected = gatewayHosts(state)
 	}
-	_ = b.syncHosts(context.Background(), b.collectHosts(), diffStrings(oldHosts, b.collectHosts()))
+	newHosts := b.collectHosts()
+	_ = b.syncHosts(context.Background(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteGateway(obj interface{}) {
 	oldHosts := b.collectHosts()
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.gateways, namespace+"/"+name) })
-	_ = b.syncHosts(context.Background(), nil, diffStrings(oldHosts, b.collectHosts()))
-}
-
-func (b *GatewayBridge) storeHTTPRoute(obj *unstructured.Unstructured) {
-	if obj == nil {
-		return
-	}
-	oldHosts := b.collectHosts()
-	if state := parseHTTPRouteState(obj); state != nil {
-		b.httpRoutes[state.key] = state
-	}
-	_ = b.syncHosts(context.Background(), b.collectHosts(), diffStrings(oldHosts, b.collectHosts()))
-}
-
-func (b *GatewayBridge) deleteHTTPRoute(obj interface{}) {
-	oldHosts := b.collectHosts()
-	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.httpRoutes, namespace+"/"+name) })
 	_ = b.syncHosts(context.Background(), nil, diffStrings(oldHosts, b.collectHosts()))
 }
 
@@ -201,6 +186,13 @@ func (b *GatewayBridge) collectHosts() []string {
 		}
 	}
 	for _, route := range b.httpRoutes {
+		for _, host := range route.hostnames {
+			if normalized := normalizeHost(host); normalized != "" {
+				set[normalized] = struct{}{}
+			}
+		}
+	}
+	for _, route := range b.tlsRoutes {
 		for _, host := range route.hostnames {
 			if normalized := normalizeHost(host); normalized != "" {
 				set[normalized] = struct{}{}
@@ -287,6 +279,52 @@ func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMater
 			}
 		}
 	}
+	for _, route := range b.tlsRoutes {
+		for _, parent := range route.parents {
+			gw := b.gateways[parent.gatewayKey]
+			if gw == nil {
+				continue
+			}
+			for _, listener := range gw.listeners {
+				if parent.sectionName != "" && parent.sectionName != listener.name {
+					continue
+				}
+				if listener.protocol != "TLS" {
+					continue
+				}
+				hostsForRoute := route.hostnames
+				if len(hostsForRoute) == 0 && listener.hostname != "" {
+					hostsForRoute = []string{listener.hostname}
+				}
+				for idx, host := range hostsForRoute {
+					host = normalizeHost(host)
+					if _, ok := hostSet[host]; !ok || host == "" {
+						continue
+					}
+					item := out[host]
+					backendID := fmt.Sprintf("k8s:backend:gateway-tls:%s:%s:%s:%d", route.namespace, route.name, host, idx)
+					item.domain = metadata.DomainEndpoint{
+						ID:              "k8s:domain:" + host,
+						Hostname:        host,
+						NeedCert:        !listener.passthrough,
+						BindedServiceID: backendID,
+						BackendType:     metadata.BackendTypeL4TLSPassthrough,
+					}
+					if !listener.passthrough {
+						item.domain.BackendType = metadata.BackendTypeL4TLSTermination
+					}
+					item.backends = []metadata.ServiceBackendRef{{
+						ID:               backendID,
+						ServiceNamespace: route.backend.namespace,
+						ServiceName:      route.backend.name,
+						ServicePort:      route.backend.port,
+					}}
+					item.routes = nil
+					out[host] = item
+				}
+			}
+		}
+	}
 	return out
 }
 
@@ -296,18 +334,10 @@ type gatewayState struct {
 }
 
 type gatewayListener struct {
-	name     string
-	protocol string
-	hostname string
-}
-
-type httpRouteState struct {
-	key       string
-	name      string
-	namespace string
-	hostnames []string
-	parents   []parentRef
-	rules     []httpRouteRule
+	name        string
+	protocol    string
+	hostname    string
+	passthrough bool
 }
 
 type parentRef struct {
@@ -315,16 +345,33 @@ type parentRef struct {
 	sectionName string
 }
 
-type httpRouteRule struct {
-	path    string
-	exact   bool
-	backend backendRef
-}
-
 type backendRef struct {
 	namespace string
 	name      string
 	port      uint32
+}
+
+func gatewayHosts(state *gatewayState) []string {
+	if state == nil {
+		return nil
+	}
+	var hosts []string
+	for _, listener := range state.listeners {
+		if normalized := normalizeHost(listener.hostname); normalized != "" {
+			hosts = append(hosts, normalized)
+		}
+	}
+	return hosts
+}
+
+func normalizeHosts(values []string) []string {
+	var out []string
+	for _, value := range values {
+		if normalized := normalizeHost(value); normalized != "" {
+			out = append(out, normalized)
+		}
+	}
+	return out
 }
 
 func parseGatewayState(obj *unstructured.Unstructured) *gatewayState {
@@ -341,84 +388,13 @@ func parseGatewayState(obj *unstructured.Unstructured) *gatewayState {
 		name, _, _ := unstructured.NestedString(item, "name")
 		protocol, _, _ := unstructured.NestedString(item, "protocol")
 		hostname, _, _ := unstructured.NestedString(item, "hostname")
-		state.listeners = append(state.listeners, gatewayListener{name: name, protocol: strings.ToUpper(strings.TrimSpace(protocol)), hostname: hostname})
-	}
-	return state
-}
-
-func parseHTTPRouteState(obj *unstructured.Unstructured) *httpRouteState {
-	if obj == nil {
-		return nil
-	}
-	state := &httpRouteState{
-		key:       obj.GetNamespace() + "/" + obj.GetName(),
-		name:      obj.GetName(),
-		namespace: obj.GetNamespace(),
-		hostnames: nestedStringSlice(obj.Object, "spec", "hostnames"),
-	}
-	parentRefs, _, _ := unstructured.NestedSlice(obj.Object, "spec", "parentRefs")
-	for _, raw := range parentRefs {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _, _ := unstructured.NestedString(item, "name")
-		namespace, _, _ := unstructured.NestedString(item, "namespace")
-		if namespace == "" {
-			namespace = obj.GetNamespace()
-		}
-		sectionName, _, _ := unstructured.NestedString(item, "sectionName")
-		state.parents = append(state.parents, parentRef{gatewayKey: namespace + "/" + name, sectionName: sectionName})
-	}
-	rules, _, _ := unstructured.NestedSlice(obj.Object, "spec", "rules")
-	for _, raw := range rules {
-		item, ok := raw.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		path := "/"
-		exact := false
-		matches, _, _ := unstructured.NestedSlice(item, "matches")
-		if len(matches) > 0 {
-			if match, ok := matches[0].(map[string]interface{}); ok {
-				if value, found, _ := unstructured.NestedString(match, "path", "value"); found && value != "" {
-					path = value
-				}
-				if typ, found, _ := unstructured.NestedString(match, "path", "type"); found && strings.EqualFold(typ, "Exact") {
-					exact = true
-				}
-			}
-		}
-		backendRefs, _, _ := unstructured.NestedSlice(item, "backendRefs")
-		for _, backendRaw := range backendRefs {
-			backendItem, ok := backendRaw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			name, _, _ := unstructured.NestedString(backendItem, "name")
-			if name == "" {
-				continue
-			}
-			namespace, _, _ := unstructured.NestedString(backendItem, "namespace")
-			if namespace == "" {
-				namespace = obj.GetNamespace()
-			}
-			port64, _, _ := unstructured.NestedInt64(backendItem, "port")
-			port := uint32(port64)
-			if port == 0 {
-				port = 80
-			}
-			state.rules = append(state.rules, httpRouteRule{
-				path:  path,
-				exact: exact,
-				backend: backendRef{
-					namespace: namespace,
-					name:      name,
-					port:      port,
-				},
-			})
-			break
-		}
+		tlsMode, _, _ := unstructured.NestedString(item, "tls", "mode")
+		state.listeners = append(state.listeners, gatewayListener{
+			name:        name,
+			protocol:    strings.ToUpper(strings.TrimSpace(protocol)),
+			hostname:    hostname,
+			passthrough: strings.EqualFold(strings.TrimSpace(tlsMode), "Passthrough"),
+		})
 	}
 	return state
 }
@@ -441,6 +417,20 @@ func diffStrings(oldValues, newValues []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func routeHostsFromDeletedObject(obj interface{}) []string {
+	item, ok := obj.(*unstructured.Unstructured)
+	if !ok || item == nil {
+		return nil
+	}
+	var hosts []string
+	for _, host := range nestedStringSlice(item.Object, "spec", "hostnames") {
+		if normalized := normalizeHost(host); normalized != "" {
+			hosts = append(hosts, normalized)
+		}
+	}
+	return hosts
 }
 
 type domainMaterialized struct {

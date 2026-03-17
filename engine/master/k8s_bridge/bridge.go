@@ -8,30 +8,22 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type childBridge interface {
-	LoadInitial(ctx context.Context) error
-	Listen()
-	Stop() error
-}
-
 type Config struct {
-	Namespace      string
-	IngressClass   string
-	EnableDNS      bool
-	EnableIngress  bool
-	EnableGateway  bool
-	KubeClient     kubernetes.Interface
-	DynamicClient  dynamic.Interface
+	Namespace     string
+	IngressClass  string
+	EnableDNS     bool
+	EnableIngress bool
+	EnableGateway bool
+	KubeClient    kubernetes.Interface
+	DynamicClient dynamic.Interface
 }
 
 // Bridge 聚合 master 侧所有 Kubernetes 监听桥。
 // 当前先接入 DNS，Ingress/Gateway 预留到同一生命周期入口。
 type Bridge struct {
 	DNS     *DNSBridge
-	Ingress childBridge
-	Gateway childBridge
-
-	children []childBridge
+	Ingress *IngressBridge
+	Gateway *GatewayBridge
 }
 
 func New(cfg Config, repo repository.Repository, pub publisher) (*Bridge, error) {
@@ -48,7 +40,6 @@ func New(cfg Config, repo repository.Repository, pub publisher) (*Bridge, error)
 			}
 		}
 		bridge.DNS = dnsBridge
-		bridge.children = append(bridge.children, dnsBridge)
 	}
 	if cfg.EnableIngress {
 		var ingressBridge *IngressBridge
@@ -62,7 +53,6 @@ func New(cfg Config, repo repository.Repository, pub publisher) (*Bridge, error)
 			}
 		}
 		bridge.Ingress = ingressBridge
-		bridge.children = append(bridge.children, ingressBridge)
 	}
 	if cfg.EnableGateway {
 		var gatewayBridge *GatewayBridge
@@ -76,7 +66,6 @@ func New(cfg Config, repo repository.Repository, pub publisher) (*Bridge, error)
 			}
 		}
 		bridge.Gateway = gatewayBridge
-		bridge.children = append(bridge.children, gatewayBridge)
 	}
 	if bridge.empty() {
 		return nil, nil
@@ -88,8 +77,18 @@ func (b *Bridge) LoadInitial(ctx context.Context) error {
 	if b == nil {
 		return nil
 	}
-	for _, child := range b.children {
-		if err := child.LoadInitial(ctx); err != nil {
+	if b.DNS != nil {
+		if err := b.DNS.LoadInitial(ctx); err != nil {
+			return err
+		}
+	}
+	if b.Ingress != nil {
+		if err := b.Ingress.LoadInitial(ctx); err != nil {
+			return err
+		}
+	}
+	if b.Gateway != nil {
+		if err := b.Gateway.LoadInitial(ctx); err != nil {
 			return err
 		}
 	}
@@ -100,8 +99,14 @@ func (b *Bridge) Listen() {
 	if b == nil {
 		return
 	}
-	for _, child := range b.children {
-		child.Listen()
+	if b.DNS != nil {
+		b.DNS.Listen()
+	}
+	if b.Ingress != nil {
+		b.Ingress.Listen()
+	}
+	if b.Gateway != nil {
+		b.Gateway.Listen()
 	}
 }
 
@@ -110,8 +115,18 @@ func (b *Bridge) Stop() error {
 		return nil
 	}
 	var firstErr error
-	for _, child := range b.children {
-		if err := child.Stop(); err != nil && firstErr == nil {
+	if b.DNS != nil {
+		if err := b.DNS.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if b.Ingress != nil {
+		if err := b.Ingress.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if b.Gateway != nil {
+		if err := b.Gateway.Stop(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -119,5 +134,5 @@ func (b *Bridge) Stop() error {
 }
 
 func (b *Bridge) empty() bool {
-	return b == nil || len(b.children) == 0
+	return b == nil || (b.DNS == nil && b.Ingress == nil && b.Gateway == nil)
 }

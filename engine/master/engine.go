@@ -26,8 +26,9 @@ type Config struct {
 	AutoMigrate           bool
 	ACME                  acme.Config
 	S3                    S3Config
-	K8sDNSBridgeEnabled   bool
+	K8sBridgeEnabled      bool
 	K8sNamespace          string
+	K8sIngressClass       string
 	ReplicationListenAddr string
 	ManageListenAddr      string
 	ShutdownTimeout       time.Duration
@@ -90,10 +91,13 @@ func New(cfg Config) (*Engine, error) {
 	}
 	engine.ACME = acme.NewService(cfg.ACME, repo, engine, engine.Bundles, acme.LegoIssuerFactory{})
 	engine.Certs = NewCertReconciler(repo, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
-	if cfg.K8sDNSBridgeEnabled {
+	if cfg.K8sBridgeEnabled {
 		bridge, err := masterk8s.New(masterk8s.Config{
-			Namespace: cfg.K8sNamespace,
-			EnableDNS: true,
+			Namespace:     cfg.K8sNamespace,
+			IngressClass:  cfg.K8sIngressClass,
+			EnableDNS:     true,
+			EnableIngress: true,
+			EnableGateway: true,
 		}, repo, engine)
 		if err != nil {
 			_ = factory.Close()

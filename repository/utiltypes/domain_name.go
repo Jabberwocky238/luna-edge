@@ -1,19 +1,34 @@
 package utiltypes
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 )
 
-type DomainName string
+type DomainName struct {
+	Hostname string
+	Wildcard bool
+}
 
-func StrToDomainName(f string) DomainName {
-	return DomainName(normalizeHost(f))
+func TryDomainName(f string) *DomainName {
+	hostname, wildcard, err := normalizeHost(f)
+	if err != nil {
+		return nil
+	}
+	return &DomainName{
+		Hostname: hostname,
+		Wildcard: wildcard,
+	}
+}
+
+func (f *DomainName) String() string {
+	return f.Hostname
 }
 
 var hostnameLabelPattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
-func normalizeHost(host string) string {
+func normalizeHost(host string) (string, bool, error) {
 	host = strings.TrimSpace(strings.ToLower(host))
 	host = strings.TrimPrefix(host, "http://")
 	host = strings.TrimPrefix(host, "https://")
@@ -23,10 +38,10 @@ func normalizeHost(host string) string {
 	return sanitizeHostname(host)
 }
 
-func sanitizeHostname(host string) string {
+func sanitizeHostname(host string) (string, bool, error) {
 	host = strings.TrimSpace(strings.ToLower(host))
 	if host == "" {
-		return ""
+		return "", false, errors.New("hostname cannot be empty")
 	}
 
 	wildcard := false
@@ -35,18 +50,18 @@ func sanitizeHostname(host string) string {
 		host = strings.TrimPrefix(host, "*.")
 	}
 	if host == "" || strings.Contains(host, "..") || strings.ContainsAny(host, `/\ `) {
-		return ""
+		return "", false, errors.New("invalid hostname")
 	}
 
-	labels := strings.Split(host, ".")
-	for _, label := range labels {
+	labels := strings.SplitSeq(host, ".")
+	for label := range labels {
 		if !hostnameLabelPattern.MatchString(label) {
-			return ""
+			return "", false, errors.New("invalid hostname label: " + label)
 		}
 	}
 
 	if wildcard {
-		return "*." + host
+		return "*." + host, true, nil
 	}
-	return host
+	return host, false, nil
 }

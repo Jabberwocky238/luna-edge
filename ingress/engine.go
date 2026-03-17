@@ -85,6 +85,7 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 		if err != nil {
 			return nil, err
 		}
+		tlsEngine.SetMemoryStore(engine.memory)
 		engine.tlsEngine = tlsEngine
 	}
 
@@ -99,9 +100,6 @@ func NewEngine(opts EngineOptions, tlsResolver TLSCertResolver, middlewares ...M
 		engine.k8sBridge = bridge
 		if engine.tlsEngine != nil {
 			engine.tlsEngine.SetK8sBridge(bridge)
-		}
-		if opts.CertificateNotifier != nil {
-			bridge.SetCertificateIntentNotifier(opts.CertificateNotifier)
 		}
 	}
 
@@ -272,14 +270,6 @@ func (e *Engine) InjectSlave(slave ReplicaReader) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.slave = slave
-}
-
-func (e *Engine) InjectCertificateIntentNotifier(notifier CertificateIntentNotifier) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.k8sBridge != nil {
-		e.k8sBridge.SetCertificateIntentNotifier(notifier)
-	}
 }
 
 func (e *Engine) RefreshAll() {
