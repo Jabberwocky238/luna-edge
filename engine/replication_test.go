@@ -7,9 +7,7 @@ import (
 	"testing"
 	"time"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	masterpkg "github.com/jabberwocky238/luna-edge/engine/master"
-	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	slavepkg "github.com/jabberwocky238/luna-edge/engine/slave"
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"github.com/jabberwocky238/luna-edge/repository"
@@ -36,20 +34,16 @@ func TestReplicationMasterToSlavePersistsSnapshotState(t *testing.T) {
 	go func() { errCh <- slaveEngine.Start(ctx) }()
 
 	waitForCondition(t, func() bool {
-		binding, err := slaveStore.GetBindingByHostname(context.Background(), "app.example.com")
-		return err == nil && binding != nil && binding.Address == "10.0.0.1"
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && len(entry.HTTPRoutes) == 1 && entry.HTTPRoutes[0].BackendRef != nil && entry.HTTPRoutes[0].BackendRef.ServiceName == "svc-app"
 	})
 	waitForCondition(t, func() bool {
-		route, err := slaveStore.GetRouteByHostname(context.Background(), "app.example.com")
-		return err == nil && route != nil && route.BindingID == "binding-1"
+		records, err := slaveStore.GetDNSRecordsByHostname(context.Background(), "app.example.com")
+		return err == nil && len(records) == 1 && records[0].ID == "dns-1"
 	})
 	waitForCondition(t, func() bool {
-		assignments, err := slaveStore.ListAssignments(context.Background(), "node-1")
-		return err == nil && len(assignments) == 1 && assignments[0].Hostname == "app.example.com"
-	})
-	waitForCondition(t, func() bool {
-		versions, err := slaveStore.GetVersions(context.Background(), "node-1")
-		return err == nil && versions.DesiredRouteVersion == 7 && versions.DesiredDNSVersion == 7
+		cursor, err := slaveStore.GetSnapshotRecordID(context.Background())
+		return err == nil && cursor > 0
 	})
 
 	cancel()
@@ -88,20 +82,11 @@ func newReplicationSlave(t *testing.T, nodeID, masterAddress string, store *slav
 	return engine
 }
 
-func waitForBindingAddress(t *testing.T, store *slavepkg.LocalStore, address string, port uint32) {
-	t.Helper()
-	waitForCondition(t, func() bool {
-		binding, err := store.GetBindingByHostname(context.Background(), "app.example.com")
-		return err == nil && binding != nil && binding.Address == address && binding.Port == port
-	})
-}
-
 func TestReplicationWrapperPublishesFinalStateRefresh(t *testing.T) {
 	t.Parallel()
 
 	masterEngine, lis, cleanup := newReplicationMaster(t)
 	defer cleanup()
-	wrapper := manage.NewWrapper(masterEngine.Repo, masterEngine.Builder, masterEngine)
 
 	slaveStore := newReplicationLocalStore(t, "slave")
 	defer func() { _ = slaveStore.Close() }()
@@ -112,17 +97,21 @@ func TestReplicationWrapperPublishesFinalStateRefresh(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- slaveEngine.Start(ctx) }()
 
-	waitForBindingAddress(t, slaveStore, "10.0.0.1", 8080)
-
-	body := []byte(`{"id":"binding-1","domain_id":"domain-1","hostname":"app.example.com","service_id":"svc-1","namespace":"default","name":"svc-app","address":"10.0.0.9","port":8089,"protocol":"http","route_version":9,"backend_json":"{\"kind\":\"service\"}"}`)
-	if _, err := wrapper.UpsertJSON(context.Background(), "service_bindings", body); err != nil {
-		t.Fatalf("wrapper upsert binding: %v", err)
-	}
-
-	waitForBindingAddress(t, slaveStore, "10.0.0.9", 8089)
 	waitForCondition(t, func() bool {
-		versions, err := slaveStore.GetVersions(context.Background(), "node-1")
-		return err == nil && versions.DesiredRouteVersion == 7
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && entry.HTTPRoutes[0].BackendRef.ServicePort == 8080
+	})
+
+	updateMasterProjection(t, masterEngine.Repo, "svc-updated", 8089, `["2.2.2.2"]`)
+	mustPublishNode(t, masterEngine, "node-1")
+
+	waitForCondition(t, func() bool {
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && entry.HTTPRoutes[0].BackendRef.ServiceName == "svc-updated" && entry.HTTPRoutes[0].BackendRef.ServicePort == 8089
+	})
+	waitForCondition(t, func() bool {
+		records, err := slaveStore.GetDNSRecordsByHostname(context.Background(), "app.example.com")
+		return err == nil && len(records) == 1 && records[0].ValuesJSON == `["2.2.2.2"]`
 	})
 
 	cancel()
@@ -141,7 +130,6 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 
 	masterEngine, lis, cleanup := newReplicationMaster(t)
 	defer cleanup()
-	wrapper := manage.NewWrapper(masterEngine.Repo, masterEngine.Builder, masterEngine)
 
 	slaveStore := newReplicationLocalStore(t, "slave")
 	defer func() { _ = slaveStore.Close() }()
@@ -151,7 +139,10 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- slaveEngine.Start(ctx) }()
 
-	waitForBindingAddress(t, slaveStore, "10.0.0.1", 8080)
+	waitForCondition(t, func() bool {
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && entry.HTTPRoutes[0].BackendRef.ServicePort == 8080
+	})
 
 	cancel()
 	select {
@@ -166,10 +157,8 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 		t.Fatalf("stop slave engine: %v", err)
 	}
 
-	body := []byte(`{"id":"binding-1","domain_id":"domain-1","hostname":"app.example.com","service_id":"svc-1","namespace":"default","name":"svc-app","address":"10.0.0.7","port":8087,"protocol":"http","route_version":11,"backend_json":"{\"kind\":\"service\"}"}`)
-	if _, err := wrapper.UpsertJSON(context.Background(), "service_bindings", body); err != nil {
-		t.Fatalf("wrapper upsert binding while offline: %v", err)
-	}
+	updateMasterProjection(t, masterEngine.Repo, "svc-restarted", 8087, `["3.3.3.3"]`)
+	mustPublishNode(t, masterEngine, "node-1")
 
 	restartedSlave := newReplicationSlave(t, "node-1", lis.Addr().String(), slaveStore)
 	restartCtx, restartCancel := context.WithCancel(context.Background())
@@ -177,7 +166,10 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 	restartErrCh := make(chan error, 1)
 	go func() { restartErrCh <- restartedSlave.Start(restartCtx) }()
 
-	waitForBindingAddress(t, slaveStore, "10.0.0.7", 8087)
+	waitForCondition(t, func() bool {
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && entry.HTTPRoutes[0].BackendRef.ServiceName == "svc-restarted" && entry.HTTPRoutes[0].BackendRef.ServicePort == 8087
+	})
 
 	restartCancel()
 	select {
@@ -207,15 +199,10 @@ func newReplicationMaster(t *testing.T) (*masterpkg.Engine, net.Listener, func()
 	masterRepo := masterFactory.Repository()
 	seedMasterProjection(t, masterRepo)
 
-	builder, err := enginepkg.NewRepositoryProjectionBuilder(masterRepo)
-	if err != nil {
-		t.Fatalf("new builder: %v", err)
-	}
 	masterEngine := &masterpkg.Engine{
 		Factory: masterFactory,
 		Repo:    masterRepo,
 		Hub:     masterpkg.NewHub(),
-		Builder: builder,
 	}
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -237,33 +224,52 @@ func seedMasterProjection(t *testing.T, repo repository.Repository) {
 	t.Helper()
 	ctx := context.Background()
 	mustUpsert(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           "domain-1",
-		ZoneID:       "zone-1",
-		Hostname:     "app.example.com",
-		Generation:   1,
-		StateVersion: 7,
+		ID:          "domain-1",
+		Hostname:    "app.example.com",
+		BackendType: metadata.BackendTypeL7HTTP,
 	}))
-	mustUpsert(t, repo.ServiceBindings().UpsertResource(ctx, &metadata.ServiceBinding{
-		ID:           "binding-1",
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		ServiceID:    "svc-1",
-		Namespace:    "default",
-		Name:         "svc-app",
-		Address:      "10.0.0.1",
-		Port:         8080,
-		Protocol:     "http",
-		RouteVersion: 1,
-		BackendJSON:  `{"kind":"service"}`,
+	mustUpsert(t, repo.ServiceBindingRefs().UpsertResource(ctx, &metadata.ServiceBackendRef{
+		ID:               "backend-1",
+		ServiceNamespace: "default",
+		ServiceName:      "svc-app",
+		ServicePort:      8080,
 	}))
-	mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
-		ID:                  "attach-1",
-		DomainID:            "domain-1",
-		NodeID:              "node-1",
-		Listener:            "edge-http",
-		DesiredRouteVersion: 7,
-		DesiredDNSVersion:   7,
-		State:               metadata.AttachmentStateReady,
+	mustUpsert(t, repo.HTTPRoutes().UpsertResource(ctx, &metadata.HTTPRoute{
+		ID:               "route-1",
+		DomainEndpointID: "domain-1",
+		Hostname:         "app.example.com",
+		Path:             "/",
+		Priority:         10,
+		BackendRefID:     "backend-1",
+	}))
+	mustUpsert(t, repo.DNSRecords().UpsertResource(ctx, &metadata.DNSRecord{
+		ID:           "dns-1",
+		FQDN:         "app.example.com",
+		RecordType:   metadata.DNSTypeA,
+		RoutingClass: metadata.RoutingClassFirst,
+		TTLSeconds:   60,
+		ValuesJSON:   `["1.1.1.1"]`,
+		Enabled:      true,
+	}))
+}
+
+func updateMasterProjection(t *testing.T, repo repository.Repository, serviceName string, servicePort uint32, dnsValues string) {
+	t.Helper()
+	ctx := context.Background()
+	mustUpsert(t, repo.ServiceBindingRefs().UpsertResource(ctx, &metadata.ServiceBackendRef{
+		ID:               "backend-1",
+		ServiceNamespace: "default",
+		ServiceName:      serviceName,
+		ServicePort:      servicePort,
+	}))
+	mustUpsert(t, repo.DNSRecords().UpsertResource(ctx, &metadata.DNSRecord{
+		ID:           "dns-1",
+		FQDN:         "app.example.com",
+		RecordType:   metadata.DNSTypeA,
+		RoutingClass: metadata.RoutingClassFirst,
+		TTLSeconds:   60,
+		ValuesJSON:   dnsValues,
+		Enabled:      true,
 	}))
 }
 
@@ -284,4 +290,11 @@ func waitForCondition(t *testing.T, fn func() bool) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("condition not met before timeout")
+}
+
+func mustPublishNode(t *testing.T, master *masterpkg.Engine, nodeID string) {
+	t.Helper()
+	if err := master.PublishNode(context.Background(), nodeID); err != nil {
+		t.Fatalf("publish node %s: %v", nodeID, err)
+	}
 }

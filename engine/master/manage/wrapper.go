@@ -21,10 +21,6 @@ func NewWrapper(repo functions.Repository, _ any, publisher enginepkg.Publisher)
 	return &Wrapper{repo: repo, publisher: publisher}
 }
 
-type genericResourceRepository interface {
-	functions.GenericRepository[any]
-}
-
 type genericResourceAdapter[M any] struct {
 	repo functions.GenericRepository[M]
 	cast func(any) (M, error)
@@ -67,7 +63,7 @@ func castModel[M any](model any) (M, error) {
 	return typedModel, nil
 }
 
-func (w *Wrapper) resourceRepo(model any) (genericResourceRepository, error) {
+func (w *Wrapper) resourceRepo(model any) (functions.GenericRepository[any], error) {
 	switch model.(type) {
 	case *metadata.DomainEndpoint:
 		return genericResourceAdapter[*metadata.DomainEndpoint]{repo: w.repo.DomainEndpoints(), cast: castModel[*metadata.DomainEndpoint]}, nil

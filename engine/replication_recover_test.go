@@ -8,13 +8,11 @@ import (
 	"testing"
 	"time"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	masterpkg "github.com/jabberwocky238/luna-edge/engine/master"
 	slavepkg "github.com/jabberwocky238/luna-edge/engine/slave"
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
-	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,7 +21,7 @@ import (
 func TestReplicationRecoversAcrossTwoSlaveFailures(t *testing.T) {
 	t.Parallel()
 
-	masterEngine, lis, cleanup := newReplicationMasterForNodes(t, []string{"node-1", "node-2"}, "10.0.0.1", 8080, 7)
+	masterEngine, lis, cleanup := newReplicationMasterForRecover(t, "svc-a", 8080)
 	defer cleanup()
 
 	slave1Store := newReplicationLocalStore(t, "slave1")
@@ -39,39 +37,39 @@ func TestReplicationRecoversAcrossTwoSlaveFailures(t *testing.T) {
 	defer run1.stop()
 	defer run2.stop()
 
-	waitForBindingAddress(t, slave1Store, "10.0.0.1", 8080)
-	waitForBindingAddress(t, slave2Store, "10.0.0.1", 8080)
+	waitForServiceName(t, slave1Store, "svc-a", 8080)
+	waitForServiceName(t, slave2Store, "svc-a", 8080)
 
-	updateMasterBindingForNodes(t, masterEngine.Repo, []string{"node-1", "node-2"}, "10.0.0.2", 8081, 8)
+	updateMasterProjection(t, masterEngine.Repo, "svc-b", 8081, `["2.2.2.2"]`)
 	mustPublishNode(t, masterEngine, "node-1")
 	mustPublishNode(t, masterEngine, "node-2")
 
-	waitForBindingAddress(t, slave1Store, "10.0.0.2", 8081)
-	waitForBindingAddress(t, slave2Store, "10.0.0.2", 8081)
+	waitForServiceName(t, slave1Store, "svc-b", 8081)
+	waitForServiceName(t, slave2Store, "svc-b", 8081)
 
 	run2.stop()
 
-	updateMasterBindingForNodes(t, masterEngine.Repo, []string{"node-1", "node-2"}, "10.0.0.3", 8082, 9)
+	updateMasterProjection(t, masterEngine.Repo, "svc-c", 8082, `["3.3.3.3"]`)
 	mustPublishNode(t, masterEngine, "node-1")
 	mustPublishNode(t, masterEngine, "node-2")
 
-	waitForBindingAddress(t, slave1Store, "10.0.0.3", 8082)
+	waitForServiceName(t, slave1Store, "svc-c", 8082)
 
 	run1.stop()
 
-	updateMasterBindingForNodes(t, masterEngine.Repo, []string{"node-1", "node-2"}, "10.0.0.4", 8083, 10)
+	updateMasterProjection(t, masterEngine.Repo, "svc-d", 8083, `["4.4.4.4"]`)
 	mustPublishNode(t, masterEngine, "node-1")
 	mustPublishNode(t, masterEngine, "node-2")
 
 	run1 = startReplicationSlave(t, newReplicationSlave(t, "node-1", lis.Addr().String(), slave1Store))
 	run2 = startReplicationSlave(t, newReplicationSlave(t, "node-2", lis.Addr().String(), slave2Store))
 
-	waitForBindingAddress(t, slave1Store, "10.0.0.4", 8083)
-	waitForBindingAddress(t, slave2Store, "10.0.0.4", 8083)
+	waitForServiceName(t, slave1Store, "svc-d", 8083)
+	waitForServiceName(t, slave2Store, "svc-d", 8083)
 	waitForCondition(t, func() bool {
-		v1, err1 := slave1Store.GetVersions(context.Background(), "node-1")
-		v2, err2 := slave2Store.GetVersions(context.Background(), "node-2")
-		return err1 == nil && err2 == nil && v1.DesiredRouteVersion == 10 && v2.DesiredRouteVersion == 10
+		v1, err1 := slave1Store.GetSnapshotRecordID(context.Background())
+		v2, err2 := slave2Store.GetSnapshotRecordID(context.Background())
+		return err1 == nil && err2 == nil && v1 > 0 && v2 > 0
 	})
 }
 
@@ -102,7 +100,7 @@ func (r *replicationSlaveRun) stop() {
 	})
 }
 
-func newReplicationMasterForNodes(t *testing.T, nodeIDs []string, address string, port uint32, version uint64) (*masterpkg.Engine, net.Listener, func()) {
+func newReplicationMasterForRecover(t *testing.T, serviceName string, port uint32) (*masterpkg.Engine, net.Listener, func()) {
 	t.Helper()
 
 	masterFactory, err := repository.NewFactory(connection.Config{
@@ -114,17 +112,13 @@ func newReplicationMasterForNodes(t *testing.T, nodeIDs []string, address string
 		t.Fatalf("new master factory: %v", err)
 	}
 	masterRepo := masterFactory.Repository()
-	seedMasterProjectionForNodes(t, masterRepo, nodeIDs, address, port, version)
+	seedMasterProjection(t, masterRepo)
+	updateMasterProjection(t, masterRepo, serviceName, port, `["1.1.1.1"]`)
 
-	builder, err := enginepkg.NewRepositoryProjectionBuilder(masterRepo)
-	if err != nil {
-		t.Fatalf("new builder: %v", err)
-	}
 	masterEngine := &masterpkg.Engine{
 		Factory: masterFactory,
 		Repo:    masterRepo,
 		Hub:     masterpkg.NewHub(),
-		Builder: builder,
 	}
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -150,81 +144,11 @@ func startReplicationSlave(t *testing.T, slave *slavepkg.Engine) *replicationSla
 	return &replicationSlaveRun{slave: slave, cancel: cancel, errCh: errCh}
 }
 
-func seedMasterProjectionForNodes(t *testing.T, repo repository.Repository, nodeIDs []string, address string, port uint32, version uint64) {
+func waitForServiceName(t *testing.T, store *slavepkg.LocalStore, serviceName string, port uint32) {
 	t.Helper()
-	ctx := context.Background()
-	mustUpsert(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           "domain-1",
-		ZoneID:       "zone-1",
-		Hostname:     "app.example.com",
-		Generation:   1,
-		StateVersion: version,
-	}))
-	mustUpsert(t, repo.ServiceBindings().UpsertResource(ctx, &metadata.ServiceBinding{
-		ID:           "binding-1",
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		ServiceID:    "svc-1",
-		Namespace:    "default",
-		Name:         "svc-app",
-		Address:      address,
-		Port:         port,
-		Protocol:     "http",
-		RouteVersion: version,
-		BackendJSON:  `{"kind":"service"}`,
-	}))
-	for _, nodeID := range nodeIDs {
-		mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
-			ID:                  "attach-" + nodeID,
-			DomainID:            "domain-1",
-			NodeID:              nodeID,
-			Listener:            "edge-http",
-			DesiredRouteVersion: version,
-			DesiredDNSVersion:   version,
-			State:               metadata.AttachmentStateReady,
-		}))
-	}
-}
-
-func updateMasterBindingForNodes(t *testing.T, repo repository.Repository, nodeIDs []string, address string, port uint32, version uint64) {
-	t.Helper()
-	ctx := context.Background()
-	mustUpsert(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           "domain-1",
-		ZoneID:       "zone-1",
-		Hostname:     "app.example.com",
-		Generation:   version,
-		StateVersion: version,
-	}))
-	mustUpsert(t, repo.ServiceBindings().UpsertResource(ctx, &metadata.ServiceBinding{
-		ID:           "binding-1",
-		DomainID:     "domain-1",
-		Hostname:     "app.example.com",
-		ServiceID:    "svc-1",
-		Namespace:    "default",
-		Name:         "svc-app",
-		Address:      address,
-		Port:         port,
-		Protocol:     "http",
-		RouteVersion: version,
-		BackendJSON:  `{"kind":"service"}`,
-	}))
-	for _, nodeID := range nodeIDs {
-		mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
-			ID:                  "attach-" + nodeID,
-			DomainID:            "domain-1",
-			NodeID:              nodeID,
-			Listener:            "edge-http",
-			DesiredRouteVersion: version,
-			DesiredDNSVersion:   version,
-			State:               metadata.AttachmentStateReady,
-		}))
-	}
-}
-
-func mustPublishNode(t *testing.T, master *masterpkg.Engine, nodeID string) {
-	t.Helper()
-	if err := master.PublishNode(context.Background(), nodeID); err != nil {
-		t.Fatalf("publish node %s: %v", nodeID, err)
-	}
+	waitForCondition(t, func() bool {
+		entry, err := store.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil && len(entry.HTTPRoutes) == 1 && entry.HTTPRoutes[0].BackendRef != nil &&
+			entry.HTTPRoutes[0].BackendRef.ServiceName == serviceName && entry.HTTPRoutes[0].BackendRef.ServicePort == port
+	})
 }

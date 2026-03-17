@@ -62,15 +62,10 @@ func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 	masterRepo := masterFactory.Repository()
 	seedMasterProjectionWithCertificate(t, masterRepo, bundle)
 
-	builder, err := enginepkg.NewRepositoryProjectionBuilder(masterRepo)
-	if err != nil {
-		t.Fatalf("new builder: %v", err)
-	}
 	masterEngine := &masterpkg.Engine{
 		Factory: masterFactory,
 		Repo:    masterRepo,
 		Hub:     masterpkg.NewHub(),
-		Builder: builder,
 		Bundles: bundleProvider{
 			bundles: map[string]*enginepkg.CertificateBundle{
 				certificateBundleKey(bundle.Hostname, bundle.Revision): bundle,
@@ -87,9 +82,7 @@ func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 	replpb.RegisterReplicationServiceServer(grpcServer, masterEngine)
-	go func() {
-		_ = grpcServer.Serve(lis)
-	}()
+	go func() { _ = grpcServer.Serve(lis) }()
 
 	cacheRoot := t.TempDir()
 	slaveStore, err := slavepkg.NewLocalStore(cacheRoot)
@@ -157,51 +150,32 @@ func seedMasterProjectionWithCertificate(t *testing.T, repo repository.Repositor
 	t.Helper()
 	ctx := context.Background()
 	mustUpsert(t, repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
-		ID:           "domain-1",
-		ZoneID:       "zone-1",
-		Hostname:     bundle.Hostname,
-		Generation:   1,
-		StateVersion: 7,
+		ID:          "domain-1",
+		Hostname:    bundle.Hostname,
+		BackendType: metadata.BackendTypeL7HTTP,
+		CertID:      "cert-1",
 	}))
-	mustUpsert(t, repo.ServiceBindings().UpsertResource(ctx, &metadata.ServiceBinding{
-		ID:           "binding-1",
-		DomainID:     "domain-1",
-		Hostname:     bundle.Hostname,
-		ServiceID:    "svc-1",
-		Namespace:    "default",
-		Name:         "svc-app",
-		Address:      "10.0.0.1",
-		Port:         8080,
-		Protocol:     "http",
-		RouteVersion: 1,
-		BackendJSON:  `{"kind":"service"}`,
+	mustUpsert(t, repo.ServiceBindingRefs().UpsertResource(ctx, &metadata.ServiceBackendRef{
+		ID:               "backend-1",
+		ServiceNamespace: "default",
+		ServiceName:      "svc-app",
+		ServicePort:      8080,
+	}))
+	mustUpsert(t, repo.HTTPRoutes().UpsertResource(ctx, &metadata.HTTPRoute{
+		ID:               "route-1",
+		DomainEndpointID: "domain-1",
+		Hostname:         bundle.Hostname,
+		Path:             "/",
+		Priority:         10,
+		BackendRefID:     "backend-1",
 	}))
 	mustUpsert(t, repo.CertificateRevisions().UpsertResource(ctx, &metadata.CertificateRevision{
-		ID:             "cert-1",
-		DomainID:       "domain-1",
-		ZoneID:         "zone-1",
-		Hostname:       bundle.Hostname,
-		Revision:       bundle.Revision,
-		Status:         metadata.CertificateRevisionStatusActive,
-		ArtifactBucket: "master",
-		ArtifactPrefix: "bundle/app.example.com",
-	}))
-	mustUpsert(t, repo.DomainEndpointStatuses().UpsertResource(ctx, &metadata.DomainEndpointStatus{
-		DomainEndpointID:    "domain-1",
-		CertificateRevision: bundle.Revision,
-		CertificateReady:    true,
-		Ready:               true,
-		Phase:               metadata.DomainPhaseReady,
-	}))
-	mustUpsert(t, repo.Attachments().UpsertResource(ctx, &metadata.Attachment{
-		ID:                         "attach-1",
-		DomainID:                   "domain-1",
-		NodeID:                     "node-1",
-		Listener:                   "edge-http",
-		DesiredRouteVersion:        7,
-		DesiredDNSVersion:          7,
-		DesiredCertificateRevision: bundle.Revision,
-		State:                      metadata.AttachmentStateReady,
+		ID:               "cert-1",
+		DomainEndpointID: "domain-1",
+		Hostname:         bundle.Hostname,
+		Revision:         bundle.Revision,
+		ArtifactBucket:   "master",
+		ArtifactPrefix:   "bundle/app.example.com",
 	}))
 }
 
