@@ -66,10 +66,8 @@ func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 
 	provider, err := NewS3CertificateBundleProvider(repo, S3Config{
 		Endpoint:        server.URL,
-		Region:          "us-east-1",
 		AccessKeyID:     "test-access",
 		SecretAccessKey: "test-secret",
-		UsePathStyle:    true,
 		HTTPTimeout:     time.Second,
 	})
 	if err != nil {

@@ -14,8 +14,7 @@ data:
   LUNA_ACME_DEFAULT_EMAIL: ""
   LUNA_ACME_EAB_KID: ""
   LUNA_S3_ENDPOINT: "http://minio.default.svc.cluster.local:9000"
-  LUNA_S3_REGION: "us-east-1"
-  LUNA_S3_PATH_STYLE: "1"
+  LUNA_S3_BUCKET: "lunaedge"
   LUNA_S3_INSECURE_SKIP_VERIFY: "0"
   LUNA_S3_HTTP_TIMEOUT: "10s"
 ---

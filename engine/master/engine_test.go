@@ -131,10 +131,8 @@ func TestNewConfiguresS3BundleProviderWhenEnabled(t *testing.T) {
 		AutoMigrate:   true,
 		S3: S3Config{
 			Endpoint:        "http://127.0.0.1:9000",
-			Region:          "us-east-1",
 			AccessKeyID:     "test-access",
 			SecretAccessKey: "test-secret",
-			UsePathStyle:    true,
 		},
 	})
 	if err != nil {

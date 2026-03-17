@@ -21,13 +21,11 @@ import (
 
 type S3Config struct {
 	Endpoint           string
-	Region             string
+	Bucket             string
 	AccessKeyID        string
 	SecretAccessKey    string
 	SessionToken       string
-	UsePathStyle       bool
 	InsecureSkipVerify bool
-	StartupProbeBucket string
 	HTTPTimeout        time.Duration
 }
 
@@ -36,8 +34,6 @@ type S3CertificateBundleProvider struct {
 	cfg    S3Config
 	client *minio.Client
 }
-
-const defaultCertificateBucket = "lunaedge"
 
 func NewS3CertificateBundleProvider(repo repository.Repository, cfg S3Config) (*S3CertificateBundleProvider, error) {
 	if repo == nil {
@@ -60,9 +56,6 @@ func newMinioClient(cfg S3Config) (*minio.Client, error) {
 	if strings.TrimSpace(cfg.Endpoint) == "" {
 		return nil, fmt.Errorf("s3 endpoint is required")
 	}
-	if strings.TrimSpace(cfg.Region) == "" {
-		return nil, fmt.Errorf("s3 region is required")
-	}
 	if strings.TrimSpace(cfg.AccessKeyID) == "" {
 		return nil, fmt.Errorf("s3 access key id is required")
 	}
@@ -74,11 +67,9 @@ func newMinioClient(cfg S3Config) (*minio.Client, error) {
 		return nil, err
 	}
 	return minio.New(endpoint, &minio.Options{
-		Creds:        credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, cfg.SessionToken),
-		Secure:       secure,
-		Region:       cfg.Region,
-		BucketLookup: bucketLookupType(cfg.UsePathStyle),
-		Transport:    buildMinioTransport(secure, cfg.InsecureSkipVerify),
+		Creds:     credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, cfg.SessionToken),
+		Secure:    secure,
+		Transport: buildMinioTransport(secure, cfg.InsecureSkipVerify),
 	})
 }
 
@@ -108,13 +99,6 @@ func parseMinioEndpoint(raw string) (string, bool, error) {
 	default:
 		return "", false, fmt.Errorf("unsupported s3 endpoint scheme %q", u.Scheme)
 	}
-}
-
-func bucketLookupType(usePathStyle bool) minio.BucketLookupType {
-	if usePathStyle {
-		return minio.BucketLookupPath
-	}
-	return minio.BucketLookupAuto
 }
 
 func buildMinioTransport(secure, insecureSkipVerify bool) http.RoundTripper {
@@ -219,7 +203,7 @@ func (p *S3CertificateBundleProvider) certificateLocation(hostname string, revis
 	latestPrefix := normalized
 	revisionPrefix := path.Join(normalized, strconv.FormatUint(revision, 10))
 	return &certificateLocation{
-		bucket:         defaultCertificateBucket,
+		bucket:         p.cfg.Bucket,
 		latestPrefix:   latestPrefix,
 		revisionPrefix: revisionPrefix,
 	}, nil
