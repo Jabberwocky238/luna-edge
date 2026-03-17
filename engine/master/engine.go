@@ -9,6 +9,7 @@ import (
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/engine/master/acme"
+	masterk8s "github.com/jabberwocky238/luna-edge/engine/master/k8s_bridge"
 	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"github.com/jabberwocky238/luna-edge/repository"
@@ -25,6 +26,8 @@ type Config struct {
 	AutoMigrate           bool
 	ACME                  acme.Config
 	S3                    S3Config
+	K8sDNSBridgeEnabled   bool
+	K8sNamespace          string
 	ReplicationListenAddr string
 	ManageListenAddr      string
 	ShutdownTimeout       time.Duration
@@ -33,14 +36,15 @@ type Config struct {
 type Engine struct {
 	replpb.UnimplementedReplicationServiceServer
 
-	Config  Config
-	Factory repository.Factory
-	Repo    repository.Repository
-	Hub     *Hub
-	Bundles CertificateBundleProvider
-	Manage  *manage.API
-	ACME    *acme.Service
-	Certs   *CertReconciler
+	Config    Config
+	Factory   repository.Factory
+	Repo      repository.Repository
+	Hub       *Hub
+	Bundles   CertificateBundleProvider
+	Manage    *manage.API
+	ACME      *acme.Service
+	Certs     *CertReconciler
+	K8sBridge *masterk8s.Bridge
 
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
@@ -86,12 +90,29 @@ func New(cfg Config) (*Engine, error) {
 	}
 	engine.ACME = acme.NewService(cfg.ACME, repo, engine, engine.Bundles, acme.LegoIssuerFactory{})
 	engine.Certs = NewCertReconciler(repo, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
+	if cfg.K8sDNSBridgeEnabled {
+		bridge, err := masterk8s.New(masterk8s.Config{
+			Namespace: cfg.K8sNamespace,
+			EnableDNS: true,
+		}, repo, engine)
+		if err != nil {
+			_ = factory.Close()
+			return nil, err
+		}
+		engine.K8sBridge = bridge
+	}
 	wrapper := manage.NewWrapper(repo, nil, engine)
 	engine.Manage = manage.NewAPI(wrapper)
 	return engine, nil
 }
 
 func (e *Engine) Start() error {
+	if e.K8sBridge != nil {
+		if err := e.K8sBridge.LoadInitial(context.Background()); err != nil {
+			return err
+		}
+		e.K8sBridge.Listen()
+	}
 	if e.Certs != nil {
 		e.Certs.Start()
 	}
@@ -290,6 +311,12 @@ func (e *Engine) Stop(ctx context.Context) error {
 		e.Certs.Stop()
 		e.Certs = nil
 	}
+	if e.K8sBridge != nil {
+		if err := e.K8sBridge.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		e.K8sBridge = nil
+	}
 	if e.httpServer != nil {
 		if err := e.httpServer.Shutdown(ctx); err != nil && firstErr == nil {
 			firstErr = err
@@ -338,4 +365,9 @@ func (e *Engine) Notify(fqdn string) {
 		return
 	}
 	e.Certs.Notify(fqdn)
+}
+
+func (e *Engine) NotifyCertificateDesired(_ context.Context, fqdn string) error {
+	e.Notify(fqdn)
+	return nil
 }

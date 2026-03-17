@@ -69,15 +69,18 @@ func (b *K8sBridge) storeIngress(obj interface{}) {
 	if !ok || ing == nil {
 		return
 	}
+	notifyHosts := ingressCertificateHosts(ing)
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if !b.matchesIngressClass(ing) {
 		delete(b.ingresses, ing.Namespace+"/"+ing.Name)
 		b.rebuildRoutesLocked()
+		b.mu.Unlock()
 		return
 	}
 	b.ingresses[ing.Namespace+"/"+ing.Name] = &k8sIngressState{resource: ing.DeepCopy()}
 	b.rebuildRoutesLocked()
+	b.mu.Unlock()
+	b.notifyCertificateHosts(context.Background(), notifyHosts)
 }
 
 func (b *K8sBridge) deleteIngress(obj interface{}) {
@@ -173,4 +176,24 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 			}
 		}
 	}
+}
+
+func ingressCertificateHosts(ing *networkingv1.Ingress) []string {
+	if ing == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var hosts []string
+	for _, tls := range ing.Spec.TLS {
+		for _, host := range tls.Hosts {
+			if normalized := normalizeHost(host); normalized != "" {
+				if _, ok := seen[normalized]; ok {
+					continue
+				}
+				seen[normalized] = struct{}{}
+				hosts = append(hosts, normalized)
+			}
+		}
+	}
+	return hosts
 }

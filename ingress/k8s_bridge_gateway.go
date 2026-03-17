@@ -308,6 +308,33 @@ func listenerAllowsKind(listener k8sGatewayListenerState, kind RouteKind) bool {
 	}
 }
 
+func gatewayCertificateHosts(gateway *k8sGatewayState) []string {
+	if gateway == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var hosts []string
+	for _, listener := range gateway.listeners {
+		host := normalizeHost(listener.hostname)
+		if host == "" {
+			continue
+		}
+		needsCertificate := listener.routeKind == RouteKindHTTPS
+		if listener.routeKind == RouteKindTLSTerminate && !strings.EqualFold(listener.tlsMode, "Passthrough") {
+			needsCertificate = true
+		}
+		if !needsCertificate {
+			continue
+		}
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	return hosts
+}
+
 func effectiveHosts(routeHosts []string, listenerHost string) []string {
 	if len(routeHosts) > 0 {
 		out := make([]string, 0, len(routeHosts))
@@ -378,10 +405,12 @@ func (b *K8sBridge) storeGatewayUnstructured(obj *unstructured.Unstructured) {
 	if state == nil {
 		return
 	}
+	notifyHosts := gatewayCertificateHosts(state)
 	b.mu.Lock()
 	b.gateways[state.namespace+"/"+state.name] = state
 	b.rebuildRoutesLocked()
 	b.mu.Unlock()
+	b.notifyCertificateHosts(context.Background(), notifyHosts)
 }
 
 func (b *K8sBridge) storeHTTPRouteUnstructured(obj *unstructured.Unstructured) {

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	master "github.com/jabberwocky238/luna-edge/engine/master"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 )
@@ -32,6 +33,8 @@ func main() {
 	flag.BoolVar(&cfg.S3.InsecureSkipVerify, "s3-insecure-skip-verify", envBool("LUNA_S3_INSECURE_SKIP_VERIFY", false), "skip s3 tls verification")
 	flag.StringVar(&cfg.S3.StartupProbeBucket, "s3-startup-probe-bucket", envOr("LUNA_S3_STARTUP_PROBE_BUCKET", ""), "probe bucket on startup")
 	flag.DurationVar(&cfg.S3.HTTPTimeout, "s3-http-timeout", envDuration("LUNA_S3_HTTP_TIMEOUT", 10*time.Second), "s3 http timeout")
+	flag.BoolVar(&cfg.K8sDNSBridgeEnabled, "k8s-dns-bridge-enabled", envOr("LUNA_K8S_DNS_BRIDGE_ENABLED", "0") == "1", "enable kubernetes DnsDomainRecord bridge on master")
+	flag.StringVar(&cfg.K8sNamespace, "k8s-namespace", envOr("LUNA_K8S_NAMESPACE", enginepkg.POD_NAMESPACE), "kubernetes namespace watched by master bridges")
 	flag.StringVar(&cfg.ReplicationListenAddr, "replication-listen", envOr("LUNA_REPLICATION_LISTEN", ":50051"), "replication gRPC listen address")
 	flag.StringVar(&cfg.ManageListenAddr, "manage-listen", envOr("LUNA_MANAGE_LISTEN", ":8080"), "manage HTTP listen address")
 	flag.DurationVar(&cfg.ShutdownTimeout, "shutdown-timeout", envDuration("LUNA_SHUTDOWN_TIMEOUT", 5*time.Second), "graceful shutdown timeout")

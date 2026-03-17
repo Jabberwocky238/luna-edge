@@ -18,6 +18,7 @@ import (
 type K8sBridge struct {
 	namespace    string
 	ingressClass string
+	notifier     CertificateIntentNotifier
 
 	client         kubernetes.Interface
 	dynamicClient  dynamic.Interface
@@ -163,9 +164,59 @@ func (b *K8sBridge) Stop() error {
 	}
 }
 
+func (b *K8sBridge) SetCertificateIntentNotifier(notifier CertificateIntentNotifier) {
+	b.mu.Lock()
+	b.notifier = notifier
+	hosts := b.collectCertificateIntentsLocked()
+	b.mu.Unlock()
+	b.notifyCertificateHosts(context.Background(), hosts)
+}
+
 // Namespace 返回 bridge 当前监听的命名空间。
 func (b *K8sBridge) Namespace() string {
 	return b.namespace
+}
+
+func (b *K8sBridge) collectCertificateIntentsLocked() []string {
+	seen := map[string]struct{}{}
+	var hosts []string
+	for _, ing := range b.ingresses {
+		for _, host := range ingressCertificateHosts(ing.resource) {
+			if _, ok := seen[host]; ok {
+				continue
+			}
+			seen[host] = struct{}{}
+			hosts = append(hosts, host)
+		}
+	}
+	for _, gateway := range b.gateways {
+		for _, host := range gatewayCertificateHosts(gateway) {
+			if _, ok := seen[host]; ok {
+				continue
+			}
+			seen[host] = struct{}{}
+			hosts = append(hosts, host)
+		}
+	}
+	return hosts
+}
+
+func (b *K8sBridge) notifyCertificateHosts(ctx context.Context, hosts []string) {
+	if b == nil || len(hosts) == 0 {
+		return
+	}
+	b.mu.RLock()
+	notifier := b.notifier
+	b.mu.RUnlock()
+	if notifier == nil {
+		return
+	}
+	for _, host := range hosts {
+		if host == "" {
+			continue
+		}
+		_ = notifier.NotifyCertificateDesired(ctx, host)
+	}
 }
 
 // ResolveHost 兼容旧接口，等价于 HTTP `/` 命中。

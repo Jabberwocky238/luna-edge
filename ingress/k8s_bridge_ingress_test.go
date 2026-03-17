@@ -9,6 +9,15 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+type fakeCertificateIntentNotifier struct {
+	hostnames []string
+}
+
+func (f *fakeCertificateIntentNotifier) NotifyCertificateDesired(_ context.Context, hostname string) error {
+	f.hostnames = append(f.hostnames, hostname)
+	return nil
+}
+
 func TestK8sBridgeMaterializesIngress(t *testing.T) {
 	pathType := networkingv1.PathTypePrefix
 	className := "luna-edge"
@@ -125,6 +134,92 @@ func TestK8sBridgeResolvesLongestMatchingPath(t *testing.T) {
 	binding, _, ok = bridge.ResolveRequest("demo.example.com", "/other")
 	if !ok || binding.Name != "svc-root" {
 		t.Fatalf("expected /other to hit svc-root, got %#v ok=%v", binding, ok)
+	}
+}
+
+func TestK8sBridgeIngressTLSNotifiesCertificateIntent(t *testing.T) {
+	pathType := networkingv1.PathTypePrefix
+	className := "luna-edge"
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1ObjectMeta("default", "tls-demo", 1),
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			TLS: []networkingv1.IngressTLS{{
+				Hosts: []string{"app.example.com"},
+			}},
+			Rules: []networkingv1.IngressRule{{
+				Host: "app.example.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "demo-svc",
+									Port: networkingv1.ServiceBackendPort{Number: 8080},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	client := fake.NewSimpleClientset()
+	bridge := NewK8sBridgeWithClient("default", "luna-edge", client)
+	notifier := &fakeCertificateIntentNotifier{}
+	bridge.SetCertificateIntentNotifier(notifier)
+
+	bridge.storeIngress(ing)
+
+	if len(notifier.hostnames) != 1 || notifier.hostnames[0] != "app.example.com" {
+		t.Fatalf("expected ingress tls host to notify certificate intent, got %+v", notifier.hostnames)
+	}
+}
+
+func TestK8sBridgeSetNotifierReplaysExistingIngressTLSHosts(t *testing.T) {
+	pathType := networkingv1.PathTypePrefix
+	className := "luna-edge"
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1ObjectMeta("default", "tls-replay", 1),
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			TLS: []networkingv1.IngressTLS{{
+				Hosts: []string{"replay.example.com"},
+			}},
+			Rules: []networkingv1.IngressRule{{
+				Host: "replay.example.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "demo-svc",
+									Port: networkingv1.ServiceBackendPort{Number: 8080},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	client := fake.NewSimpleClientset(ing)
+	bridge := NewK8sBridgeWithClient("default", "luna-edge", client)
+	if err := bridge.LoadInitial(context.Background()); err != nil {
+		t.Fatalf("load initial: %v", err)
+	}
+
+	notifier := &fakeCertificateIntentNotifier{}
+	bridge.SetCertificateIntentNotifier(notifier)
+
+	if len(notifier.hostnames) != 1 || notifier.hostnames[0] != "replay.example.com" {
+		t.Fatalf("expected existing ingress tls host replay, got %+v", notifier.hostnames)
 	}
 }
 

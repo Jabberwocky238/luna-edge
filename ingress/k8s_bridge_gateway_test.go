@@ -256,3 +256,52 @@ func TestK8sBridgeTLS443Overlap(t *testing.T) {
 		t.Fatal("expected tls passthrough sni not to match tls termination route")
 	}
 }
+
+func TestK8sBridgeGatewayHTTPSNotifiesCertificateIntent(t *testing.T) {
+	bridge := NewK8sBridgeWithClients("default", "luna-edge", fake.NewSimpleClientset(), nil)
+	notifier := &fakeCertificateIntentNotifier{}
+	bridge.SetCertificateIntentNotifier(notifier)
+
+	bridge.storeGatewayUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "secure.example.com"},
+			},
+		},
+	}})
+
+	if len(notifier.hostnames) != 1 || notifier.hostnames[0] != "secure.example.com" {
+		t.Fatalf("expected gateway https listener to notify certificate intent, got %+v", notifier.hostnames)
+	}
+}
+
+func TestK8sBridgeSetNotifierReplaysExistingGatewayHTTPSHosts(t *testing.T) {
+	bridge := NewK8sBridgeWithClients("default", "luna-edge", fake.NewSimpleClientset(), nil)
+
+	bridge.storeGatewayUnstructured(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "replay.example.com"},
+			},
+		},
+	}})
+
+	notifier := &fakeCertificateIntentNotifier{}
+	bridge.SetCertificateIntentNotifier(notifier)
+
+	if len(notifier.hostnames) != 1 || notifier.hostnames[0] != "replay.example.com" {
+		t.Fatalf("expected existing gateway https host replay, got %+v", notifier.hostnames)
+	}
+}

@@ -50,6 +50,8 @@ type EngineOptions struct {
 	K8sNamespace string
 	// K8sIngressClass 是当前 bridge 负责的 IngressClass 名称。
 	K8sIngressClass string
+	// CertificateNotifier 用于将 K8s 声明出的证书意图通知到外部控制面。
+	CertificateNotifier CertificateIntentNotifier
 	// LRUSize 是 ingress 运行时 LRU 缓冲大小；<=0 时默认 4096。
 	LRUSize int
 }
@@ -115,4 +117,9 @@ type CertificatePaths struct {
 // ProjectionReader 定义 ingress 所需的最小仓储读取能力。
 type ProjectionReader interface {
 	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
+}
+
+// CertificateIntentNotifier 用于声明某个 hostname 需要平台侧证书。
+type CertificateIntentNotifier interface {
+	NotifyCertificateDesired(ctx context.Context, hostname string) error
 }
