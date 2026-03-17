@@ -188,7 +188,7 @@ func (b *K8sBridge) ResolveRequest(host, requestPath string) (*BackendBinding, *
 	if !ok {
 		return nil, nil, false
 	}
-	return cloneBinding(resolved.Binding), cloneRoute(resolved.Route), true
+	return resolved.Binding, resolved.Route, true
 }
 
 func (b *K8sBridge) ResolveHTTP(host, requestPath string) (*K8sResolvedBackend, bool) {
@@ -274,8 +274,8 @@ func materializedToResolved(route k8sMaterializedRoute) *K8sResolvedBackend {
 		Kind:     route.kind,
 		Hostname: route.hostname,
 		Port:     route.port,
-		Binding:  cloneBinding(route.binding),
-		Route:    cloneRoute(route.route),
+		Binding:  route.binding,
+		Route:    route.route,
 	}
 }
 

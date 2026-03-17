@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -73,29 +74,38 @@ func NewGRPCClient(conn grpc.ClientConnInterface) *GRPCClient {
 }
 
 func (c *GRPCClient) GetSnapshot(ctx context.Context, nodeID string, snapshotRecordID uint64) (SnapshotStream, error) {
+	log.Printf("replication-client: get snapshot request node_id=%s after_record_id=%d", nodeID, snapshotRecordID)
 	stream, err := c.client.GetSnapshot(ctx, &replpb.SnapshotRequest{NodeId: nodeID, SnapshotRecordId: snapshotRecordID})
 	if err != nil {
+		log.Printf("replication-client: get snapshot request failed node_id=%s after_record_id=%d err=%v", nodeID, snapshotRecordID, err)
 		return nil, err
 	}
+	log.Printf("replication-client: get snapshot stream opened node_id=%s after_record_id=%d", nodeID, snapshotRecordID)
 	return grpcSnapshotStream{stream: stream}, nil
 }
 
 func (c *GRPCClient) Subscribe(ctx context.Context, nodeID string) (NoticeStream, error) {
+	log.Printf("replication-client: subscribe request node_id=%s", nodeID)
 	stream, err := c.client.Subscribe(ctx, &replpb.SubscriptionRequest{NodeId: nodeID})
 	if err != nil {
+		log.Printf("replication-client: subscribe request failed node_id=%s err=%v", nodeID, err)
 		return nil, err
 	}
+	log.Printf("replication-client: subscribe stream opened node_id=%s", nodeID)
 	return grpcNoticeStream{stream: stream}, nil
 }
 
 func (c *GRPCClient) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*CertificateBundle, error) {
+	log.Printf("replication-client: fetch certificate bundle request hostname=%s revision=%d", hostname, revision)
 	resp, err := c.client.FetchCertificateBundle(ctx, &replpb.CertificateBundleRequest{Hostname: hostname, Revision: revision})
 	if err != nil {
+		log.Printf("replication-client: fetch certificate bundle failed hostname=%s revision=%d err=%v", hostname, revision, err)
 		return nil, err
 	}
 	if resp == nil {
 		return nil, fmt.Errorf("certificate bundle response is nil")
 	}
+	log.Printf("replication-client: fetch certificate bundle done hostname=%s revision=%d crt_bytes=%d key_bytes=%d", resp.GetHostname(), resp.GetRevision(), len(resp.GetTlsCrt()), len(resp.GetTlsKey()))
 	return &CertificateBundle{Hostname: resp.GetHostname(), Revision: resp.GetRevision(), TLSCrt: append([]byte(nil), resp.GetTlsCrt()...), TLSKey: append([]byte(nil), resp.GetTlsKey()...), MetadataJSON: append([]byte(nil), resp.GetMetadataJson()...)}, nil
 }
 
@@ -106,9 +116,16 @@ type grpcSnapshotStream struct {
 func (s grpcSnapshotStream) Recv() (*Snapshot, error) {
 	msg, err := s.stream.Recv()
 	if err != nil {
+		if err != io.EOF {
+			log.Printf("replication-client: recv snapshot failed err=%v", err)
+		}
 		return nil, err
 	}
-	return SnapshotFromProto(msg), nil
+	out := SnapshotFromProto(msg)
+	if out != nil {
+		log.Printf("replication-client: recv snapshot node_id=%s snapshot_record_id=%d last=%v dns=%d domains=%d", out.NodeID, out.SnapshotRecordID, out.Last, len(out.DNSRecords), len(out.DomainEntries))
+	}
+	return out, nil
 }
 
 type grpcNoticeStream struct {
@@ -118,9 +135,16 @@ type grpcNoticeStream struct {
 func (s grpcNoticeStream) Recv() (*ChangeNotification, error) {
 	msg, err := s.stream.Recv()
 	if err != nil {
+		if err != io.EOF {
+			log.Printf("replication-client: recv change notice failed err=%v", err)
+		}
 		return nil, err
 	}
-	return ChangeNotificationFromProto(msg), nil
+	out := ChangeNotificationFromProto(msg)
+	if out != nil {
+		log.Printf("replication-client: recv change notice snapshot_record_id=%d dns=%v domain=%v", out.SnapshotRecordID, out.DNSRecord != nil, out.DomainEntry != nil)
+	}
+	return out, nil
 }
 
 func SnapshotToProto(in *Snapshot) *replpb.Snapshot {

@@ -3,6 +3,7 @@ package acme
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -44,20 +45,26 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("acme service repository is required")
 	}
+	log.Printf("acme: issue requested domain_id=%s provider=%s challenge=%s", req.DomainID, req.Provider, req.ChallengeType)
 	domain, err := s.repo.GetDomainEndpointByID(ctx, req.DomainID)
 	if err != nil {
+		log.Printf("acme: load domain failed domain_id=%s err=%v", req.DomainID, err)
 		return nil, err
 	}
 	if domain == nil {
 		return nil, fmt.Errorf("domain endpoint %q not found", req.DomainID)
 	}
+	log.Printf("acme: resolved domain domain_id=%s hostname=%s backend_type=%s cert_id=%s", domain.ID, domain.Hostname, domain.BackendType, domain.CertID)
 
 	issuerCfg, err := s.resolveIssuerConfig(req)
 	if err != nil {
+		log.Printf("acme: resolve issuer config failed domain_id=%s hostname=%s err=%v", domain.ID, domain.Hostname, err)
 		return nil, err
 	}
+	log.Printf("acme: issuer config hostname=%s provider=%s directory=%s email=%s", domain.Hostname, issuerCfg.Provider, issuerCfg.Directory, issuerCfg.Email)
 	revisionNumber, err := s.nextRevision(ctx, domain.ID)
 	if err != nil {
+		log.Printf("acme: next revision failed domain_id=%s err=%v", domain.ID, err)
 		return nil, err
 	}
 	certID := "certrev-" + s.idSuffix()
@@ -72,9 +79,12 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		ArtifactPrefix:   certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
 	}
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
+		log.Printf("acme: persist placeholder cert failed hostname=%s cert_id=%s revision=%d err=%v", domain.Hostname, certID, revisionNumber, err)
 		return nil, err
 	}
+	log.Printf("acme: placeholder cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, certID, revisionNumber)
 	if err := s.publishChange(ctx); err != nil {
+		log.Printf("acme: publish placeholder cert failed hostname=%s cert_id=%s err=%v", domain.Hostname, certID, err)
 		return nil, err
 	}
 
@@ -88,38 +98,52 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	}
 	issuer, err := s.issuers.New(issuerCfg, req.ChallengeType, solver)
 	if err != nil {
+		log.Printf("acme: create issuer failed hostname=%s provider=%s challenge=%s err=%v", domain.Hostname, issuerCfg.Provider, req.ChallengeType, err)
 		return nil, err
 	}
+	log.Printf("acme: issuer created hostname=%s provider=%s challenge=%s order_id=%s", domain.Hostname, issuerCfg.Provider, req.ChallengeType, solver.orderID)
 
 	resource, err := issuer.Obtain(ctx, []string{domain.Hostname})
 	if err != nil {
+		log.Printf("acme: obtain certificate failed hostname=%s provider=%s challenge=%s err=%v", domain.Hostname, issuerCfg.Provider, req.ChallengeType, err)
 		return nil, err
 	}
+	log.Printf("acme: obtain certificate succeeded hostname=%s provider=%s challenge=%s", domain.Hostname, issuerCfg.Provider, req.ChallengeType)
 	bundle, notBefore, notAfter, crtHash, keyHash, err := buildBundle(resource, revisionNumber)
 	if err != nil {
+		log.Printf("acme: build bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
 		return nil, err
 	}
+	log.Printf("acme: bundle built hostname=%s revision=%d not_before=%s not_after=%s", domain.Hostname, revisionNumber, notBefore.UTC().Format(time.RFC3339), notAfter.UTC().Format(time.RFC3339))
 
 	cert.NotBefore = notBefore
 	cert.NotAfter = notAfter
 	cert.SHA256Crt = crtHash
 	cert.SHA256Key = keyHash
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
+		log.Printf("acme: persist final cert failed hostname=%s cert_id=%s revision=%d err=%v", domain.Hostname, cert.ID, cert.Revision, err)
 		return nil, err
 	}
+	log.Printf("acme: final cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, cert.ID, cert.Revision)
 	if s.bundles != nil {
 		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
+			log.Printf("acme: store bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
 			return nil, err
 		}
+		log.Printf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
 	}
 
 	domain.CertID = cert.ID
 	if err := s.repo.DomainEndpoints().UpsertResource(ctx, domain); err != nil {
+		log.Printf("acme: update domain cert binding failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
+	log.Printf("acme: domain cert binding updated hostname=%s cert_id=%s", domain.Hostname, cert.ID)
 	if err := s.publishChange(ctx); err != nil {
+		log.Printf("acme: publish final cert change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
+	log.Printf("acme: issue completed hostname=%s provider=%s challenge=%s cert_id=%s revision=%d", domain.Hostname, issuerCfg.Provider, req.ChallengeType, cert.ID, cert.Revision)
 	return cert, nil
 }
 

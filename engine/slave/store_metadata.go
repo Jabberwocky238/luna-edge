@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -46,6 +47,7 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	if snapshot == nil {
 		return nil
 	}
+	log.Printf("slave-store: apply snapshot begin snapshot_record_id=%d last=%v dns=%d domains=%d", snapshot.SnapshotRecordID, snapshot.Last, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 	tx := s.db.WithContext(ctx).Begin()
 	err := tx.Error
 	if err != nil {
@@ -71,8 +73,10 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 		}
 		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
 			err = execErr
+			log.Printf("slave-store: upsert dns row failed snapshot_record_id=%d dns_id=%s err=%v", snapshot.SnapshotRecordID, row.ID, execErr)
 			return err
 		}
+		log.Printf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", snapshot.SnapshotRecordID, row.ID, row.FQDN)
 	}
 
 	for i := range snapshot.DomainEntries {
@@ -96,19 +100,28 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 		}
 		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
 			err = execErr
+			log.Printf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", snapshot.SnapshotRecordID, row.ID, execErr)
 			return err
 		}
+		log.Printf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", snapshot.SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
 	}
 
 	if snapshot.Last {
 		row := &syncStateRow{Key: snapshotCursorStateKey, Value: fmt.Sprintf("%d", snapshot.SnapshotRecordID)}
 		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
 			err = execErr
+			log.Printf("slave-store: update cursor failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, execErr)
 			return err
 		}
+		log.Printf("slave-store: cursor updated snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	}
 
 	err = tx.Commit().Error
+	if err != nil {
+		log.Printf("slave-store: apply snapshot commit failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
+		return err
+	}
+	log.Printf("slave-store: apply snapshot done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	return err
 }
 

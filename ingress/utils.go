@@ -141,22 +141,6 @@ func deleteByNamespaceName(obj interface{}, deleter func(namespace, name string)
 	}
 }
 
-func cloneBinding(in *BackendBinding) *BackendBinding {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
-}
-
-func cloneRoute(in *ResolvedRoute) *ResolvedRoute {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
-}
-
 func buildServiceAddress(name, namespace string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", name, namespace)
 }

@@ -2,7 +2,6 @@ package ingress
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -232,12 +231,6 @@ func (e *Engine) routeByKind(ctx context.Context, host, requestPath string, kind
 }
 
 func (e *Engine) resultFromBinding(hostname string, binding *BackendBinding) (*RouteResult, error) {
-	if static, ok := parseStaticResponse(binding); ok {
-		return &RouteResult{
-			Found:          true,
-			StaticResponse: static,
-		}, nil
-	}
 	upstreamURL := buildUpstreamURL(string(binding.Protocol), binding.Address, binding.Port)
 	if upstreamURL == "" {
 		return nil, fmt.Errorf("service binding %q has no valid upstream", binding.ID)
@@ -252,27 +245,6 @@ func (e *Engine) resultFromBinding(hostname string, binding *BackendBinding) (*R
 	}
 	e.memory.Put(binding)
 	return result, nil
-}
-
-func parseStaticResponse(binding *BackendBinding) (*StaticResponse, bool) {
-	if binding == nil {
-		return nil, false
-	}
-	var payload struct {
-		Kind             string `json:"kind"`
-		KeyAuthorization string `json:"key_authorization"`
-	}
-	if err := json.Unmarshal([]byte(binding.BackendJSON), &payload); err != nil {
-		return nil, false
-	}
-	if payload.Kind != "acme-http01" {
-		return nil, false
-	}
-	return &StaticResponse{
-		StatusCode:  http.StatusOK,
-		ContentType: "text/plain; charset=utf-8",
-		Body:        []byte(payload.KeyAuthorization),
-	}, true
 }
 
 func (e *Engine) resultFromProjection(hostname, requestPath string, kind RouteKind, entry *metadata.DomainEntryProjection) (*RouteResult, error) {

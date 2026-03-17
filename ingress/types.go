@@ -74,15 +74,6 @@ type RouteResult struct {
 	Found bool
 	// Target 是匹配到的上游目标。
 	Target ProxyTarget
-	// StaticResponse 表示直接由 ingress 返回静态内容。
-	StaticResponse *StaticResponse
-}
-
-// StaticResponse 表示一个直接回写给客户端的响应。
-type StaticResponse struct {
-	StatusCode  int
-	ContentType string
-	Body        []byte
 }
 
 // K8sResolvedBackend 表示 bridge 对外暴露的一次 Kubernetes 路由解析结果。

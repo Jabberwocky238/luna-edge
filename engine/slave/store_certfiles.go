@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,6 +18,7 @@ func (s *LocalStore) SyncSnapshotCertificates(ctx context.Context, snapshot *eng
 	if s == nil || snapshot == nil {
 		return nil
 	}
+	log.Printf("slave-store: sync certificates begin snapshot_record_id=%d domains=%d", snapshot.SnapshotRecordID, len(snapshot.DomainEntries))
 	activeHosts := make([]string, 0, len(snapshot.DomainEntries))
 	for i := range snapshot.DomainEntries {
 		cert := snapshot.DomainEntries[i].Cert
@@ -25,10 +27,17 @@ func (s *LocalStore) SyncSnapshotCertificates(ctx context.Context, snapshot *eng
 		}
 		activeHosts = append(activeHosts, cert.Hostname)
 		if err := s.SyncCertificateBundle(ctx, &engine.CertificateBundle{Hostname: cert.Hostname, Revision: cert.Revision}); err != nil {
+			log.Printf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", snapshot.SnapshotRecordID, cert.Hostname, cert.Revision, err)
 			return err
 		}
+		log.Printf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", snapshot.SnapshotRecordID, cert.Hostname, cert.Revision)
 	}
-	return s.pruneInactiveCertificates(activeHosts)
+	if err := s.pruneInactiveCertificates(activeHosts); err != nil {
+		log.Printf("slave-store: prune inactive certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
+		return err
+	}
+	log.Printf("slave-store: sync certificates done snapshot_record_id=%d active_hosts=%d", snapshot.SnapshotRecordID, len(activeHosts))
+	return nil
 }
 
 func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.CertificateBundle) error {
@@ -36,13 +45,21 @@ func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.Cer
 		return nil
 	}
 	if s.fetcher == nil {
+		log.Printf("slave-store: skip fetch certificate bundle hostname=%s revision=%d reason=no_fetcher", cert.Hostname, cert.Revision)
 		return nil
 	}
+	log.Printf("slave-store: fetch certificate bundle begin hostname=%s revision=%d", cert.Hostname, cert.Revision)
 	bundle, err := s.fetcher.FetchCertificateBundle(ctx, cert.Hostname, cert.Revision)
 	if err != nil {
+		log.Printf("slave-store: fetch certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
 		return err
 	}
-	return writeCertificateBundle(s.certRoot, bundle)
+	if err := writeCertificateBundle(s.certRoot, bundle); err != nil {
+		log.Printf("slave-store: write certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
+		return err
+	}
+	log.Printf("slave-store: write certificate bundle done hostname=%s revision=%d", cert.Hostname, cert.Revision)
+	return nil
 }
 
 func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {

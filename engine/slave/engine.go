@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -186,11 +187,13 @@ func (e *Engine) Subscribe(ctx context.Context) error {
 	if e.Subscriber == nil {
 		return fmt.Errorf("subscriber is not configured")
 	}
+	log.Printf("slave: subscribe begin node_id=%s master=%s", e.Config.NodeID, e.Config.MasterAddress)
 	return e.Subscriber.Subscribe(ctx, e.Config.NodeID)
 }
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
+	log.Printf("slave: start begin node_id=%s master=%s", e.Config.NodeID, e.Config.MasterAddress)
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
 			return err
@@ -221,12 +224,15 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	backoff := e.Config.RetryMinBackoff
 	for {
+		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", e.Config.NodeID, backoff)
 		err := e.Subscribe(ctx)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
+			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.Config.NodeID, err, ctx.Err())
 			return err
 		}
 		e.ready.Store(false)
+		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", e.Config.NodeID, err, backoff)
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
@@ -258,8 +264,10 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 	}
 	stream, err := s.Client.Subscribe(ctx, nodeID)
 	if err != nil {
+		log.Printf("slave: open notice stream failed node_id=%s err=%v", nodeID, err)
 		return err
 	}
+	log.Printf("slave: notice stream opened node_id=%s", nodeID)
 	if s.OnConnect != nil {
 		s.OnConnect()
 	}
@@ -278,52 +286,69 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 		}
 		cursor = value
 	}
+	log.Printf("slave: local snapshot cursor node_id=%s cursor=%d", nodeID, cursor)
 	if err := s.catchUpSnapshots(ctx, nodeID, cursor); err != nil {
+		log.Printf("slave: initial catch-up failed node_id=%s cursor=%d err=%v", nodeID, cursor, err)
 		return err
 	}
+	log.Printf("slave: initial catch-up done node_id=%s cursor=%d", nodeID, cursor)
 
 	for {
 		notice, recvErr := stream.Recv()
 		if recvErr != nil {
 			if recvErr == io.EOF {
+				log.Printf("slave: notice stream closed by server node_id=%s", nodeID)
 				return nil
 			}
+			log.Printf("slave: notice recv failed node_id=%s err=%v", nodeID, recvErr)
 			return recvErr
 		}
 		if notice == nil {
 			continue
 		}
+		log.Printf("slave: notice received node_id=%s snapshot_record_id=%d dns=%v domain=%v", nodeID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
 		if err := s.catchUpSnapshots(ctx, nodeID, notice.SnapshotRecordID-1); err != nil {
+			log.Printf("slave: catch-up after notice failed node_id=%s snapshot_record_id=%d err=%v", nodeID, notice.SnapshotRecordID, err)
 			return err
 		}
 	}
 }
 
 func (s *streamSubscriber) catchUpSnapshots(ctx context.Context, nodeID string, cursor uint64) error {
+	log.Printf("slave: catch-up begin node_id=%s cursor=%d", nodeID, cursor)
 	snapshotStream, err := s.Client.GetSnapshot(ctx, nodeID, cursor)
 	if err != nil {
+		log.Printf("slave: catch-up open snapshot stream failed node_id=%s cursor=%d err=%v", nodeID, cursor, err)
 		return err
 	}
 	for {
 		snapshot, recvErr := snapshotStream.Recv()
 		if recvErr != nil {
 			if recvErr == io.EOF {
+				log.Printf("slave: catch-up stream eof node_id=%s cursor=%d", nodeID, cursor)
 				return nil
 			}
+			log.Printf("slave: catch-up recv failed node_id=%s cursor=%d err=%v", nodeID, cursor, recvErr)
 			return recvErr
 		}
 		if snapshot == nil {
 			continue
 		}
+		log.Printf("slave: apply snapshot begin node_id=%s snapshot_record_id=%d last=%v dns=%d domains=%d", nodeID, snapshot.SnapshotRecordID, snapshot.Last, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 		if err := s.Applier.ApplySnapshot(ctx, snapshot); err != nil {
+			log.Printf("slave: apply snapshot failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
 			return err
 		}
+		log.Printf("slave: apply snapshot done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
 		if s.OnSnapshot != nil {
 			if err := s.OnSnapshot(ctx, snapshot); err != nil {
+				log.Printf("slave: on snapshot hook failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
 				return err
 			}
+			log.Printf("slave: on snapshot hook done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
 		}
 		if snapshot.Last {
+			log.Printf("slave: catch-up done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
 			return nil
 		}
 	}
@@ -400,19 +425,26 @@ func (e *Engine) handleHealthz(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
+	log.Printf("slave: refresh runtime begin snapshot_record_id=%d dns=%d domains=%d", snapshot.SnapshotRecordID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 	if syncer, ok := e.Applier.(CertificateSnapshotSyncer); ok {
 		if err := syncer.SyncSnapshotCertificates(ctx, snapshot); err != nil {
+			log.Printf("slave: sync snapshot certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
 			return err
 		}
+		log.Printf("slave: sync snapshot certificates done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	}
 	if e.DNS != nil {
 		if err := e.restoreDNSRuntime(context.Background()); err != nil {
+			log.Printf("slave: restore dns runtime failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
 			return err
 		}
+		log.Printf("slave: restore dns runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	}
 	if e.Ingress != nil {
 		e.Ingress.RefreshAll()
+		log.Printf("slave: ingress runtime refreshed snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	}
+	log.Printf("slave: refresh runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package master
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -116,14 +117,20 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 	}
 	e.ctx = ctx
 	e.cancel = cancel
+	log.Printf("master: start begin replication=%s manage=%s k8s_bridge=%v", e.Config.ReplicationListenAddr, e.Config.ManageListenAddr, e.K8sBridge != nil)
 	if e.K8sBridge != nil {
+		log.Printf("master: k8s bridge load initial begin")
 		if err := e.K8sBridge.LoadInitial(ctx); err != nil {
+			log.Printf("master: k8s bridge load initial failed err=%v", err)
 			return err
 		}
+		log.Printf("master: k8s bridge load initial done")
 		e.K8sBridge.Listen(ctx)
+		log.Printf("master: k8s bridge listeners started")
 	}
 	if e.Certs != nil {
 		e.Certs.Start(ctx)
+		log.Printf("master: cert reconciler started")
 	}
 	if e.Config.ReplicationListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ReplicationListenAddr)
@@ -136,6 +143,7 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 		e.grpcListener = lis
 		e.grpcServer = grpc.NewServer()
 		replpb.RegisterReplicationServiceServer(e.grpcServer, e)
+		log.Printf("master: replication listener ready addr=%s", lis.Addr().String())
 		go func() { _ = e.grpcServer.Serve(lis) }()
 	}
 	if e.Config.ManageListenAddr != "" {
@@ -154,8 +162,10 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 		}
 		e.httpListener = lis
 		e.httpServer = &http.Server{Addr: e.Config.ManageListenAddr, Handler: e.Manage.Handler()}
+		log.Printf("master: manage listener ready addr=%s", lis.Addr().String())
 		go func() { _ = e.httpServer.Serve(lis) }()
 	}
+	log.Printf("master: start done")
 	return nil
 }
 
@@ -163,22 +173,28 @@ func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapsh
 	if e == nil || e.Hub == nil || snapshot == nil {
 		return nil
 	}
+	log.Printf("replication: publish snapshot begin node_id=%s dns=%d domains=%d", snapshot.NodeID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 	for i := range snapshot.DNSRecords {
 		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
 		if err != nil {
+			log.Printf("replication: append snapshot record failed type=%s sync_id=%s err=%v", metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, err)
 			return err
 		}
 		rec := snapshot.DNSRecords[i]
+		log.Printf("replication: publish dns change snapshot_record_id=%d dns_id=%s fqdn=%s type=%s", recordID, rec.ID, rec.FQDN, rec.RecordType)
 		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
 	}
 	for i := range snapshot.DomainEntries {
 		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
 		if err != nil {
+			log.Printf("replication: append snapshot record failed type=%s sync_id=%s err=%v", metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, err)
 			return err
 		}
 		entry := snapshot.DomainEntries[i]
+		log.Printf("replication: publish domain change snapshot_record_id=%d domain_id=%s hostname=%s", recordID, entry.ID, entry.Hostname)
 		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DomainEntry: &entry})
 	}
+	log.Printf("replication: publish snapshot done node_id=%s", snapshot.NodeID)
 	return nil
 }
 
@@ -186,14 +202,17 @@ func (e *Engine) PublishNode(ctx context.Context, nodeID string) error {
 	if e == nil || e.Hub == nil {
 		return nil
 	}
+	log.Printf("replication: publish node begin node_id=%s", nodeID)
 	snapshot, err := e.BuildSnapshot(ctx, nodeID)
 	if err != nil {
+		log.Printf("replication: build snapshot failed node_id=%s err=%v", nodeID, err)
 		return err
 	}
 	return e.PublishSnapshot(ctx, snapshot)
 }
 
 func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.Snapshot, error) {
+	log.Printf("replication: build snapshot begin node_id=%s", nodeID)
 	snapshot := &enginepkg.Snapshot{
 		NodeID:    nodeID,
 		CreatedAt: time.Now().UTC(),
@@ -202,10 +221,12 @@ func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.S
 		return snapshot, nil
 	}
 	if err := e.Repo.DNSRecords().ListResource(ctx, &snapshot.DNSRecords, "fqdn asc, record_type asc, id asc"); err != nil {
+		log.Printf("replication: list dns records failed node_id=%s err=%v", nodeID, err)
 		return nil, err
 	}
 	var domains []metadata.DomainEndpoint
 	if err := e.Repo.DomainEndpoints().ListResource(ctx, &domains, "hostname asc"); err != nil {
+		log.Printf("replication: list domain endpoints failed node_id=%s err=%v", nodeID, err)
 		return nil, err
 	}
 	for i := range domains {
@@ -214,20 +235,25 @@ func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.S
 			snapshot.DomainEntries = append(snapshot.DomainEntries, *entry)
 		}
 	}
+	log.Printf("replication: build snapshot done node_id=%s dns=%d domains=%d", nodeID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 	return snapshot, nil
 }
 
 func (e *Engine) appendSnapshotRecord(ctx context.Context, syncType metadata.SnapshotSyncType, syncID string, action metadata.SnapshotAction) (uint64, error) {
 	record := &metadata.SnapshotRecord{SyncType: syncType, SyncID: syncID, Action: action}
 	if err := e.Repo.AppendSnapshotRecord(ctx, record); err != nil {
+		log.Printf("replication: append snapshot record failed type=%s sync_id=%s action=%s err=%v", syncType, syncID, action, err)
 		return 0, err
 	}
+	log.Printf("replication: append snapshot record done id=%d type=%s sync_id=%s action=%s", record.ID, syncType, syncID, action)
 	return record.ID, nil
 }
 
 func (e *Engine) GetSnapshot(req *replpb.SnapshotRequest, stream grpc.ServerStreamingServer[replpb.Snapshot]) error {
+	log.Printf("replication: get snapshot begin node_id=%s after_record_id=%d", req.GetNodeId(), req.GetSnapshotRecordId())
 	records, err := e.Repo.ListSnapshotRecordsAfter(stream.Context(), req.GetSnapshotRecordId())
 	if err != nil {
+		log.Printf("replication: get snapshot list records failed node_id=%s err=%v", req.GetNodeId(), err)
 		return err
 	}
 	chunk := &enginepkg.Snapshot{NodeID: req.GetNodeId(), CreatedAt: time.Now().UTC()}
@@ -240,8 +266,10 @@ func (e *Engine) GetSnapshot(req *replpb.SnapshotRequest, stream grpc.ServerStre
 			return nil
 		}
 		if err := stream.Send(enginepkg.SnapshotToProto(chunk)); err != nil {
+			log.Printf("replication: send snapshot chunk failed node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d err=%v", req.GetNodeId(), last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries), err)
 			return err
 		}
+		log.Printf("replication: send snapshot chunk done node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d", req.GetNodeId(), last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries))
 		chunk = &enginepkg.Snapshot{NodeID: req.GetNodeId(), CreatedAt: time.Now().UTC()}
 		count = 0
 		return nil
@@ -272,24 +300,31 @@ func (e *Engine) GetSnapshot(req *replpb.SnapshotRequest, stream grpc.ServerStre
 			}
 		}
 	}
+	log.Printf("replication: get snapshot finished node_id=%s records=%d", req.GetNodeId(), len(records))
 	return sendChunk(true)
 }
 
 func (e *Engine) Subscribe(req *replpb.SubscriptionRequest, stream grpc.ServerStreamingServer[replpb.ChangeNotification]) error {
 	nodeID := req.GetNodeId()
+	log.Printf("replication: subscribe begin node_id=%s", nodeID)
 	subID, ch := e.Hub.Subscribe(nodeID, 128)
 	defer e.Hub.Unsubscribe(nodeID, subID)
+	log.Printf("replication: subscribe registered node_id=%s sub_id=%d", nodeID, subID)
 	for {
 		select {
 		case <-stream.Context().Done():
+			log.Printf("replication: subscribe context done node_id=%s sub_id=%d err=%v", nodeID, subID, stream.Context().Err())
 			return stream.Context().Err()
 		case notice, ok := <-ch:
 			if !ok {
+				log.Printf("replication: subscribe channel closed node_id=%s sub_id=%d", nodeID, subID)
 				return nil
 			}
 			if err := stream.Send(enginepkg.ChangeNotificationToProto(notice)); err != nil {
+				log.Printf("replication: subscribe send failed node_id=%s sub_id=%d snapshot_record_id=%d err=%v", nodeID, subID, notice.SnapshotRecordID, err)
 				return err
 			}
+			log.Printf("replication: subscribe sent node_id=%s sub_id=%d snapshot_record_id=%d dns=%v domain=%v", nodeID, subID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
 		}
 	}
 }
