@@ -2,7 +2,54 @@
 
 [English](./README.md)
 
-Luna Edge 是一个统一的边缘控制面，用同一套模型管理 DNS、HTTP Ingress、TLS、证书申请和证书分发。
+Luna Edge 是一个云原生、多集群的边缘融合网关。
+
+它把 DNS、HTTP Ingress、TLS 终止、证书申请、证书分发、Kubernetes 物化统一到同一个控制面里。
+
+它支持 Kubernetes `Ingress` 与 2026 年实验性 Gateway API 能力；由于 repository 模型与 Kubernetes 物化深度融合，它可以实现类似 Quicksilver 的效果：控制面状态只写一次、物化一次，再以小粒度 changelog 推送到边缘节点，而不是每次都重建整份全量状态。
+
+`master` 同时支持两种控制输入：
+
+- Kubernetes 资源通过内建 bridge 直接控制 master
+- 管理端点通过内置 `lnctl` client 直接控制 master
+
+## 定位
+
+- 云原生边缘融合网关
+- 多集群控制与边缘分发
+- Kubernetes 原生物化模型
+- Kubernetes 可以直接通过 bridge 控制 master
+- 支持 2026 年实验性 Gateway API
+- 基于 repository + replication 的 Quicksilver 风格增量传播
+- 支持通过 `lnctl` 完整控制 manage 端点
+
+## 架构图
+
+```text
+     Kubernetes Ingress / Gateway API              lnctl / manage API
+                    |                                   |
+                    +-----------------+-----------------+
+                                      |
+                                      v
+                    +-----------------------------+
+                    |           master            |
+                    |  k8s bridge + repository    |
+                    |  cert reconcile + ACME      |
+                    |  changelog publisher        |
+                    +-------------+---------------+
+                                  |
+                     Subscribe / GetSnapshot / FetchCertificateBundle
+                                  |
+                +-----------------+-----------------+
+                |                                   |
+                v                                   v
+      +---------------------+             +---------------------+
+      |       slave A       |             |       slave B       |
+      | local sqlite cache  |             | local sqlite cache  |
+      | cert files on disk  |             | cert files on disk  |
+      | DNS + ingress serve |             | DNS + ingress serve |
+      +---------------------+             +---------------------+
+```
 
 ## 当前架构
 
@@ -79,4 +126,4 @@ go test ./...
 
 ## License
 
-MIT。见 [LICENSE](./LICENSE)。
+GPL-3.0。见 [LICENSE](./LICENSE)。

@@ -66,4 +66,4 @@ bash run.sh up ngi # nginx k8s ingress
 
 ## License
 
-See [LICENSE](./LICENSE).
+GPL-3.0. See [LICENSE](./LICENSE).
