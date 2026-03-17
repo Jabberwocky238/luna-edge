@@ -306,6 +306,10 @@ func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath st
 		if route == nil || route.BackendRef == nil {
 			return nil
 		}
+		upstreamProtocol := RouteKindHTTP
+		if kind == RouteKindGRPC {
+			upstreamProtocol = RouteKindGRPC
+		}
 		return &BackendBinding{
 			ID:            route.ID,
 			DomainID:      entry.ID,
@@ -314,7 +318,7 @@ func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath st
 			Name:          route.BackendRef.ServiceName,
 			Address:       buildServiceAddress(route.BackendRef.ServiceName, route.BackendRef.ServiceNamespace),
 			Port:          route.BackendRef.ServicePort,
-			Protocol:      kind,
+			Protocol:      upstreamProtocol,
 			RouteVersion:  1,
 			Path:          route.Path,
 			Priority:      route.Priority,

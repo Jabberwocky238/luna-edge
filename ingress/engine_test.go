@@ -8,9 +8,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
+
+type routeLookupReaderStub struct {
+	entry *metadata.DomainEntryProjection
+}
+
+func (s routeLookupReaderStub) GetDomainEntryByHostname(context.Context, string) (*metadata.DomainEntryProjection, error) {
+	return s.entry, nil
+}
+
+type replicaReaderStub struct {
+	reader routeLookupReaderStub
+}
+
+func (s replicaReaderStub) ReadCache() RouteLookupReader {
+	return s.reader
+}
 
 func testResolver(t *testing.T) *LunaTLSCertResolver {
 	t.Helper()
@@ -284,6 +301,48 @@ func TestEngineRouteUsesMemoryStore(t *testing.T) {
 
 	if !first.Found || !second.Found {
 		t.Fatal("expected memory store route to be found")
+	}
+}
+
+func TestEngineRouteHTTPSUsesHTTPUpstreamForL7Projection(t *testing.T) {
+	engine, err := NewEngine(EngineOptions{
+		HTTPListenAddr: "127.0.0.1:80",
+	}, nil)
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+	engine.slave = replicaReaderStub{
+		reader: routeLookupReaderStub{
+			entry: &metadata.DomainEntryProjection{
+				ID:          "domain-1",
+				Hostname:    "secure.example.com",
+				BackendType: metadata.BackendTypeL7HTTPS,
+				HTTPRoutes: []metadata.HTTPRouteProjection{{
+					ID:               "route-1",
+					DomainEndpointID: "domain-1",
+					Hostname:         "secure.example.com",
+					Path:             "/",
+					Priority:         10,
+					BackendRef: &metadata.ServiceBackendRef{
+						ID:               "backend-1",
+						ServiceNamespace: "default",
+						ServiceName:      "svc-secure",
+						ServicePort:      80,
+					},
+				}},
+			},
+		},
+	}
+
+	result, err := engine.RouteHTTPS(context.Background(), "secure.example.com", "/")
+	if err != nil {
+		t.Fatalf("route https: %v", err)
+	}
+	if !result.Found {
+		t.Fatalf("expected route to be found")
+	}
+	if result.Target.UpstreamURL != "http://svc-secure.default.svc.cluster.local:80" {
+		t.Fatalf("unexpected upstream url: %s", result.Target.UpstreamURL)
 	}
 }
 

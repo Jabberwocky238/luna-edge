@@ -250,3 +250,103 @@ func TestTLSEngineWildcardCertificateUsedForHTTPSListener(t *testing.T) {
 		t.Fatalf("unexpected wildcard body: %q", string(body))
 	}
 }
+
+func TestTLSEngineTLS443OverlapHTTPSAndTLSTerminationReturnHTTPResponses(t *testing.T) {
+	requireSocketSupport(t)
+
+	certRoot := t.TempDir()
+	httpsCA := writeTestCertificate(t, certRoot, "https.example.com")
+	termCA := writeTestCertificate(t, certRoot, "term.example.com")
+
+	httpsUpstream := newLocalTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Forwarded-Proto"); got != "https" {
+			t.Errorf("expected X-Forwarded-Proto=https, got %q", got)
+		}
+		_, _ = io.WriteString(w, "https-overlap-ok")
+	}))
+	defer httpsUpstream.Close()
+	httpsHost, httpsPort := splitHostPort(t, httpsUpstream.Listener.Addr().String())
+
+	termUpstream := newLocalTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.TLS != nil {
+			t.Errorf("expected tls termination upstream to receive plain http")
+		}
+		_, _ = io.WriteString(w, "tls-termination-ok")
+	}))
+	defer termUpstream.Close()
+	termHost, termPort := splitHostPort(t, termUpstream.Listener.Addr().String())
+
+	resolver, err := NewLunaTLSCertResolver(certRoot, 8)
+	if err != nil {
+		t.Fatalf("new resolver: %v", err)
+	}
+	engine, err := NewEngine(EngineOptions{
+		TLSListenAddr: freeAddr(t),
+	}, resolver)
+	if err != nil {
+		t.Fatalf("new engine: %v", err)
+	}
+	engine.memory.Put(&BackendBinding{
+		ID:       "binding-https-overlap",
+		Hostname: "https.example.com",
+		Address:  httpsHost,
+		Port:     httpsPort,
+		Protocol: RouteKindHTTP,
+	})
+	engine.memory.Put(&BackendBinding{
+		ID:       "binding-term-overlap",
+		Hostname: "term.example.com",
+		Address:  termHost,
+		Port:     termPort,
+		Protocol: RouteKindTLSTerminate,
+	})
+	if err := engine.Listen(); err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = engine.Stop(context.Background()) }()
+
+	waitForTLSServer(t, engine.opts.TLSListenAddr, "https.example.com", httpsCA)
+	waitForTLSServer(t, engine.opts.TLSListenAddr, "term.example.com", termCA)
+
+	httpsClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				ServerName: "https.example.com",
+				RootCAs:    httpsCA,
+			},
+		},
+	}
+	resp, err := httpsClient.Get("https://" + engine.opts.TLSListenAddr + "/")
+	if err != nil {
+		t.Fatalf("https overlap request: %v", err)
+	}
+	body, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("read https overlap body: %v", err)
+	}
+	if string(body) != "https-overlap-ok" {
+		t.Fatalf("unexpected https overlap body: %q", string(body))
+	}
+
+	termClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				ServerName: "term.example.com",
+				RootCAs:    termCA,
+			},
+		},
+	}
+	resp, err = termClient.Get("https://" + engine.opts.TLSListenAddr + "/")
+	if err != nil {
+		t.Fatalf("tls termination overlap request: %v", err)
+	}
+	body, err = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err != nil {
+		t.Fatalf("read tls termination overlap body: %v", err)
+	}
+	if string(body) != "tls-termination-ok" {
+		t.Fatalf("unexpected tls termination overlap body: %q", string(body))
+	}
+}
