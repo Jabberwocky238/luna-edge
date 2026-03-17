@@ -85,8 +85,7 @@ func TestIssueCertificateDNS01(t *testing.T) {
 	svc := NewService(Config{
 		DefaultEmail: "ops@example.com",
 		DNS01TTL:     120,
-	}, repo, publisher, bundles)
-	svc.issuers = fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01}
+	}, repo, publisher, bundles, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01})
 
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
@@ -135,8 +134,7 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	svc := NewService(Config{
 		DefaultEmail:   "ops@example.com",
 		HTTP01Priority: 999,
-	}, repo, publisher, &fakeBundleStore{})
-	svc.issuers = fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01}
+	}, repo, publisher, &fakeBundleStore{}, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01})
 
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
@@ -187,7 +185,7 @@ func TestPresentDNS01WritesAndBroadcasts(t *testing.T) {
 	}
 
 	publisher := &fakePublisher{}
-	svc := NewService(Config{DNS01TTL: 90}, repo, publisher, nil)
+	svc := NewService(Config{DNS01TTL: 90}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeDNS01})
 	provider := &masterChallengeProvider{
 		service:       svc,
 		domain:        domain,
@@ -222,7 +220,7 @@ func TestPresentHTTP01WritesAndBroadcasts(t *testing.T) {
 	}
 
 	publisher := &fakePublisher{}
-	svc := NewService(Config{HTTP01Priority: 999}, repo, publisher, nil)
+	svc := NewService(Config{HTTP01Priority: 999}, repo, publisher, nil, fakeIssuerFactory{t: t, expectedType: metadata.ChallengeTypeHTTP01})
 	provider := &masterChallengeProvider{
 		service:       svc,
 		domain:        domain,

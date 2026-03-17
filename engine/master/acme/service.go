@@ -12,7 +12,7 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
-func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore) *Service {
+func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore, issuer IssuerFactory) *Service {
 	if cfg.DNS01TTL == 0 {
 		cfg.DNS01TTL = 60
 	}
@@ -30,7 +30,7 @@ func NewService(cfg Config, repo repository.Repository, publish publisher, bundl
 		repo:     repo,
 		publish:  publish,
 		bundles:  bundles,
-		issuers:  LegoIssuerFactory{},
+		issuers:  issuer,
 		now:      func() time.Time { return time.Now().UTC() },
 		idSuffix: randomID,
 	}

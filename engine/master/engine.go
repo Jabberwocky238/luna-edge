@@ -8,6 +8,7 @@ import (
 	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/engine/master/acme"
 	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"github.com/jabberwocky238/luna-edge/repository"
@@ -22,6 +23,7 @@ type Config struct {
 	SQLitePath            string
 	PostgresDSN           string
 	AutoMigrate           bool
+	ACME                  acme.Config
 	S3                    S3Config
 	ReplicationListenAddr string
 	ManageListenAddr      string
@@ -37,6 +39,8 @@ type Engine struct {
 	Hub     *Hub
 	Bundles CertificateBundleProvider
 	Manage  *manage.API
+	ACME    *acme.Service
+	Certs   *CertReconciler
 
 	grpcServer   *grpc.Server
 	grpcListener net.Listener
@@ -80,15 +84,23 @@ func New(cfg Config) (*Engine, error) {
 		}
 		engine.Bundles = bundles
 	}
+	engine.ACME = acme.NewService(cfg.ACME, repo, engine, engine.Bundles, acme.LegoIssuerFactory{})
+	engine.Certs = NewCertReconciler(repo, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
 	wrapper := manage.NewWrapper(repo, nil, engine)
 	engine.Manage = manage.NewAPI(wrapper)
 	return engine, nil
 }
 
 func (e *Engine) Start() error {
+	if e.Certs != nil {
+		e.Certs.Start()
+	}
 	if e.Config.ReplicationListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ReplicationListenAddr)
 		if err != nil {
+			if e.Certs != nil {
+				e.Certs.Stop()
+			}
 			return err
 		}
 		e.grpcListener = lis
@@ -99,6 +111,9 @@ func (e *Engine) Start() error {
 	if e.Config.ManageListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ManageListenAddr)
 		if err != nil {
+			if e.Certs != nil {
+				e.Certs.Stop()
+			}
 			if e.grpcServer != nil {
 				e.grpcServer.GracefulStop()
 			}
@@ -271,6 +286,10 @@ func (e *Engine) FetchCertificateBundle(ctx context.Context, req *replpb.Certifi
 
 func (e *Engine) Stop(ctx context.Context) error {
 	var firstErr error
+	if e.Certs != nil {
+		e.Certs.Stop()
+		e.Certs = nil
+	}
 	if e.httpServer != nil {
 		if err := e.httpServer.Shutdown(ctx); err != nil && firstErr == nil {
 			firstErr = err
@@ -312,4 +331,11 @@ func (e *Engine) Stop(ctx context.Context) error {
 		e.Factory = nil
 	}
 	return firstErr
+}
+
+func (e *Engine) Notify(fqdn string) {
+	if e == nil || e.Certs == nil {
+		return
+	}
+	e.Certs.Notify(fqdn)
 }
