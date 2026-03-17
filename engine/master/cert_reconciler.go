@@ -24,6 +24,7 @@ type certificateIssuer interface {
 type CertReconciler struct {
 	repo        repository.Repository
 	issuer      certificateIssuer
+	provider    metadata.ACMEProvider
 	interval    time.Duration
 	renewBefore time.Duration
 
@@ -35,7 +36,7 @@ type CertReconciler struct {
 	now      func() time.Time
 }
 
-func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, interval, renewBefore time.Duration) *CertReconciler {
+func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, provider metadata.ACMEProvider, interval, renewBefore time.Duration) *CertReconciler {
 	if interval <= 0 {
 		interval = defaultCertReconcileInterval
 	}
@@ -45,6 +46,7 @@ func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, int
 	return &CertReconciler{
 		repo:        repo,
 		issuer:      issuer,
+		provider:    provider,
 		interval:    interval,
 		renewBefore: renewBefore,
 		notifyCh:    make(chan string, 128),
@@ -54,13 +56,12 @@ func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, int
 	}
 }
 
-func (r *CertReconciler) Start(runCtx ...context.Context) {
+func (r *CertReconciler) Start(ctx context.Context) {
 	if r == nil {
 		return
 	}
-	ctx := context.Background()
-	if len(runCtx) > 0 && runCtx[0] != nil {
-		ctx = runCtx[0]
+	if ctx == nil {
+		return
 	}
 	go r.run(ctx)
 }
@@ -155,7 +156,7 @@ func (r *CertReconciler) reconcileDomain(ctx context.Context, domain *metadata.D
 	_, err := r.issuer.IssueCertificate(ctx, acme.IssueRequest{
 		DomainID:      domain.ID,
 		ChallengeType: challengeTypeForDomain(domain),
-		Provider:      acme.ProviderLetsEncrypt,
+		Provider:      r.provider,
 	})
 	return err
 }

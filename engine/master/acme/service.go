@@ -13,6 +13,9 @@ import (
 )
 
 func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore, issuer IssuerFactory, http01 http01ChallengeStore) *Service {
+	if cfg.DefaultProvider == "" {
+		cfg.DefaultProvider = metadata.ProviderLetsEncrypt
+	}
 	if cfg.DNS01TTL == 0 {
 		cfg.DNS01TTL = 60
 	}
@@ -121,10 +124,6 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 }
 
 func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
-	provider := strings.ToLower(strings.TrimSpace(req.Provider))
-	if provider == "" {
-		provider = ProviderLetsEncrypt
-	}
 	email := strings.TrimSpace(req.Email)
 	if email == "" {
 		email = strings.TrimSpace(s.cfg.DefaultEmail)
@@ -133,13 +132,13 @@ func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
 		return IssuerConfig{}, fmt.Errorf("acme email is required")
 	}
 	cfg := IssuerConfig{
-		Provider: provider,
+		Provider: req.Provider,
 		Email:    email,
 	}
-	switch provider {
-	case ProviderLetsEncrypt:
+	switch req.Provider {
+	case metadata.ProviderLetsEncrypt:
 		cfg.Directory = lego.LEDirectoryProduction
-	case ProviderZeroSSL:
+	case metadata.ProviderZeroSSL:
 		eabKID := strings.TrimSpace(req.EABKID)
 		if eabKID == "" {
 			eabKID = strings.TrimSpace(s.cfg.DefaultEABKID)
@@ -155,7 +154,7 @@ func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
 		cfg.EABKID = eabKID
 		cfg.EABHMACKey = eabHMACKey
 	default:
-		return IssuerConfig{}, fmt.Errorf("unsupported acme provider %q", provider)
+		return IssuerConfig{}, fmt.Errorf("unsupported acme provider %q", req.Provider)
 	}
 	return cfg, nil
 }

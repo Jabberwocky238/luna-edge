@@ -62,7 +62,7 @@ func TestEngineTracksDnsDomainRecordChangesWithFakeKube(t *testing.T) {
 		t.Fatal("expected initial bridge records after loading existing dnsdomainrecord")
 	}
 	engine.k8sBridge = bridge
-	bridge.Listen()
+	bridge.Listen(ctx)
 	if !cache.WaitForCacheSync(ctx.Done(), bridge.factory.ForResource(dnsDomainRecordGVR).Informer().HasSynced) {
 		t.Fatal("wait for dns informer cache sync")
 	}

@@ -15,6 +15,9 @@ import (
 func TestEngineStartReturnsManageListenError(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -28,10 +31,10 @@ func TestEngineStartReturnsManageListenError(t *testing.T) {
 		Manage: manage.NewAPI(nil),
 	}
 
-	if err := eng.Start(ctx); err == nil {
+	if err := eng.Start(ctx, cancel); err == nil {
 		t.Fatal("expected start to fail when manage port is already in use")
 	}
-	_ = eng.Stop(ctx)
+	_ = eng.Stop()
 }
 
 func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
@@ -137,7 +140,7 @@ func TestNewConfiguresS3BundleProviderWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
-	defer func() { _ = eng.Stop(context.Background()) }()
+	defer func() { _ = eng.Stop() }()
 
 	if eng.Bundles == nil {
 		t.Fatal("expected s3 bundle provider to be configured")

@@ -144,13 +144,9 @@ func (b *K8sBridge) LoadInitial(ctx context.Context) error {
 }
 
 // Listen 启动 informer 监听当前命名空间资源变化。
-func (b *K8sBridge) Listen(runCtx ...context.Context) {
-	var ctx context.Context
-	if len(runCtx) > 0 {
-		ctx = runCtx[0]
-	}
+func (b *K8sBridge) Listen(ctx context.Context) {
 	if ctx == nil {
-		ctx = context.Background()
+		return
 	}
 	b.ctx = ctx
 	if b.ingressFactory != nil {

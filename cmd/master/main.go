@@ -13,6 +13,7 @@ import (
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	master "github.com/jabberwocky238/luna-edge/engine/master"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
 func main() {
@@ -21,9 +22,11 @@ func main() {
 		cfg.StorageDriver = connection.Driver(value)
 		return nil
 	})
+	var acmeProvider string
 	flag.StringVar(&cfg.SQLitePath, "sqlite-path", envOr("LUNA_SQLITE_PATH", "./master.db"), "master sqlite path")
 	flag.StringVar(&cfg.PostgresDSN, "postgres-dsn", envOr("LUNA_POSTGRES_DSN", ""), "master postgres dsn")
 	flag.BoolVar(&cfg.AutoMigrate, "auto-migrate", envOr("LUNA_AUTO_MIGRATE", "") == "1", "run automigrate on startup")
+	flag.StringVar(&acmeProvider, "acme-default-provider", envOr("LUNA_ACME_DEFAULT_PROVIDER", "letsencrypt"), "default ACME provider: letsencrypt or zerossl")
 	flag.StringVar(&cfg.ACME.DefaultEmail, "acme-default-email", envOr("LUNA_ACME_DEFAULT_EMAIL", ""), "default ACME account email")
 	flag.StringVar(&cfg.ACME.DefaultEABKID, "acme-default-eab-kid", envOr("LUNA_ACME_EAB_KID", ""), "default ACME external account binding key id")
 	flag.StringVar(&cfg.ACME.DefaultEABHMACKey, "acme-default-eab-hmac-key", envOr("LUNA_ACME_EAB_HMAC_KEY", ""), "default ACME external account binding hmac key")
@@ -47,21 +50,31 @@ func main() {
 	}
 	flag.Parse()
 
+	switch acmeProvider {
+	case "letsencrypt":
+		cfg.ACME.DefaultProvider = metadata.ProviderLetsEncrypt
+	case "zerossl":
+		cfg.ACME.DefaultProvider = metadata.ProviderZeroSSL
+	default:
+		log.Fatalf("unsupported acme provider: %s", acmeProvider)
+	}
+
+	baseCtx := context.Background()
+	ctx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
 	engine, err := master.New(cfg)
 	if err != nil {
 		log.Fatalf("create master: %v", err)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := engine.Start(ctx); err != nil {
+	if err := engine.Start(ctx, cancel); err != nil {
 		log.Fatalf("start master: %v", err)
 	}
 	log.Printf("master started: replication=%s manage=%s", cfg.ReplicationListenAddr, cfg.ManageListenAddr)
 	<-ctx.Done()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
-	defer cancel()
-	if err := engine.Stop(shutdownCtx); err != nil {
+	if err := engine.Stop(); err != nil {
 		log.Fatalf("stop master: %v", err)
 	}
 }

@@ -91,16 +91,12 @@ func (b *IngressBridge) LoadInitial(ctx context.Context) error {
 	return b.syncHosts(ctx, mapKeys(affected), nil)
 }
 
-func (b *IngressBridge) Listen(runCtx ...context.Context) {
+func (b *IngressBridge) Listen(ctx context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
-	var ctx context.Context
-	if len(runCtx) > 0 {
-		ctx = runCtx[0]
-	}
 	if ctx == nil {
-		ctx = context.Background()
+		return
 	}
 	b.ctx = ctx
 	b.factory.Start(b.stopCh)

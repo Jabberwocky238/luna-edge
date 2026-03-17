@@ -80,11 +80,7 @@ func (b *Bridge) LoadInitial(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bridge) Listen(runCtx ...context.Context) {
-	var ctx context.Context
-	if len(runCtx) > 0 {
-		ctx = runCtx[0]
-	}
+func (b *Bridge) Listen(ctx context.Context) {
 	if b == nil {
 		return
 	}

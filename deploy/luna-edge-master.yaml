@@ -10,6 +10,7 @@ data:
   LUNA_K8S_BRIDGE_ENABLED: "1"
   LUNA_K8S_NAMESPACE: "luna-edge"
   LUNA_K8S_INGRESS_CLASS: "luna-edge"
+  LUNA_ACME_DEFAULT_PROVIDER: "zerossl"
   LUNA_ACME_DEFAULT_EMAIL: ""
   LUNA_ACME_EAB_KID: ""
   LUNA_S3_ENDPOINT: "http://minio.default.svc.cluster.local:9000"

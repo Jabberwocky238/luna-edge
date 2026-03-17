@@ -27,7 +27,7 @@ func (LegoIssuerFactory) New(config IssuerConfig, challengeType metadata.Challen
 	if err != nil {
 		return nil, err
 	}
-	if config.Provider == ProviderZeroSSL {
+	if config.Provider == metadata.ProviderZeroSSL {
 		reg, err := client.Registration.RegisterWithExternalAccountBinding(registration.RegisterEABOptions{
 			TermsOfServiceAgreed: true,
 			Kid:                  config.EABKID,
@@ -45,7 +45,7 @@ func (LegoIssuerFactory) New(config IssuerConfig, challengeType metadata.Challen
 		user.Registration = reg
 	}
 	switch config.Provider {
-	case ProviderLetsEncrypt, ProviderZeroSSL:
+	case metadata.ProviderLetsEncrypt, metadata.ProviderZeroSSL:
 	default:
 		return nil, fmt.Errorf("unsupported acme provider %q", config.Provider)
 	}

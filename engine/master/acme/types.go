@@ -12,13 +12,11 @@ import (
 )
 
 const (
-	ProviderLetsEncrypt = "letsencrypt"
-	ProviderZeroSSL     = "zerossl"
-
 	zeroSSLDirectoryURL = "https://acme.zerossl.com/v2/DV90"
 )
 
 type Config struct {
+	DefaultProvider       metadata.ACMEProvider
 	DefaultEmail          string
 	DefaultEABKID         string
 	DefaultEABHMACKey     string
@@ -32,7 +30,7 @@ type Config struct {
 
 type IssueRequest struct {
 	DomainID      string
-	Provider      string
+	Provider      metadata.ACMEProvider
 	ChallengeType metadata.ChallengeType
 	Email         string
 	EABKID        string
@@ -40,14 +38,14 @@ type IssueRequest struct {
 }
 
 type Service struct {
-	cfg        Config
-	repo       repository.Repository
-	publish    publisher
-	bundles    bundleStore
-	issuers    IssuerFactory
-	http01     http01ChallengeStore
-	now        func() time.Time
-	idSuffix   func() string
+	cfg      Config
+	repo     repository.Repository
+	publish  publisher
+	bundles  bundleStore
+	issuers  IssuerFactory
+	http01   http01ChallengeStore
+	now      func() time.Time
+	idSuffix func() string
 }
 
 type publisher interface {
@@ -72,7 +70,7 @@ type CertificateIssuer interface {
 }
 
 type IssuerConfig struct {
-	Provider   string
+	Provider   metadata.ACMEProvider
 	Email      string
 	Directory  string
 	EABKID     string

@@ -94,16 +94,12 @@ func (b *GatewayBridge) LoadInitial(ctx context.Context) error {
 	return b.syncHosts(ctx, b.collectHosts(), nil)
 }
 
-func (b *GatewayBridge) Listen(runCtx ...context.Context) {
+func (b *GatewayBridge) Listen(ctx context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
-	var ctx context.Context
-	if len(runCtx) > 0 {
-		ctx = runCtx[0]
-	}
 	if ctx == nil {
-		ctx = context.Background()
+		return
 	}
 	b.ctx = ctx
 	b.factory.Start(b.stopCh)

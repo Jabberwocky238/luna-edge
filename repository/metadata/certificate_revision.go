@@ -9,6 +9,13 @@ const (
 	ChallengeTypeHTTP01 ChallengeType = "http-01"
 )
 
+type ACMEProvider string
+
+const (
+	ProviderLetsEncrypt ACMEProvider = "letsencrypt"
+	ProviderZeroSSL     ACMEProvider = "zerossl"
+)
+
 // CertificateRevision 表示某个域名的一个证书版本元数据。
 type CertificateRevision struct {
 	Shared
@@ -21,7 +28,7 @@ type CertificateRevision struct {
 	// Revision 是按域名递增的证书版本号。
 	Revision uint64 `json:"revision" gorm:"column:revision;not null"`
 	// Provider 是签发该证书的提供方。
-	Provider string `json:"provider" gorm:"column:provider;not null;default:'';type:text"`
+	Provider ACMEProvider `json:"provider" gorm:"column:provider;not null;default:'';type:text"`
 	// ChallengeType 是申请该证书时使用的 challenge 类型。
 	ChallengeType ChallengeType `json:"challenge_type" gorm:"column:challenge_type;not null;default:'';type:text"`
 	// ArtifactBucket 是对象存储中保存该证书的 bucket 名称。

@@ -62,7 +62,7 @@ func (f *fakeCertificateIssuer) IssueCertificate(ctx context.Context, req acme.I
 		Hostname:         domain.Hostname,
 		Revision:         revision,
 		ChallengeType:    req.ChallengeType,
-		Provider:         acme.ProviderLetsEncrypt,
+		Provider:         metadata.ProviderLetsEncrypt,
 		NotBefore:        time.Now().UTC().Add(-time.Hour),
 		NotAfter:         time.Now().UTC().Add(90 * 24 * time.Hour),
 	}
@@ -110,7 +110,7 @@ func TestCertReconcilerIssuesWhenNeedCertAndNoCertificate(t *testing.T) {
 
 	bundles := &memoryBundleProvider{}
 	issuer := &fakeCertificateIssuer{repo: repo, bundles: bundles}
-	reconciler := NewCertReconciler(repo, issuer, time.Hour, 30*24*time.Hour)
+	reconciler := NewCertReconciler(repo, issuer, metadata.ProviderLetsEncrypt, time.Hour, 30*24*time.Hour)
 	if err := reconciler.scan(ctx); err != nil {
 		t.Fatalf("scan: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestCertReconcilerNotifyIssuesForExpiringCertificate(t *testing.T) {
 
 	bundles := &memoryBundleProvider{}
 	issuer := &fakeCertificateIssuer{repo: repo, bundles: bundles}
-	reconciler := NewCertReconciler(repo, issuer, time.Hour, 24*time.Hour)
+	reconciler := NewCertReconciler(repo, issuer, metadata.ProviderLetsEncrypt, time.Hour, 24*time.Hour)
 	reconciler.now = func() time.Time { return time.Now().UTC() }
 	if err := reconciler.reconcileHostname(ctx, "app.example.com"); err != nil {
 		t.Fatalf("reconcile hostname: %v", err)

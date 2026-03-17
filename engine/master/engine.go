@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"slices"
+
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/engine/master/acme"
 	masterk8s "github.com/jabberwocky238/luna-edge/engine/master/k8s_bridge"
@@ -16,7 +18,6 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"google.golang.org/grpc"
-	"slices"
 )
 
 type Config struct {
@@ -37,6 +38,9 @@ type Config struct {
 type Engine struct {
 	replpb.UnimplementedReplicationServiceServer
 
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	Config    Config
 	Factory   repository.Factory
 	Repo      repository.Repository
@@ -51,7 +55,6 @@ type Engine struct {
 	grpcListener net.Listener
 	httpServer   *http.Server
 	httpListener net.Listener
-	runCtx       context.Context
 }
 
 type CertificateBundleProvider interface {
@@ -91,7 +94,7 @@ func New(cfg Config) (*Engine, error) {
 	}
 	engine.Bundles = bundles
 	engine.ACME = acme.NewService(cfg.ACME, wrapper, engine, engine.Bundles, acme.LegoIssuerFactory{}, engine.Manage)
-	engine.Certs = NewCertReconciler(wrapper, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
+	engine.Certs = NewCertReconciler(wrapper, engine.ACME, cfg.ACME.DefaultProvider, defaultCertReconcileInterval, defaultCertRenewBefore)
 	if cfg.K8sBridgeEnabled {
 		bridge, err := masterk8s.New(masterk8s.Config{
 			Namespace:    cfg.K8sNamespace,
@@ -107,12 +110,12 @@ func New(cfg Config) (*Engine, error) {
 	return engine, nil
 }
 
-func (e *Engine) Start(runCtx ...context.Context) error {
-	ctx := context.Background()
-	if len(runCtx) > 0 && runCtx[0] != nil {
-		ctx = runCtx[0]
+func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
+	if ctx == nil {
+		return fmt.Errorf("start context is required")
 	}
-	e.runCtx = ctx
+	e.ctx = ctx
+	e.cancel = cancel
 	if e.K8sBridge != nil {
 		if err := e.K8sBridge.LoadInitial(ctx); err != nil {
 			return err
@@ -159,12 +162,6 @@ func (e *Engine) Start(runCtx ...context.Context) error {
 func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapshot) error {
 	if e == nil || e.Hub == nil || snapshot == nil {
 		return nil
-	}
-	if ctx == nil {
-		ctx = e.runCtx
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	for i := range snapshot.DNSRecords {
 		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
@@ -317,7 +314,7 @@ func (e *Engine) FetchCertificateBundle(ctx context.Context, req *replpb.Certifi
 	}, nil
 }
 
-func (e *Engine) Stop(ctx context.Context) error {
+func (e *Engine) Stop() error {
 	var firstErr error
 	if e.Certs != nil {
 		e.Certs.Stop()
@@ -330,7 +327,7 @@ func (e *Engine) Stop(ctx context.Context) error {
 		e.K8sBridge = nil
 	}
 	if e.httpServer != nil {
-		if err := e.httpServer.Shutdown(ctx); err != nil && firstErr == nil {
+		if err := e.httpServer.Shutdown(e.ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		e.httpServer = nil
@@ -348,10 +345,10 @@ func (e *Engine) Stop(ctx context.Context) error {
 			close(stopped)
 		}()
 		select {
-		case <-ctx.Done():
+		case <-e.ctx.Done():
 			e.grpcServer.Stop()
 			if firstErr == nil {
-				firstErr = ctx.Err()
+				firstErr = e.ctx.Err()
 			}
 		case <-stopped:
 		}

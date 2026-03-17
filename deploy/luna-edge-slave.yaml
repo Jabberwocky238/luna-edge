@@ -5,6 +5,7 @@ metadata:
   namespace: luna-edge
 data:
   LUNA_MASTER_ADDRESS: "luna-master.luna-edge.svc.cluster.local:50051"
+  LUNA_MASTER_MANAGE_URL: "http://luna-master.luna-edge.svc.cluster.local:8080"
   LUNA_RETRY_MIN_BACKOFF: "1s"
   LUNA_RETRY_MAX_BACKOFF: "30s"
   LUNA_DNS_LISTEN: ":53"

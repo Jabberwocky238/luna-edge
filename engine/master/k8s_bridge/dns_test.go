@@ -112,8 +112,9 @@ func TestDNSBridgeTracksAddUpdateDelete(t *testing.T) {
 	pub := &fakePublisher{}
 	repo := manage.NewWrapper(factory.Repository(), pub, nil)
 	bridge := NewDNSBridgeWithClient("luna-edge", client, repo)
-	bridge.Listen()
-	if !cache.WaitForCacheSync(context.Background().Done(), bridge.factory.ForResource(dnsDomainRecordGVR).Informer().HasSynced) {
+	ctx := context.Background()
+	bridge.Listen(ctx)
+	if !cache.WaitForCacheSync(ctx.Done(), bridge.factory.ForResource(dnsDomainRecordGVR).Informer().HasSynced) {
 		t.Fatal("wait for informer sync")
 	}
 	defer func() { _ = bridge.Stop() }()

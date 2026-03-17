@@ -105,7 +105,7 @@ func TestIssueCertificateDNS01(t *testing.T) {
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
 		ChallengeType: metadata.ChallengeTypeDNS01,
-		Provider:      ProviderLetsEncrypt,
+		Provider:      metadata.ProviderLetsEncrypt,
 	})
 	if err != nil {
 		t.Fatalf("issue certificate: %v", err)
@@ -155,7 +155,7 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	cert, err := svc.IssueCertificate(ctx, IssueRequest{
 		DomainID:      "domain-1",
 		ChallengeType: metadata.ChallengeTypeHTTP01,
-		Provider:      ProviderLetsEncrypt,
+		Provider:      metadata.ProviderLetsEncrypt,
 	})
 	if err != nil {
 		t.Fatalf("issue certificate: %v", err)

@@ -149,16 +149,12 @@ func (b *K8sBridge) LoadInitial(ctx context.Context) error {
 	return nil
 }
 
-func (b *K8sBridge) Listen(runCtx ...context.Context) {
+func (b *K8sBridge) Listen(ctx context.Context) {
 	if b == nil || b.factory == nil {
 		return
 	}
-	var ctx context.Context
-	if len(runCtx) > 0 {
-		ctx = runCtx[0]
-	}
 	if ctx == nil {
-		ctx = context.Background()
+		return
 	}
 	b.ctx = ctx
 	b.factory.Start(b.stopCh)
