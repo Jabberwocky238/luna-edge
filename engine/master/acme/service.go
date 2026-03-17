@@ -200,10 +200,17 @@ func (s *Service) publishChange(ctx context.Context, hostname string) error {
 	}
 	entry, err := s.repo.GetDomainEntryProjectionByDomain(ctx, hostname)
 	if err != nil {
+		log.Printf("acme: publish change load projection failed hostname=%s err=%v", hostname, err)
 		return err
 	}
 	if entry == nil {
+		log.Printf("acme: publish change projection missing hostname=%s", hostname)
 		return nil
+	}
+	if entry.Cert != nil {
+		log.Printf("acme: publish change projection hostname=%s domain_id=%s cert_id=%s revision=%d", entry.Hostname, entry.ID, entry.Cert.ID, entry.Cert.Revision)
+	} else {
+		log.Printf("acme: publish change projection hostname=%s domain_id=%s cert=nil", entry.Hostname, entry.ID)
 	}
 	return s.publish.PublishChangeLog(ctx, &engine.ChangeNotification{
 		NodeID:      engine.POD_NAME,

@@ -13,6 +13,8 @@ const (
 	BackendTypeL7HTTPS BackendType = "l7-https"
 	// BackendTypeL7HTTP 表示该域名入口走 L7 HTTP 路由模型。
 	BackendTypeL7HTTP BackendType = "l7-http"
+	// BackendTypeL7HTTPBoth 表示该域名入口走 L7 HTTP + HTTPS 路由模型。
+	BackendTypeL7HTTPBoth BackendType = "l7-http-both"
 )
 
 // DomainEndpoint 表示系统的一等资源，即一个域名入口对象。

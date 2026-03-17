@@ -2,6 +2,7 @@ package functions
 
 import (
 	"context"
+	"log"
 
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"gorm.io/gorm"
@@ -120,6 +121,11 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 			SHA256Crt:        derefString(first.CertSHA256Crt),
 			SHA256Key:        derefString(first.CertSHA256Key),
 		}
+	}
+	if projection.Cert != nil {
+		log.Printf("repository: domain projection cert resolved hostname=%s domain_id=%s cert_id=%s revision=%d", projection.Hostname, projection.ID, projection.Cert.ID, projection.Cert.Revision)
+	} else {
+		log.Printf("repository: domain projection cert missing hostname=%s domain_id=%s", projection.Hostname, projection.ID)
 	}
 
 	if projection.BackendType == metadata.BackendTypeL4TLSPassthrough || projection.BackendType == metadata.BackendTypeL4TLSTermination {

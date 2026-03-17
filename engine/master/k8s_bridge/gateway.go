@@ -261,7 +261,17 @@ func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMater
 					}
 					if listener.protocol == "HTTPS" {
 						item.domain.NeedCert = true
-						item.domain.BackendType = metadata.BackendTypeL7HTTPS
+						switch item.domain.BackendType {
+						case metadata.BackendTypeL7HTTP:
+							item.domain.BackendType = metadata.BackendTypeL7HTTPBoth
+						default:
+							item.domain.BackendType = metadata.BackendTypeL7HTTPS
+						}
+					} else if listener.protocol == "HTTP" && item.domain.NeedCert {
+						switch item.domain.BackendType {
+						case metadata.BackendTypeL7HTTPS, metadata.BackendTypeL7HTTPBoth:
+							item.domain.BackendType = metadata.BackendTypeL7HTTPBoth
+						}
 					}
 					for ruleIdx, rule := range route.rules {
 						backendID := fmt.Sprintf("k8s:backend:gateway:%s:%s:%s:%d:%d", route.namespace, route.name, host, idx, ruleIdx)
@@ -482,10 +492,11 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 			}
 			continue
 		}
-		if err := upsertManagedDomain(ctx, repo, item); err != nil {
+		changed, err := upsertManagedDomain(ctx, repo, item)
+		if err != nil {
 			return err
 		}
-		if item.domain.NeedCert {
+		if changed && item.domain.NeedCert {
 			if marker, ok := repo.(certificateDesiredMarker); ok {
 				marker.MarkCertificateDesired(ctx, item.domain.Hostname)
 			}
@@ -507,17 +518,24 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 	return nil
 }
 
-func upsertManagedDomain(ctx context.Context, repo repository.Repository, item domainMaterialized) error {
+func upsertManagedDomain(ctx context.Context, repo repository.Repository, item domainMaterialized) (bool, error) {
 	existing, err := repo.GetDomainEndpointByID(ctx, item.domain.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-	if err := repo.DomainEndpoints().UpsertResource(ctx, &item.domain); err != nil {
-		return err
+		return false, err
 	}
 	currentRoutes, err := repo.ListHTTPRoutesByDomainID(ctx, item.domain.ID)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
+		return false, err
+	}
+	currentBackends, err := repo.ListServiceBindingsByDomainID(ctx, item.domain.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+	if managedDomainUnchanged(existing, currentRoutes, currentBackends, item) {
+		return false, nil
+	}
+	if err := repo.DomainEndpoints().UpsertResource(ctx, &item.domain); err != nil {
+		return false, err
 	}
 	currentRouteIDs := make(map[string]metadata.HTTPRoute, len(currentRoutes))
 	for i := range currentRoutes {
@@ -528,13 +546,13 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 	for i := range item.backends {
 		nextBackendIDs[item.backends[i].ID] = struct{}{}
 		if err := repo.ServiceBindingRefs().UpsertResource(ctx, &item.backends[i]); err != nil {
-			return err
+			return false, err
 		}
 	}
 	for i := range item.routes {
 		nextRouteIDs[item.routes[i].ID] = struct{}{}
 		if err := repo.HTTPRoutes().UpsertResource(ctx, &item.routes[i]); err != nil {
-			return err
+			return false, err
 		}
 	}
 	for id, route := range currentRouteIDs {
@@ -542,12 +560,12 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 			continue
 		}
 		if err := repo.HTTPRoutes().DeleteResourceByField(ctx, &metadata.HTTPRoute{}, "id", id); err != nil {
-			return err
+			return false, err
 		}
 		if strings.HasPrefix(route.BackendRefID, "k8s:backend:") {
 			if _, keep := nextBackendIDs[route.BackendRefID]; !keep {
 				if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", route.BackendRefID); err != nil {
-					return err
+					return false, err
 				}
 			}
 		}
@@ -555,11 +573,11 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 	if existing != nil && existing.BindedServiceID != "" && strings.HasPrefix(existing.BindedServiceID, "k8s:backend:") {
 		if _, keep := nextBackendIDs[existing.BindedServiceID]; !keep {
 			if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", existing.BindedServiceID); err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
-	return nil
+	return true, nil
 }
 
 func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostname string) error {
@@ -592,6 +610,39 @@ func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostna
 		}
 	}
 	return repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", domain.ID)
+}
+
+func managedDomainUnchanged(existing *metadata.DomainEndpoint, currentRoutes []metadata.HTTPRoute, currentBackends []metadata.ServiceBackendRef, item domainMaterialized) bool {
+	if existing == nil {
+		return false
+	}
+	if existing.Hostname != item.domain.Hostname || existing.NeedCert != item.domain.NeedCert || existing.BackendType != item.domain.BackendType || existing.BindedServiceID != item.domain.BindedServiceID {
+		return false
+	}
+	if len(currentRoutes) != len(item.routes) || len(currentBackends) != len(item.backends) {
+		return false
+	}
+	currentRouteMap := make(map[string]metadata.HTTPRoute, len(currentRoutes))
+	for i := range currentRoutes {
+		currentRouteMap[currentRoutes[i].ID] = currentRoutes[i]
+	}
+	for i := range item.routes {
+		current, ok := currentRouteMap[item.routes[i].ID]
+		if !ok || current.DomainEndpointID != item.routes[i].DomainEndpointID || current.Path != item.routes[i].Path || current.Priority != item.routes[i].Priority || current.BackendRefID != item.routes[i].BackendRefID {
+			return false
+		}
+	}
+	currentBackendMap := make(map[string]metadata.ServiceBackendRef, len(currentBackends))
+	for i := range currentBackends {
+		currentBackendMap[currentBackends[i].ID] = currentBackends[i]
+	}
+	for i := range item.backends {
+		current, ok := currentBackendMap[item.backends[i].ID]
+		if !ok || current.ServiceNamespace != item.backends[i].ServiceNamespace || current.ServiceName != item.backends[i].ServiceName || current.ServicePort != item.backends[i].ServicePort {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeHost(host string) string {

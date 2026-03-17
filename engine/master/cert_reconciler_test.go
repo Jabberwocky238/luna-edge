@@ -116,6 +116,43 @@ func TestCertReconcilerIssuesWhenNeedCertAndNoCertificate(t *testing.T) {
 	}
 }
 
+func TestCertReconcilerUsesHTTP01ForHTTPBoth(t *testing.T) {
+	t.Parallel()
+
+	factory, err := repository.NewFactory(connection.Config{
+		Driver:      connection.DriverSQLite,
+		Path:        filepath.Join(t.TempDir(), "master.db"),
+		AutoMigrate: true,
+	})
+	if err != nil {
+		t.Fatalf("new factory: %v", err)
+	}
+	defer func() { _ = factory.Close() }()
+
+	repo := factory.Repository()
+	ctx := context.Background()
+	if err := repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
+		ID:          "domain-1",
+		Hostname:    "app.example.com",
+		NeedCert:    true,
+		BackendType: metadata.BackendTypeL7HTTPBoth,
+	}); err != nil {
+		t.Fatalf("upsert domain: %v", err)
+	}
+
+	bundles := &memoryBundleProvider{}
+	issuer := &fakeCertificateIssuer{repo: repo, bundles: bundles}
+	reconciler := NewCertReconciler(repo, issuer, metadata.ProviderLetsEncrypt, time.Hour, 30*24*time.Hour)
+	if err := reconciler.scan(ctx); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	assertIssuedCertificate(t, ctx, repo, bundles, "domain-1", "app.example.com", 1)
+	if got := issuer.requests[0].ChallengeType; got != metadata.ChallengeTypeHTTP01 {
+		t.Fatalf("expected http-01 for l7-http-both endpoint, got %s", got)
+	}
+}
+
 func TestCertReconcilerNotifyIssuesForExpiringCertificate(t *testing.T) {
 	t.Parallel()
 

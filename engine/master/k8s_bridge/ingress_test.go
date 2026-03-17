@@ -207,6 +207,59 @@ func TestIngressBridgeUpdateRebuildsAffectedDomain(t *testing.T) {
 	}
 }
 
+func TestIngressBridgeNoopUpdateDoesNotBroadcast(t *testing.T) {
+	factory, err := repository.NewFactory(connection.Config{
+		Driver:      connection.DriverSQLite,
+		Path:        filepath.Join(t.TempDir(), "master.db"),
+		AutoMigrate: true,
+	})
+	if err != nil {
+		t.Fatalf("new factory: %v", err)
+	}
+	defer func() { _ = factory.Close() }()
+
+	pathType := networkingv1.PathTypePrefix
+	className := "luna-edge"
+	recorder := &effectRecorder{}
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewIngressBridgeWithClient("default", "luna-edge", fake.NewSimpleClientset(), repo)
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "demo",
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			TLS:              []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
+			Rules: []networkingv1.IngressRule{{
+				Host: "app.example.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "svc-app",
+									Port: networkingv1.ServiceBackendPort{Number: 8080},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	bridge.storeIngress(ing)
+	recorder.events = nil
+	bridge.storeIngress(ing.DeepCopy())
+	if len(recorder.events) != 0 {
+		t.Fatalf("expected no side effects for noop update, got %+v", recorder.events)
+	}
+}
+
 func TestIngressBridgeDeleteRemovesManagedDomain(t *testing.T) {
 	factory, err := repository.NewFactory(connection.Config{
 		Driver:      connection.DriverSQLite,

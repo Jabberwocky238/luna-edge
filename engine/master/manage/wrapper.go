@@ -77,10 +77,6 @@ func (w *Wrapper) ListHTTPRoutesByDomainID(ctx context.Context, domainID string)
 	return w.raw.ListHTTPRoutesByDomainID(ctx, domainID)
 }
 
-func (w *Wrapper) GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error) {
-	return w.raw.GetHTTPRouteByHostname(ctx, hostname, requestPath)
-}
-
 func (w *Wrapper) ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error {
 	return w.raw.ReplaceDNSRecords(ctx, domainID, records)
 }

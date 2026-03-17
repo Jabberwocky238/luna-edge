@@ -12,7 +12,6 @@ type SpecRepository interface {
 	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
 	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
 	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
-	GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error)
 	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
 	ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error)
 	ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error)

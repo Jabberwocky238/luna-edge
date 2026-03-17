@@ -96,10 +96,6 @@ func (r batchRepository) ListHTTPRoutesByDomainID(ctx context.Context, domainID 
 	return r.repo.ListHTTPRoutesByDomainID(withBatchContext(ctx, r.ctx), domainID)
 }
 
-func (r batchRepository) GetHTTPRouteByHostname(ctx context.Context, hostname, requestPath string) (*metadata.HTTPRoute, error) {
-	return r.repo.GetHTTPRouteByHostname(withBatchContext(ctx, r.ctx), hostname, requestPath)
-}
-
 func (r batchRepository) ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error {
 	return r.repo.ReplaceDNSRecords(withBatchContext(ctx, r.ctx), domainID, records)
 }

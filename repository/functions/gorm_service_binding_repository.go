@@ -28,21 +28,6 @@ func (r *GormRepository) GetServiceBindingByDomainID(ctx context.Context, domain
 	return backend, nil
 }
 
-func (r *GormRepository) GetServiceBindingByHostname(ctx context.Context, hostname string) (*metadata.ServiceBackendRef, error) {
-	route, err := r.GetHTTPRouteByHostname(ctx, hostname, "/")
-	if err != nil || route == nil {
-		return nil, err
-	}
-
-	backend := &metadata.ServiceBackendRef{}
-	if err := r.db.WithContext(ctx).
-		Where("deleted = ?", false).
-		First(backend, "id = ?", route.BackendRefID).Error; err != nil {
-		return nil, err
-	}
-	return backend, nil
-}
-
 func (r *GormRepository) ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error) {
 	var backends []metadata.ServiceBackendRef
 	err := r.db.WithContext(ctx).

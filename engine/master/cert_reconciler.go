@@ -190,7 +190,7 @@ func (r *CertReconciler) end(fqdn string) {
 
 func challengeTypeForDomain(domain *metadata.DomainEndpoint) metadata.ChallengeType {
 	switch domain.BackendType {
-	case metadata.BackendTypeL7HTTP, metadata.BackendTypeL7HTTPS:
+	case metadata.BackendTypeL7HTTP, metadata.BackendTypeL7HTTPS, metadata.BackendTypeL7HTTPBoth:
 		return metadata.ChallengeTypeHTTP01
 	default:
 		return metadata.ChallengeTypeDNS01

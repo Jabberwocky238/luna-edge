@@ -14,6 +14,121 @@ import (
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 )
 
+func TestGatewayBridgeListenerCertificateModes(t *testing.T) {
+	tests := []struct {
+		name              string
+		listeners         []interface{}
+		expectedNeedCert  bool
+		expectedType      metadata.BackendType
+		expectedEventList []string
+	}{
+		{
+			name: "web",
+			listeners: []interface{}{
+				map[string]interface{}{"name": "web", "protocol": "HTTP", "port": int64(80), "hostname": "app.example.com"},
+			},
+			expectedNeedCert:  false,
+			expectedType:      metadata.BackendTypeL7HTTP,
+			expectedEventList: []string{"publish"},
+		},
+		{
+			name: "websecure",
+			listeners: []interface{}{
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "app.example.com"},
+			},
+			expectedNeedCert:  true,
+			expectedType:      metadata.BackendTypeL7HTTPS,
+			expectedEventList: []string{"cert:app.example.com", "publish"},
+		},
+		{
+			name: "web+websecure",
+			listeners: []interface{}{
+				map[string]interface{}{"name": "web", "protocol": "HTTP", "port": int64(80), "hostname": "app.example.com"},
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "app.example.com"},
+			},
+			expectedNeedCert:  true,
+			expectedType:      metadata.BackendTypeL7HTTPBoth,
+			expectedEventList: []string{"cert:app.example.com", "publish"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory, err := repository.NewFactory(connection.Config{
+				Driver:      connection.DriverSQLite,
+				Path:        filepath.Join(t.TempDir(), "master.db"),
+				AutoMigrate: true,
+			})
+			if err != nil {
+				t.Fatalf("new factory: %v", err)
+			}
+			defer func() { _ = factory.Close() }()
+
+			client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+			recorder := &effectRecorder{}
+			repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+			bridge := NewGatewayBridgeWithClient("default", client, repo)
+
+			bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "gateway.networking.k8s.io/v1",
+				"kind":       "Gateway",
+				"metadata": map[string]interface{}{
+					"name":      "edge",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"listeners": tt.listeners,
+				},
+			}})
+			recorder.events = nil
+			bridge.storeHTTPRoute(&unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "gateway.networking.k8s.io/v1",
+				"kind":       "HTTPRoute",
+				"metadata": map[string]interface{}{
+					"name":      "app",
+					"namespace": "default",
+				},
+				"spec": map[string]interface{}{
+					"parentRefs": buildParentRefsForGatewayTest(tt.listeners),
+					"hostnames":  []interface{}{"app.example.com"},
+					"rules": []interface{}{map[string]interface{}{
+						"backendRefs": []interface{}{map[string]interface{}{"name": "svc-app", "port": int64(8080)}},
+					}},
+				},
+			}})
+
+			domain, err := factory.Repository().GetDomainEndpointByHostname(context.Background(), "app.example.com")
+			if err != nil {
+				t.Fatalf("get domain: %v", err)
+			}
+			if domain.NeedCert != tt.expectedNeedCert || domain.BackendType != tt.expectedType {
+				t.Fatalf("unexpected domain endpoint: %+v", domain)
+			}
+			if len(recorder.events) != len(tt.expectedEventList) {
+				t.Fatalf("unexpected side effects: %+v", recorder.events)
+			}
+			for i := range tt.expectedEventList {
+				if recorder.events[i] != tt.expectedEventList[i] {
+					t.Fatalf("unexpected side effects: %+v", recorder.events)
+				}
+			}
+		})
+	}
+}
+
+func buildParentRefsForGatewayTest(listeners []interface{}) []interface{} {
+	refs := make([]interface{}, 0, len(listeners))
+	for _, listener := range listeners {
+		item, ok := listener.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := item["name"].(string)
+		refs = append(refs, map[string]interface{}{"name": "edge", "sectionName": name})
+	}
+	return refs
+}
+
 func TestGatewayBridgeWritesMasterThenCertThenBroadcast(t *testing.T) {
 	factory, err := repository.NewFactory(connection.Config{
 		Driver:      connection.DriverSQLite,
@@ -141,6 +256,128 @@ func TestGatewayBridgeIgnoresHTTPListenerForCertificateRequest(t *testing.T) {
 	}
 	if len(recorder.events) != 1 || recorder.events[0] != "publish" {
 		t.Fatalf("unexpected side effects: %+v", recorder.events)
+	}
+}
+
+func TestGatewayBridgeMergesWebAndWebsecureIntoHTTPBoth(t *testing.T) {
+	factory, err := repository.NewFactory(connection.Config{
+		Driver:      connection.DriverSQLite,
+		Path:        filepath.Join(t.TempDir(), "master.db"),
+		AutoMigrate: true,
+	})
+	if err != nil {
+		t.Fatalf("new factory: %v", err)
+	}
+	defer func() { _ = factory.Close() }()
+
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+	recorder := &effectRecorder{}
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
+
+	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "web", "protocol": "HTTP", "port": int64(80), "hostname": "app.example.com"},
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "app.example.com"},
+			},
+		},
+	}})
+	recorder.events = nil
+	bridge.storeHTTPRoute(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata": map[string]interface{}{
+			"name":      "app",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{
+				map[string]interface{}{"name": "edge", "sectionName": "web"},
+				map[string]interface{}{"name": "edge", "sectionName": "websecure"},
+			},
+			"hostnames": []interface{}{"app.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-app", "port": int64(8080)}},
+			}},
+		},
+	}})
+
+	domain, err := factory.Repository().GetDomainEndpointByHostname(context.Background(), "app.example.com")
+	if err != nil {
+		t.Fatalf("get domain: %v", err)
+	}
+	if !domain.NeedCert || domain.BackendType != metadata.BackendTypeL7HTTPBoth {
+		t.Fatalf("unexpected merged domain endpoint: %+v", domain)
+	}
+	routes, err := factory.Repository().ListHTTPRoutesByDomainID(context.Background(), domain.ID)
+	if err != nil {
+		t.Fatalf("list routes: %v", err)
+	}
+	if len(routes) != 1 {
+		t.Fatalf("expected 1 deduplicated route for web+websecure, got %+v", routes)
+	}
+	if len(recorder.events) != 2 || recorder.events[0] != "cert:app.example.com" || recorder.events[1] != "publish" {
+		t.Fatalf("unexpected side effects: %+v", recorder.events)
+	}
+}
+
+func TestGatewayBridgeNoopUpdateDoesNotBroadcast(t *testing.T) {
+	factory, err := repository.NewFactory(connection.Config{
+		Driver:      connection.DriverSQLite,
+		Path:        filepath.Join(t.TempDir(), "master.db"),
+		AutoMigrate: true,
+	})
+	if err != nil {
+		t.Fatalf("new factory: %v", err)
+	}
+	defer func() { _ = factory.Close() }()
+
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
+	recorder := &effectRecorder{}
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
+
+	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "secure.example.com"},
+			},
+		},
+	}})
+	route := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata": map[string]interface{}{
+			"name":      "secure",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{map[string]interface{}{"name": "edge", "sectionName": "websecure"}},
+			"hostnames":  []interface{}{"secure.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-https", "port": int64(8443)}},
+			}},
+		},
+	}}
+
+	bridge.storeHTTPRoute(route)
+	recorder.events = nil
+	bridge.storeHTTPRoute(route.DeepCopy())
+	if len(recorder.events) != 0 {
+		t.Fatalf("expected no side effects for noop update, got %+v", recorder.events)
 	}
 }
 
