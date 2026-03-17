@@ -42,6 +42,31 @@
 3. 校验 slave 所在节点没有别的进程占用 `53/80/443`
 4. 校验证书存储和数据库配置已经替换成真实值
 
+## 手动删除 PVC
+
+如果测试环境里需要重置 `StatefulSet` 绑定的数据盘，可以直接删对应 PVC。
+
+先看 PVC：
+
+```bash
+kubectl get pvc -A
+```
+
+删除指定 PVC：
+
+```bash
+kubectl delete pvc data-postgres-0 -n default
+```
+
+如果 `StatefulSet` 还在运行，建议先缩容或删除工作负载，再删 PVC：
+
+```bash
+kubectl scale statefulset/postgres --replicas=0 -n default
+kubectl delete pvc data-postgres-0 -n default
+```
+
+如果底层 `PV` 的回收策略不是 `Delete`，删完 PVC 后还需要手动处理对应 `PV`。
+
 ## 存在的问题
 
 - 部署文件仍然偏手工，环境变量较多

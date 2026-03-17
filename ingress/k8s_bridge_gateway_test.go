@@ -226,6 +226,9 @@ func TestK8sBridgeTLS443Overlap(t *testing.T) {
 	if !ok || httpsBackend.Kind != RouteKindHTTPS || httpsBackend.Binding.Name != "svc-https-app" {
 		t.Fatalf("unexpected https backend: %#v ok=%v", httpsBackend, ok)
 	}
+	if httpsBackend.Binding.Protocol != RouteKindHTTP {
+		t.Fatalf("expected https listener backend protocol to stay http, got %#v", httpsBackend.Binding)
+	}
 
 	terminatedBackend, ok := bridge.ResolveTLS("term.example.com")
 	if !ok || terminatedBackend.Kind != RouteKindTLSTerminate || terminatedBackend.Binding.Name != "svc-tls-term" {

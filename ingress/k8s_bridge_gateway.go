@@ -258,6 +258,7 @@ func (b *K8sBridge) materializeL4Locked(kind RouteKind, route *k8sL4RouteState) 
 
 func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, host string, port uint32, backend k8sBackendRef, raw []byte, order int) k8sMaterializedRoute {
 	bindingID := fmt.Sprintf("k8s:%s:%s:%s:%s:%d", kind, namespace, routeName, backend.name, order)
+	backendProtocol := backendProtocolForRouteKind(kind)
 	return k8sMaterializedRoute{
 		kind:     kind,
 		hostname: host,
@@ -273,7 +274,7 @@ func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, h
 			Name:         backend.name,
 			Address:      buildServiceAddress(backend.name, backend.namespace),
 			Port:         backend.port,
-			Protocol:     kind,
+			Protocol:     backendProtocol,
 			RouteVersion: 1,
 			BackendJSON:  string(raw),
 		},
@@ -286,6 +287,15 @@ func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, h
 			BindingID:    bindingID,
 		},
 		routeOrder: order,
+	}
+}
+
+func backendProtocolForRouteKind(kind RouteKind) RouteKind {
+	switch kind {
+	case RouteKindHTTPS:
+		return RouteKindHTTP
+	default:
+		return kind
 	}
 }
 
