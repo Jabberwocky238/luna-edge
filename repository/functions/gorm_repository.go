@@ -9,7 +9,7 @@ import (
 
 // GormRepository 是基于 GORM 的统一仓储实现。
 type GormRepository struct {
-	db  *gorm.DB
+	db *gorm.DB
 }
 
 // NewGormRepository 创建一个基于 GORM 的仓储实现。
@@ -114,7 +114,7 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 			DomainEndpointID: derefString(first.CertDomainID),
 			Hostname:         derefString(first.CertHostname),
 			Revision:         derefUint64(first.CertRevision),
-			Provider:         derefString(first.CertProvider),
+			Provider:         metadata.ACMEProvider(derefString(first.CertProvider)),
 			ChallengeType:    derefChallengeType(first.CertType),
 			ArtifactBucket:   derefString(first.CertBucket),
 			ArtifactPrefix:   derefString(first.CertPrefix),
