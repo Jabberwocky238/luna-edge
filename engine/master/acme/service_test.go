@@ -130,8 +130,8 @@ func TestIssueCertificateDNS01(t *testing.T) {
 		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
 
-	if len(publisher.nodes) != 4 {
-		t.Fatalf("expected 4 publishes, got %d", len(publisher.nodes))
+	if len(publisher.nodes) != 5 {
+		t.Fatalf("expected 5 publishes, got %d", len(publisher.nodes))
 	}
 	if bundles.bundles["app.example.com:1"] == nil {
 		t.Fatal("expected bundle to be stored")
@@ -172,8 +172,8 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	if domain.CertID != cert.ID {
 		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
-	if len(publisher.nodes) != 2 {
-		t.Fatalf("expected 2 publishes, got %d", len(publisher.nodes))
+	if len(publisher.nodes) != 3 {
+		t.Fatalf("expected 3 publishes, got %d", len(publisher.nodes))
 	}
 }
 
@@ -207,7 +207,7 @@ func TestPresentDNS01WritesAndBroadcasts(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected 1 dns record, got %+v", records)
 	}
-	if len(publisher.nodes) != 1 || publisher.nodes[0] != "" {
+	if len(publisher.nodes) != 1 || publisher.nodes[0] != enginepkg.POD_NAME {
 		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
 	}
 }

@@ -126,13 +126,6 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		return nil, err
 	}
 	log.Printf("acme: final cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, cert.ID, cert.Revision)
-	if s.bundles != nil {
-		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
-			log.Printf("acme: store bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
-			return nil, err
-		}
-		log.Printf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
-	}
 
 	domain.CertID = cert.ID
 	if err := s.repo.DomainEndpoints().UpsertResource(ctx, domain); err != nil {
@@ -140,6 +133,13 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		return nil, err
 	}
 	log.Printf("acme: domain cert binding updated hostname=%s cert_id=%s", domain.Hostname, cert.ID)
+	if s.bundles != nil {
+		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
+			log.Printf("acme: store bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
+			return nil, err
+		}
+		log.Printf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
+	}
 	if err := s.publishChange(ctx); err != nil {
 		log.Printf("acme: publish final cert change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err

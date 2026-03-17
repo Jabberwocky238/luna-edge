@@ -33,6 +33,7 @@ func main() {
 	flag.StringVar(&cfg.ACME.DefaultEABHMACKey, "acme-default-eab-hmac-key", envOr("LUNA_ACME_EAB_HMAC_KEY", ""), "default ACME external account binding hmac key")
 
 	flag.StringVar(&cfg.S3.Endpoint, "s3-endpoint", envOr("LUNA_S3_ENDPOINT", ""), "s3 or minio endpoint")
+	flag.StringVar(&cfg.S3.Bucket, "s3-bucket", envOr("LUNA_S3_BUCKET", ""), "s3 bucket")
 	flag.StringVar(&cfg.S3.AccessKeyID, "s3-access-key-id", envOr("LUNA_S3_ACCESS_KEY_ID", ""), "s3 access key id")
 	flag.StringVar(&cfg.S3.SecretAccessKey, "s3-secret-access-key", envOr("LUNA_S3_SECRET_ACCESS_KEY", ""), "s3 secret access key")
 	flag.StringVar(&cfg.S3.SessionToken, "s3-session-token", envOr("LUNA_S3_SESSION_TOKEN", ""), "s3 session token")

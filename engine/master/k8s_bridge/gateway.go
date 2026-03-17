@@ -509,6 +509,13 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 }
 
 func upsertManagedDomain(ctx context.Context, repo repository.Repository, item domainMaterialized) error {
+	existing, err := repo.GetDomainEndpointByID(ctx, item.domain.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	if existing != nil {
+		item.domain.CertID = existing.CertID
+	}
 	if err := repo.DomainEndpoints().UpsertResource(ctx, &item.domain); err != nil {
 		return err
 	}
@@ -546,6 +553,13 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 				if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", route.BackendRefID); err != nil {
 					return err
 				}
+			}
+		}
+	}
+	if existing != nil && existing.BindedServiceID != "" && strings.HasPrefix(existing.BindedServiceID, "k8s:backend:") {
+		if _, keep := nextBackendIDs[existing.BindedServiceID]; !keep {
+			if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", existing.BindedServiceID); err != nil {
+				return err
 			}
 		}
 	}

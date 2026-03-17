@@ -20,7 +20,7 @@ func init() {
 func readEnvTrimmed(key string) string {
 	out := strings.TrimSpace(os.Getenv(key))
 	if out == "" {
-		panic("Critical Error: " + key + " is not set")
+		panic("Critical Error: " + key + " is not set. POD_IP, POD_NAMESPACE and POD_NAME must be set.")
 	}
 	return out
 }

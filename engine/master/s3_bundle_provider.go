@@ -56,6 +56,9 @@ func newMinioClient(cfg S3Config) (*minio.Client, error) {
 	if strings.TrimSpace(cfg.Endpoint) == "" {
 		return nil, fmt.Errorf("s3 endpoint is required")
 	}
+	if strings.TrimSpace(cfg.Bucket) == "" {
+		return nil, fmt.Errorf("s3 bucket is required")
+	}
 	if strings.TrimSpace(cfg.AccessKeyID) == "" {
 		return nil, fmt.Errorf("s3 access key id is required")
 	}
@@ -69,11 +72,13 @@ func newMinioClient(cfg S3Config) (*minio.Client, error) {
 	return minio.New(endpoint, &minio.Options{
 		Creds:     credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, cfg.SessionToken),
 		Secure:    secure,
+		Region:    "earth",
 		Transport: buildMinioTransport(secure, cfg.InsecureSkipVerify),
 	})
 }
 
 func normalizeS3Config(cfg S3Config) S3Config {
+	cfg.Bucket = strings.TrimSpace(cfg.Bucket)
 	if cfg.HTTPTimeout <= 0 {
 		cfg.HTTPTimeout = 10 * time.Second
 	}

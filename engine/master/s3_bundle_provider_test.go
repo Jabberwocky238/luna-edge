@@ -35,14 +35,20 @@ func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 			return
 		}
 		switch {
-		case r.Method == http.MethodGet:
+		case r.Method == http.MethodHead || r.Method == http.MethodGet:
 			body, ok := objects[r.URL.Path]
+			if !ok {
+				body, ok = objects[r.URL.EscapedPath()]
+			}
 			if !ok {
 				http.NotFound(w, r)
 				return
 			}
 			w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
-			_, _ = w.Write(body)
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			if r.Method == http.MethodGet {
+				_, _ = w.Write(body)
+			}
 		case r.Method == http.MethodPut:
 			body := readAllTest(t, r)
 			if strings.EqualFold(r.Header.Get("X-Amz-Content-Sha256"), "STREAMING-AWS4-HMAC-SHA256-PAYLOAD") {
@@ -66,6 +72,7 @@ func TestS3CertificateBundleProviderFetchesAndStoresObjects(t *testing.T) {
 
 	provider, err := NewS3CertificateBundleProvider(repo, S3Config{
 		Endpoint:        server.URL,
+		Bucket:          "lunaedge",
 		AccessKeyID:     "test-access",
 		SecretAccessKey: "test-secret",
 		HTTPTimeout:     time.Second,

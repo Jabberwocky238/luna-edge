@@ -5,6 +5,7 @@ import (
 	"net"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/repository"
@@ -14,8 +15,7 @@ import (
 
 func TestEngineStartReturnsManageListenError(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -39,6 +39,8 @@ func TestEngineStartReturnsManageListenError(t *testing.T) {
 
 func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	factory, err := repository.NewFactory(connection.Config{
 		Driver:      connection.DriverSQLite,
@@ -52,7 +54,6 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 
 	repo := factory.Repository()
 	wrapper := manage.NewWrapper(repo, nil, nil)
-	ctx := context.Background()
 	if err := repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
 		ID:          "domain-1",
 		Hostname:    "app.example.com",
@@ -124,6 +125,8 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 
 func TestNewConfiguresS3BundleProviderWhenEnabled(t *testing.T) {
 	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	eng, err := New(Config{
 		StorageDriver: connection.DriverSQLite,
@@ -131,6 +134,7 @@ func TestNewConfiguresS3BundleProviderWhenEnabled(t *testing.T) {
 		AutoMigrate:   true,
 		S3: S3Config{
 			Endpoint:        "http://127.0.0.1:9000",
+			Bucket:          "lunaedge",
 			AccessKeyID:     "test-access",
 			SecretAccessKey: "test-secret",
 		},
@@ -138,9 +142,13 @@ func TestNewConfiguresS3BundleProviderWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new engine: %v", err)
 	}
-	defer func() { _ = eng.Stop() }()
+	defer func() {
+		<-ctx.Done()
+		_ = eng.Factory.Close()
+	}()
 
 	if eng.Bundles == nil {
 		t.Fatal("expected s3 bundle provider to be configured")
 	}
+	cancel()
 }
