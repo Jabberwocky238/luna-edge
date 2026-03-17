@@ -146,6 +146,10 @@ metadata:
   namespace: luna-edge
 spec:
   ingressClassName: luna-edge
+  tls:
+    - hosts:
+        - nginx-ingress.cluster-1.app238.com
+      secretName: nginx-ingress-cluster-1-app238-com
   rules:
     - host: nginx-ingress.cluster-1.app238.com
       http:
