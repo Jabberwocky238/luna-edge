@@ -4,6 +4,7 @@ package metadata
 type DomainEntryProjection struct {
 	ID               string                `json:"id"`
 	Hostname         string                `json:"hostname"`
+	Deleted          bool                  `json:"deleted"`
 	Cert             *CertificateRevision  `json:"cert"`
 	BackendType      BackendType           `json:"backend_type"`
 	HTTPRoutes       []HTTPRouteProjection `json:"http_routes"`

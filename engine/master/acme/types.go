@@ -49,7 +49,7 @@ type Service struct {
 }
 
 type publisher interface {
-	PublishNode(ctx context.Context, nodeID string) error
+	PublishChangeLog(ctx context.Context, changelog *enginepkg.ChangeNotification) error
 }
 
 type bundleStore interface {

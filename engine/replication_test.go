@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	masterpkg "github.com/jabberwocky238/luna-edge/engine/master"
 	slavepkg "github.com/jabberwocky238/luna-edge/engine/slave"
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
@@ -102,7 +103,7 @@ func TestReplicationWrapperPublishesFinalStateRefresh(t *testing.T) {
 	})
 
 	updateMasterProjection(t, masterEngine.Repo, "svc-updated", 8089, `["2.2.2.2"]`)
-	mustPublishNode(t, masterEngine, "node-1")
+	mustPublishProjection(t, masterEngine)
 
 	waitForCondition(t, func() bool {
 		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
@@ -157,7 +158,7 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 	}
 
 	updateMasterProjection(t, masterEngine.Repo, "svc-restarted", 8087, `["3.3.3.3"]`)
-	mustPublishNode(t, masterEngine, "node-1")
+	mustPublishProjection(t, masterEngine)
 
 	restartedSlave := newReplicationSlave(t, "node-1", lis.Addr().String(), slaveStore)
 	restartCtx, restartCancel := context.WithCancel(context.Background())
@@ -203,6 +204,7 @@ func newReplicationMaster(t *testing.T) (*masterpkg.Engine, net.Listener, func()
 		Repo:    masterRepo,
 		Hub:     masterpkg.NewHub(),
 	}
+	mustPublishProjection(t, masterEngine)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -291,9 +293,29 @@ func waitForCondition(t *testing.T, fn func() bool) {
 	t.Fatal("condition not met before timeout")
 }
 
-func mustPublishNode(t *testing.T, master *masterpkg.Engine, nodeID string) {
+func mustPublishProjection(t *testing.T, master *masterpkg.Engine) {
 	t.Helper()
-	if err := master.PublishNode(context.Background(), nodeID); err != nil {
-		t.Fatalf("publish node %s: %v", nodeID, err)
+	ctx := context.Background()
+	record := &metadata.DNSRecord{}
+	if err := master.Repo.DNSRecords().GetResourceByField(ctx, record, "id", "dns-1"); err != nil {
+		t.Fatalf("load dns record: %v", err)
+	}
+	if err := master.PublishChangeLog(ctx, &enginepkg.ChangeNotification{
+		NodeID:    "test-master",
+		CreatedAt: time.Now().UTC(),
+		DNSRecord: record,
+	}); err != nil {
+		t.Fatalf("publish dns changelog: %v", err)
+	}
+	entry, err := master.Repo.GetDomainEntryProjectionByDomain(ctx, "app.example.com")
+	if err != nil {
+		t.Fatalf("load domain projection: %v", err)
+	}
+	if err := master.PublishChangeLog(ctx, &enginepkg.ChangeNotification{
+		NodeID:      "test-master",
+		CreatedAt:   time.Now().UTC(),
+		DomainEntry: entry,
+	}); err != nil {
+		t.Fatalf("publish domain changelog: %v", err)
 	}
 }

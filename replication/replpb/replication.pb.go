@@ -446,6 +446,7 @@ type DNSRecord struct {
 	ValuesJson    string                 `protobuf:"bytes,6,opt,name=values_json,json=valuesJson,proto3" json:"values_json,omitempty"`
 	RoutingKey    string                 `protobuf:"bytes,7,opt,name=routing_key,json=routingKey,proto3" json:"routing_key,omitempty"`
 	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Deleted       bool                   `protobuf:"varint,9,opt,name=deleted,proto3" json:"deleted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -532,6 +533,13 @@ func (x *DNSRecord) GetRoutingKey() string {
 func (x *DNSRecord) GetEnabled() bool {
 	if x != nil {
 		return x.Enabled
+	}
+	return false
+}
+
+func (x *DNSRecord) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
 	}
 	return false
 }
@@ -828,6 +836,7 @@ type DomainEntryProjection struct {
 	Cert             *CertificateRevision   `protobuf:"bytes,4,opt,name=cert,proto3" json:"cert,omitempty"`
 	HttpRoutes       []*HTTPRouteProjection `protobuf:"bytes,5,rep,name=http_routes,json=httpRoutes,proto3" json:"http_routes,omitempty"`
 	BindedBackendRef *ServiceBackendRef     `protobuf:"bytes,6,opt,name=binded_backend_ref,json=bindedBackendRef,proto3" json:"binded_backend_ref,omitempty"`
+	Deleted          bool                   `protobuf:"varint,7,opt,name=deleted,proto3" json:"deleted,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -904,6 +913,13 @@ func (x *DomainEntryProjection) GetBindedBackendRef() *ServiceBackendRef {
 	return nil
 }
 
+func (x *DomainEntryProjection) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
 var File_replication_proto protoreflect.FileDescriptor
 
 const file_replication_proto_rawDesc = "" +
@@ -940,7 +956,7 @@ const file_replication_proto_rawDesc = "" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\x12\x17\n" +
 	"\atls_crt\x18\x03 \x01(\fR\x06tlsCrt\x12\x17\n" +
 	"\atls_key\x18\x04 \x01(\fR\x06tlsKey\x12#\n" +
-	"\rmetadata_json\x18\x05 \x01(\fR\fmetadataJson\"\xf2\x01\n" +
+	"\rmetadata_json\x18\x05 \x01(\fR\fmetadataJson\"\x8c\x02\n" +
 	"\tDNSRecord\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04fqdn\x18\x02 \x01(\tR\x04fqdn\x12\x1f\n" +
@@ -953,7 +969,8 @@ const file_replication_proto_rawDesc = "" +
 	"valuesJson\x12\x1f\n" +
 	"\vrouting_key\x18\a \x01(\tR\n" +
 	"routingKey\x12\x18\n" +
-	"\aenabled\x18\b \x01(\bR\aenabled\"\x96\x01\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\x12\x18\n" +
+	"\adeleted\x18\t \x01(\bR\adeleted\"\x96\x01\n" +
 	"\x11ServiceBackendRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
 	"\x11service_namespace\x18\x02 \x01(\tR\x10serviceNamespace\x12!\n" +
@@ -983,7 +1000,7 @@ const file_replication_proto_rawDesc = "" +
 	" \x01(\tR\tsha256Key\x129\n" +
 	"\n" +
 	"not_before\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\x127\n" +
-	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\xc5\x02\n" +
+	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\xdf\x02\n" +
 	"\x15DomainEntryProjection\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
@@ -991,7 +1008,8 @@ const file_replication_proto_rawDesc = "" +
 	"\x04cert\x18\x04 \x01(\v2(.luna.replication.v1.CertificateRevisionR\x04cert\x12I\n" +
 	"\vhttp_routes\x18\x05 \x03(\v2(.luna.replication.v1.HTTPRouteProjectionR\n" +
 	"httpRoutes\x12T\n" +
-	"\x12binded_backend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\x10bindedBackendRef2\xc5\x02\n" +
+	"\x12binded_backend_ref\x18\x06 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\x10bindedBackendRef\x12\x18\n" +
+	"\adeleted\x18\a \x01(\bR\adeleted2\xc5\x02\n" +
 	"\x12ReplicationService\x12T\n" +
 	"\vGetSnapshot\x12$.luna.replication.v1.SnapshotRequest\x1a\x1d.luna.replication.v1.Snapshot0\x01\x12`\n" +
 	"\tSubscribe\x12(.luna.replication.v1.SubscriptionRequest\x1a'.luna.replication.v1.ChangeNotification0\x01\x12w\n" +

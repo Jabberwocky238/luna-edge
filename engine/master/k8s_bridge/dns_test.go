@@ -26,7 +26,7 @@ func (f *fakePublisher) PublishSnapshot(_ context.Context, _ *engine.Snapshot) e
 	return nil
 }
 
-func (f *fakePublisher) PublishNode(_ context.Context, _ string) error {
+func (f *fakePublisher) PublishChangeLog(_ context.Context, _ *engine.ChangeNotification) error {
 	f.count++
 	return nil
 }

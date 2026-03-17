@@ -286,6 +286,15 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 		return err
 	}
 	log.Printf("slave: initial catch-up done node_id=%s cursor=%d", nodeID, cursor)
+	if provider, ok := s.Applier.(interface {
+		GetSnapshotRecordID(context.Context) (uint64, error)
+	}); ok {
+		value, err := provider.GetSnapshotRecordID(ctx)
+		if err != nil {
+			return err
+		}
+		cursor = value
+	}
 
 	for {
 		notice, recvErr := stream.Recv()
@@ -301,11 +310,57 @@ func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
 			continue
 		}
 		log.Printf("slave: notice received node_id=%s snapshot_record_id=%d dns=%v domain=%v", nodeID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
-		if err := s.catchUpSnapshots(ctx, nodeID, notice.SnapshotRecordID-1); err != nil {
-			log.Printf("slave: catch-up after notice failed node_id=%s snapshot_record_id=%d err=%v", nodeID, notice.SnapshotRecordID, err)
+		if notice.SnapshotRecordID <= cursor {
+			continue
+		}
+		if notice.SnapshotRecordID > cursor+1 {
+			if err := s.catchUpSnapshots(ctx, nodeID, cursor); err != nil {
+				log.Printf("slave: catch-up after notice failed node_id=%s snapshot_record_id=%d err=%v", nodeID, notice.SnapshotRecordID, err)
+				return err
+			}
+			if provider, ok := s.Applier.(interface {
+				GetSnapshotRecordID(context.Context) (uint64, error)
+			}); ok {
+				value, err := provider.GetSnapshotRecordID(ctx)
+				if err != nil {
+					return err
+				}
+				cursor = value
+			}
+			continue
+		}
+		snapshot := snapshotFromNotice(notice)
+		log.Printf("slave: apply notice snapshot begin node_id=%s snapshot_record_id=%d dns=%d domains=%d", nodeID, snapshot.SnapshotRecordID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
+		if err := s.Applier.ApplySnapshot(ctx, snapshot); err != nil {
+			log.Printf("slave: apply notice snapshot failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
 			return err
 		}
+		log.Printf("slave: apply notice snapshot done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
+		if s.OnSnapshot != nil {
+			if err := s.OnSnapshot(ctx, snapshot); err != nil {
+				log.Printf("slave: on notice snapshot hook failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
+				return err
+			}
+			log.Printf("slave: on notice snapshot hook done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
+		}
+		cursor = notice.SnapshotRecordID
 	}
+}
+
+func snapshotFromNotice(notice *engine.ChangeNotification) *engine.Snapshot {
+	snapshot := &engine.Snapshot{
+		NodeID:           notice.NodeID,
+		CreatedAt:        notice.CreatedAt,
+		SnapshotRecordID: notice.SnapshotRecordID,
+		Last:             true,
+	}
+	if notice.DNSRecord != nil {
+		snapshot.DNSRecords = append(snapshot.DNSRecords, *notice.DNSRecord)
+	}
+	if notice.DomainEntry != nil {
+		snapshot.DomainEntries = append(snapshot.DomainEntries, *notice.DomainEntry)
+	}
+	return snapshot
 }
 
 func (s *streamSubscriber) catchUpSnapshots(ctx context.Context, nodeID string, cursor uint64) error {

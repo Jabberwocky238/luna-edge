@@ -22,11 +22,17 @@ import (
 )
 
 type fakePublisher struct {
-	nodes []string
+	snapshots   []*enginepkg.Snapshot
+	changeLogs  []*enginepkg.ChangeNotification
 }
 
-func (p *fakePublisher) PublishNode(_ context.Context, nodeID string) error {
-	p.nodes = append(p.nodes, nodeID)
+func (p *fakePublisher) PublishSnapshot(_ context.Context, snapshot *enginepkg.Snapshot) error {
+	p.snapshots = append(p.snapshots, snapshot)
+	return nil
+}
+
+func (p *fakePublisher) PublishChangeLog(_ context.Context, changelog *enginepkg.ChangeNotification) error {
+	p.changeLogs = append(p.changeLogs, changelog)
 	return nil
 }
 
@@ -130,8 +136,8 @@ func TestIssueCertificateDNS01(t *testing.T) {
 		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
 
-	if len(publisher.nodes) != 5 {
-		t.Fatalf("expected 5 publishes, got %d", len(publisher.nodes))
+	if len(publisher.changeLogs) != 5 {
+		t.Fatalf("expected 5 publishes, got %d", len(publisher.changeLogs))
 	}
 	if bundles.bundles["app.example.com:1"] == nil {
 		t.Fatal("expected bundle to be stored")
@@ -172,8 +178,8 @@ func TestIssueCertificateHTTP01(t *testing.T) {
 	if domain.CertID != cert.ID {
 		t.Fatalf("expected domain cert id to be updated, got %+v", domain)
 	}
-	if len(publisher.nodes) != 3 {
-		t.Fatalf("expected 3 publishes, got %d", len(publisher.nodes))
+	if len(publisher.changeLogs) != 3 {
+		t.Fatalf("expected 3 publishes, got %d", len(publisher.changeLogs))
 	}
 }
 
@@ -207,8 +213,8 @@ func TestPresentDNS01WritesAndBroadcasts(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected 1 dns record, got %+v", records)
 	}
-	if len(publisher.nodes) != 1 || publisher.nodes[0] != enginepkg.POD_NAME {
-		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
+	if len(publisher.changeLogs) != 1 || publisher.changeLogs[0].DomainEntry == nil {
+		t.Fatalf("unexpected publishes: %+v", publisher.changeLogs)
 	}
 }
 
@@ -239,8 +245,8 @@ func TestPresentHTTP01WritesAndBroadcasts(t *testing.T) {
 	if got := http01.items["token-1"]; got != "token-1.key-auth" {
 		t.Fatalf("unexpected http01 token content: %q", got)
 	}
-	if len(publisher.nodes) != 0 {
-		t.Fatalf("unexpected publishes: %+v", publisher.nodes)
+	if len(publisher.changeLogs) != 0 {
+		t.Fatalf("unexpected publishes: %+v", publisher.changeLogs)
 	}
 }
 

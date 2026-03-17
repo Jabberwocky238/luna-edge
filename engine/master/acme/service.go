@@ -84,7 +84,7 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		return nil, err
 	}
 	log.Printf("acme: placeholder cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, certID, revisionNumber)
-	if err := s.publishChange(ctx); err != nil {
+	if err := s.publishChange(ctx, domain.Hostname); err != nil {
 		log.Printf("acme: publish placeholder cert failed hostname=%s cert_id=%s err=%v", domain.Hostname, certID, err)
 		return nil, err
 	}
@@ -140,12 +140,12 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		}
 		log.Printf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
 	}
-	if err := s.publishChange(ctx); err != nil {
+	if err := s.publishChange(ctx, domain.Hostname); err != nil {
 		log.Printf("acme: publish final cert change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
 	log.Printf("acme: publish final cert change done hostname=%s cert_id=%s", domain.Hostname, cert.ID)
-	if err := s.publishChange(ctx); err != nil {
+	if err := s.publishChange(ctx, domain.Hostname); err != nil {
 		log.Printf("acme: publish post-issue extra change failed hostname=%s cert_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
@@ -201,9 +201,20 @@ func (s *Service) nextRevision(ctx context.Context, domainID string) (uint64, er
 	return cert.Revision + 1, nil
 }
 
-func (s *Service) publishChange(ctx context.Context) error {
-	if s.publish == nil {
+func (s *Service) publishChange(ctx context.Context, hostname string) error {
+	if s == nil || s.publish == nil || s.repo == nil {
 		return nil
 	}
-	return s.publish.PublishNode(ctx, engine.POD_NAME)
+	entry, err := s.repo.GetDomainEntryProjectionByDomain(ctx, hostname)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return nil
+	}
+	return s.publish.PublishChangeLog(ctx, &engine.ChangeNotification{
+		NodeID:      engine.POD_NAME,
+		CreatedAt:   time.Now().UTC(),
+		DomainEntry: entry,
+	})
 }

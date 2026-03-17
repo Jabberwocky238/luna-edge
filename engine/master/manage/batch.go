@@ -3,7 +3,6 @@ package manage
 import (
 	"context"
 
-	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/functions"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -12,8 +11,9 @@ import (
 type batchContextKey struct{}
 
 type effectBatch struct {
-	publish   bool
-	certHosts map[string]struct{}
+	dnsRecords map[string]struct{}
+	domains    map[string]struct{}
+	certHosts  map[string]struct{}
 }
 
 func (w *Wrapper) MarkCertificateDesired(ctx context.Context, hostname string) {
@@ -26,7 +26,11 @@ func (w *Wrapper) Batch(ctx context.Context, fn func(repo repository.Repository)
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	batch := &effectBatch{certHosts: map[string]struct{}{}}
+	batch := &effectBatch{
+		dnsRecords: map[string]struct{}{},
+		domains:    map[string]struct{}{},
+		certHosts:  map[string]struct{}{},
+	}
 	ctx = context.WithValue(ctx, batchContextKey{}, batch)
 	if err := fn(batchRepository{ctx: ctx, repo: w}); err != nil {
 		return err
@@ -38,8 +42,13 @@ func (w *Wrapper) Batch(ctx context.Context, fn func(repo repository.Repository)
 			}
 		}
 	}
-	if batch.publish && w.publisher != nil {
-		if err := w.publisher.PublishNode(ctx, engine.POD_NAME); err != nil {
+	for id := range batch.dnsRecords {
+		if err := publishDNSRecordNow(ctx, w, id); err != nil {
+			return err
+		}
+	}
+	for id := range batch.domains {
+		if err := publishDomainNow(ctx, w, id); err != nil {
 			return err
 		}
 	}

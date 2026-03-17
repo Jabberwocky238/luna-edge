@@ -128,3 +128,75 @@ func TestLocalStoreMetadataL4UsesBindedBackendRef(t *testing.T) {
 		t.Fatalf("apply snapshot: %v", err)
 	}
 }
+
+func TestLocalStoreMetadataDeletesDNSRecord(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new local store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	ctx := context.Background()
+	if err := store.ApplySnapshot(ctx, &enginepkg.Snapshot{
+		DNSRecords: []metadata.DNSRecord{{
+			ID:         "dns-1",
+			FQDN:       "app.example.com",
+			RecordType: metadata.DNSTypeA,
+		}},
+	}); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	if err := store.ApplySnapshot(ctx, &enginepkg.Snapshot{
+		DNSRecords: []metadata.DNSRecord{{
+			Shared: metadata.Shared{Deleted: true},
+			ID:     "dns-1",
+			FQDN:   "app.example.com",
+		}},
+	}); err != nil {
+		t.Fatalf("delete snapshot: %v", err)
+	}
+
+	records, err := store.GetDNSRecordsByHostname(ctx, "app.example.com")
+	if err != nil {
+		t.Fatalf("get dns records by hostname: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("expected dns record deleted, got %+v", records)
+	}
+}
+
+func TestLocalStoreMetadataDeletesDomainEntry(t *testing.T) {
+	t.Parallel()
+
+	store, err := NewLocalStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new local store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	ctx := context.Background()
+	if err := store.ApplySnapshot(ctx, &enginepkg.Snapshot{
+		DomainEntries: []metadata.DomainEntryProjection{{
+			ID:       "domain-1",
+			Hostname: "app.example.com",
+		}},
+	}); err != nil {
+		t.Fatalf("seed snapshot: %v", err)
+	}
+	if err := store.ApplySnapshot(ctx, &enginepkg.Snapshot{
+		DomainEntries: []metadata.DomainEntryProjection{{
+			ID:       "domain-1",
+			Hostname: "app.example.com",
+			Deleted:  true,
+		}},
+	}); err != nil {
+		t.Fatalf("delete snapshot: %v", err)
+	}
+
+	entry, err := store.GetDomainEntryByHostname(ctx, "app.example.com")
+	if err == nil || entry != nil {
+		t.Fatalf("expected domain entry deleted, got entry=%+v err=%v", entry, err)
+	}
+}

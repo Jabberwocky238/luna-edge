@@ -56,6 +56,7 @@ message DNSRecord {
   string values_json = 6;
   string routing_key = 7;
   bool enabled = 8;
+  bool deleted = 9;
 }
 
 message ServiceBackendRef {
@@ -96,6 +97,7 @@ message DomainEntryProjection {
   CertificateRevision cert = 4;
   repeated HTTPRouteProjection http_routes = 5;
   ServiceBackendRef binded_backend_ref = 6;
+  bool deleted = 7;
 }
 
 service ReplicationService {

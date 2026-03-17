@@ -3,7 +3,9 @@ name: Publish Docker Image
 on:
   push:
     branches:
-      - publish
+      - main
+    tags:
+      - 'v*.*.*'
 
 env:
   REGISTRY: ghcr.io
@@ -36,8 +38,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/publish' }}
-            type=sha,format=short
+            type=ref,event=tag,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6

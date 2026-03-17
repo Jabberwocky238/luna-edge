@@ -19,9 +19,9 @@ type effectRecorder struct {
 	events []string
 }
 
-// PublishSnapshot implements [engine.Publisher].
 func (r *effectRecorder) PublishSnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
-	panic("unimplemented")
+	r.events = append(r.events, "snapshot")
+	return nil
 }
 
 func (r *effectRecorder) NotifyCertificateDesired(_ context.Context, fqdn string) error {
@@ -29,7 +29,7 @@ func (r *effectRecorder) NotifyCertificateDesired(_ context.Context, fqdn string
 	return nil
 }
 
-func (r *effectRecorder) PublishNode(_ context.Context, _ string) error {
+func (r *effectRecorder) PublishChangeLog(_ context.Context, _ *engine.ChangeNotification) error {
 	r.events = append(r.events, "publish")
 	return nil
 }

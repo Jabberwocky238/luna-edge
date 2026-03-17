@@ -60,6 +60,15 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	}()
 
 	for i := range snapshot.DNSRecords {
+		if snapshot.DNSRecords[i].Deleted {
+			if execErr := tx.Delete(&dnsRecordCacheRow{}, "id = ?", snapshot.DNSRecords[i].ID).Error; execErr != nil {
+				err = execErr
+				log.Printf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", snapshot.SnapshotRecordID, snapshot.DNSRecords[i].ID, execErr)
+				return err
+			}
+			log.Printf("slave-store: delete dns row snapshot_record_id=%d dns_id=%s", snapshot.SnapshotRecordID, snapshot.DNSRecords[i].ID)
+			continue
+		}
 		payload, marshalErr := json.Marshal(snapshot.DNSRecords[i])
 		if marshalErr != nil {
 			err = marshalErr
@@ -80,6 +89,15 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	}
 
 	for i := range snapshot.DomainEntries {
+		if snapshot.DomainEntries[i].Deleted {
+			if execErr := tx.Delete(&domainEntryCacheRow{}, "hostname = ?", snapshot.DomainEntries[i].Hostname).Error; execErr != nil {
+				err = execErr
+				log.Printf("slave-store: delete domain row failed snapshot_record_id=%d hostname=%s err=%v", snapshot.SnapshotRecordID, snapshot.DomainEntries[i].Hostname, execErr)
+				return err
+			}
+			log.Printf("slave-store: delete domain row snapshot_record_id=%d hostname=%s", snapshot.SnapshotRecordID, snapshot.DomainEntries[i].Hostname)
+			continue
+		}
 		payload, marshalErr := json.Marshal(snapshot.DomainEntries[i])
 		if marshalErr != nil {
 			err = marshalErr

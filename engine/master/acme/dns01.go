@@ -28,7 +28,7 @@ func (p *masterChallengeProvider) presentDNS01(domain, token, keyAuth string) er
 		return err
 	}
 	log.Printf("acme: dns01 persisted hostname=%s token=%s record_id=%s", p.domain.Hostname, token, record.ID)
-	return p.service.publishChange(ctx)
+	return p.service.publishChange(ctx, p.domain.Hostname)
 }
 
 func (p *masterChallengeProvider) cleanupDNS01(_ string, token, _ string) error {
@@ -38,7 +38,7 @@ func (p *masterChallengeProvider) cleanupDNS01(_ string, token, _ string) error 
 		log.Printf("acme: dns01 cleanup failed hostname=%s token=%s err=%v", p.domain.Hostname, token, err)
 		return err
 	}
-	return p.service.publishChange(ctx)
+	return p.service.publishChange(ctx, p.domain.Hostname)
 }
 
 func (p *masterChallengeProvider) dns01RecordID(token string) string {

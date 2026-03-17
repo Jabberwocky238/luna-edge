@@ -62,7 +62,7 @@ type SnapshotApplier interface {
 
 type Publisher interface {
 	PublishSnapshot(ctx context.Context, snapshot *Snapshot) error
-	PublishNode(ctx context.Context, nodeID string) error
+	PublishChangeLog(ctx context.Context, changelog *ChangeNotification) error
 }
 
 type GRPCClient struct {
@@ -210,14 +210,14 @@ func ChangeNotificationFromProto(in *replpb.ChangeNotification) *ChangeNotificat
 }
 
 func dnsRecordToProto(in metadata.DNSRecord) *replpb.DNSRecord {
-	return &replpb.DNSRecord{Id: in.ID, Fqdn: in.FQDN, RecordType: string(in.RecordType), RoutingClass: string(in.RoutingClass), TtlSeconds: in.TTLSeconds, ValuesJson: in.ValuesJSON, RoutingKey: in.RoutingKey, Enabled: in.Enabled}
+	return &replpb.DNSRecord{Id: in.ID, Fqdn: in.FQDN, RecordType: string(in.RecordType), RoutingClass: string(in.RoutingClass), TtlSeconds: in.TTLSeconds, ValuesJson: in.ValuesJSON, RoutingKey: in.RoutingKey, Enabled: in.Enabled, Deleted: in.Deleted}
 }
 
 func dnsRecordFromProto(in *replpb.DNSRecord) metadata.DNSRecord {
 	if in == nil {
 		return metadata.DNSRecord{}
 	}
-	return metadata.DNSRecord{ID: in.GetId(), FQDN: in.GetFqdn(), RecordType: metadata.DNSRecordType(in.GetRecordType()), RoutingClass: metadata.RoutingClass(in.GetRoutingClass()), TTLSeconds: in.GetTtlSeconds(), ValuesJSON: in.GetValuesJson(), RoutingKey: in.GetRoutingKey(), Enabled: in.GetEnabled()}
+	return metadata.DNSRecord{Shared: metadata.Shared{Deleted: in.GetDeleted()}, ID: in.GetId(), FQDN: in.GetFqdn(), RecordType: metadata.DNSRecordType(in.GetRecordType()), RoutingClass: metadata.RoutingClass(in.GetRoutingClass()), TTLSeconds: in.GetTtlSeconds(), ValuesJSON: in.GetValuesJson(), RoutingKey: in.GetRoutingKey(), Enabled: in.GetEnabled()}
 }
 
 func serviceBackendRefToProto(in *metadata.ServiceBackendRef) *replpb.ServiceBackendRef {
@@ -260,7 +260,7 @@ func certificateRevisionFromProto(in *replpb.CertificateRevision) *metadata.Cert
 }
 
 func domainEntryProjectionToProto(in metadata.DomainEntryProjection) *replpb.DomainEntryProjection {
-	out := &replpb.DomainEntryProjection{Id: in.ID, Hostname: in.Hostname, BackendType: string(in.BackendType), Cert: certificateRevisionToProto(in.Cert), BindedBackendRef: serviceBackendRefToProto(in.BindedBackendRef)}
+	out := &replpb.DomainEntryProjection{Id: in.ID, Hostname: in.Hostname, BackendType: string(in.BackendType), Cert: certificateRevisionToProto(in.Cert), BindedBackendRef: serviceBackendRefToProto(in.BindedBackendRef), Deleted: in.Deleted}
 	out.HttpRoutes = make([]*replpb.HTTPRouteProjection, 0, len(in.HTTPRoutes))
 	for i := range in.HTTPRoutes {
 		out.HttpRoutes = append(out.HttpRoutes, httpRouteProjectionToProto(in.HTTPRoutes[i]))
@@ -272,7 +272,7 @@ func domainEntryProjectionFromProto(in *replpb.DomainEntryProjection) metadata.D
 	if in == nil {
 		return metadata.DomainEntryProjection{}
 	}
-	out := metadata.DomainEntryProjection{ID: in.GetId(), Hostname: in.GetHostname(), BackendType: metadata.BackendType(in.GetBackendType()), Cert: certificateRevisionFromProto(in.GetCert()), BindedBackendRef: serviceBackendRefFromProto(in.GetBindedBackendRef())}
+	out := metadata.DomainEntryProjection{ID: in.GetId(), Hostname: in.GetHostname(), Deleted: in.GetDeleted(), BackendType: metadata.BackendType(in.GetBackendType()), Cert: certificateRevisionFromProto(in.GetCert()), BindedBackendRef: serviceBackendRefFromProto(in.GetBindedBackendRef())}
 	out.HTTPRoutes = make([]metadata.HTTPRouteProjection, 0, len(in.GetHttpRoutes()))
 	for _, item := range in.GetHttpRoutes() {
 		out.HTTPRoutes = append(out.HTTPRoutes, httpRouteProjectionFromProto(item))

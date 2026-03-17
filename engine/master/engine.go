@@ -198,17 +198,30 @@ func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapsh
 	return nil
 }
 
-func (e *Engine) PublishNode(ctx context.Context, nodeID string) error {
-	if e == nil || e.Hub == nil {
+func (e *Engine) PublishChangeLog(ctx context.Context, changelog *enginepkg.ChangeNotification) error {
+	if e == nil || e.Hub == nil || changelog == nil {
 		return nil
 	}
-	log.Printf("replication: publish node begin node_id=%s", nodeID)
-	snapshot, err := e.BuildSnapshot(ctx, nodeID)
-	if err != nil {
-		log.Printf("replication: build snapshot failed node_id=%s err=%v", nodeID, err)
-		return err
+	log.Printf("replication: publish changelog begin node_id=%s dns=%v domain=%v", changelog.NodeID, changelog.DNSRecord != nil, changelog.DomainEntry != nil)
+	switch {
+	case changelog.DNSRecord != nil:
+		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, changelog.DNSRecord.ID, metadata.SnapshotActionUpsert)
+		if err != nil {
+			return err
+		}
+		changelog.SnapshotRecordID = recordID
+	case changelog.DomainEntry != nil:
+		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, changelog.DomainEntry.ID, metadata.SnapshotActionUpsert)
+		if err != nil {
+			return err
+		}
+		changelog.SnapshotRecordID = recordID
+	default:
+		return nil
 	}
-	return e.PublishSnapshot(ctx, snapshot)
+	e.Hub.PublishAll(changelog)
+	log.Printf("replication: publish changelog done node_id=%s snapshot_record_id=%d", changelog.NodeID, changelog.SnapshotRecordID)
+	return nil
 }
 
 func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.Snapshot, error) {

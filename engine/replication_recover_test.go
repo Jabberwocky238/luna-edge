@@ -41,8 +41,8 @@ func TestReplicationRecoversAcrossTwoSlaveFailures(t *testing.T) {
 	waitForServiceName(t, slave2Store, "svc-a", 8080)
 
 	updateMasterProjection(t, masterEngine.Repo, "svc-b", 8081, `["2.2.2.2"]`)
-	mustPublishNode(t, masterEngine, "node-1")
-	mustPublishNode(t, masterEngine, "node-2")
+	mustPublishProjection(t, masterEngine)
+	mustPublishProjection(t, masterEngine)
 
 	waitForServiceName(t, slave1Store, "svc-b", 8081)
 	waitForServiceName(t, slave2Store, "svc-b", 8081)
@@ -50,16 +50,16 @@ func TestReplicationRecoversAcrossTwoSlaveFailures(t *testing.T) {
 	run2.stop()
 
 	updateMasterProjection(t, masterEngine.Repo, "svc-c", 8082, `["3.3.3.3"]`)
-	mustPublishNode(t, masterEngine, "node-1")
-	mustPublishNode(t, masterEngine, "node-2")
+	mustPublishProjection(t, masterEngine)
+	mustPublishProjection(t, masterEngine)
 
 	waitForServiceName(t, slave1Store, "svc-c", 8082)
 
 	run1.stop()
 
 	updateMasterProjection(t, masterEngine.Repo, "svc-d", 8083, `["4.4.4.4"]`)
-	mustPublishNode(t, masterEngine, "node-1")
-	mustPublishNode(t, masterEngine, "node-2")
+	mustPublishProjection(t, masterEngine)
+	mustPublishProjection(t, masterEngine)
 
 	run1 = startReplicationSlave(t, newReplicationSlave(t, "node-1", lis.Addr().String(), slave1Store))
 	run2 = startReplicationSlave(t, newReplicationSlave(t, "node-2", lis.Addr().String(), slave2Store))
@@ -120,6 +120,7 @@ func newReplicationMasterForRecover(t *testing.T, serviceName string, port uint3
 		Repo:    masterRepo,
 		Hub:     masterpkg.NewHub(),
 	}
+	mustPublishProjection(t, masterEngine)
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

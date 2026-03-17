@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/functions"
@@ -294,7 +295,7 @@ func (w *Wrapper) upsertServiceBackendRef(ctx context.Context, backend *metadata
 	if err := w.raw.ServiceBindingRefs().UpsertResource(ctx, backend); err != nil {
 		return err
 	}
-	return publishAll(ctx, w)
+	return nil
 }
 
 func (w *Wrapper) deleteServiceBackendRef(ctx context.Context, model *metadata.ServiceBackendRef, field string, value any) error {
@@ -305,7 +306,7 @@ func (w *Wrapper) deleteServiceBackendRef(ctx context.Context, model *metadata.S
 	if err := w.raw.ServiceBindingRefs().DeleteResourceByField(ctx, model, field, value); err != nil {
 		return err
 	}
-	return publishAllModel(ctx, w, current)
+	return nil
 }
 
 func (w *Wrapper) upsertHTTPRoute(ctx context.Context, route *metadata.HTTPRoute) error {
@@ -341,7 +342,21 @@ func (w *Wrapper) deleteDNSRecord(ctx context.Context, model *metadata.DNSRecord
 	if err := w.raw.DNSRecords().DeleteResourceByField(ctx, model, field, value); err != nil {
 		return err
 	}
-	return publishAllModel(ctx, w, current)
+	if w.publisher == nil {
+		return nil
+	}
+	return w.publisher.PublishChangeLog(ctx, &enginepkg.ChangeNotification{
+		NodeID:    enginepkg.POD_NAME,
+		CreatedAt: time.Now().UTC(),
+		DNSRecord: &metadata.DNSRecord{
+			Shared: metadata.Shared{
+				Deleted: true,
+			},
+			ID:         current.ID,
+			FQDN:       current.FQDN,
+			RecordType: current.RecordType,
+		},
+	})
 }
 
 func (w *Wrapper) upsertCertificateRevision(ctx context.Context, cert *metadata.CertificateRevision) error {
