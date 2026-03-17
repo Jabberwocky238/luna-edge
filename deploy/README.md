@@ -218,12 +218,7 @@ spec:
 
 当前部署文件已经把代码里支持的主要 DNS 环境变量都显式暴露在 `slave` 的 `ConfigMap` 里：
 
-- `LUNA_DNS_LISTEN`
-- `LUNA_DNS_FORWARD_ENABLED`
-- `LUNA_DNS_FORWARD_SERVERS`
-- `LUNA_DNS_FORWARD_TIMEOUT`
-- `LUNA_DNS_GEOIP_ENABLED`
-- `LUNA_DNS_GEOIP_MMDB_PATH`
+kubectl delete pvc data-postgres-0 -n default 
 
 默认值是：
 

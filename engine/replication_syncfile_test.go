@@ -92,7 +92,6 @@ func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 	defer func() { _ = slaveStore.Close() }()
 
 	slaveEngine, err := slavepkg.New(slavepkg.Config{
-		NodeID:            "node-1",
 		MasterAddress:     lis.Addr().String(),
 		SubscribeSnapshot: true,
 		RetryMinBackoff:   10 * time.Millisecond,

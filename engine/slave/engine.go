@@ -21,7 +21,6 @@ import (
 
 // Config 定义 slave 模式核心配置。
 type Config struct {
-	NodeID            string
 	MasterAddress     string
 	SubscribeSnapshot bool
 	RetryMinBackoff   time.Duration
@@ -109,10 +108,6 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 		Client:  client,
 		Applier: applier,
 	}
-	if cfg.NodeID == "" {
-		_ = conn.Close()
-		return nil, fmt.Errorf("node id is required")
-	}
 	eng := &Engine{
 		Config:     cfg,
 		CacheRoot:  cacheRoot,
@@ -160,12 +155,12 @@ func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotAppl
 			return nil, err
 		}
 		ing, err := ingress.NewEngine(ingress.EngineOptions{
-			HTTPListenAddr:  cfg.IngressHTTPAddr,
-			TLSListenAddr:   cfg.IngressTLSAddr,
-			K8sEnabled:      cfg.IngressK8sEnabled,
-			K8sNamespace:    cfg.IngressK8sNS,
-			K8sIngressClass: cfg.IngressK8sClass,
-			LRUSize:         cfg.IngressLRUSize,
+			HTTPListenAddr:       cfg.IngressHTTPAddr,
+			TLSListenAddr:        cfg.IngressTLSAddr,
+			K8sEnabled:           cfg.IngressK8sEnabled,
+			K8sNamespace:         cfg.IngressK8sNS,
+			K8sIngressClass:      cfg.IngressK8sClass,
+			LRUSize:              cfg.IngressLRUSize,
 			MasterHTTP01ProxyURL: cfg.MasterManageURL,
 		}, resolver)
 		if err != nil {
@@ -187,13 +182,13 @@ func (e *Engine) Subscribe(ctx context.Context) error {
 	if e.Subscriber == nil {
 		return fmt.Errorf("subscriber is not configured")
 	}
-	log.Printf("slave: subscribe begin node_id=%s master=%s", e.Config.NodeID, e.Config.MasterAddress)
-	return e.Subscriber.Subscribe(ctx, e.Config.NodeID)
+	log.Printf("slave: subscribe begin node_id=%s master=%s", engine.POD_NAME, e.Config.MasterAddress)
+	return e.Subscriber.Subscribe(ctx, engine.POD_NAME)
 }
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
-	log.Printf("slave: start begin node_id=%s master=%s", e.Config.NodeID, e.Config.MasterAddress)
+	log.Printf("slave: start begin node_id=%s master=%s", engine.POD_NAME, e.Config.MasterAddress)
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
 			return err
@@ -224,15 +219,15 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	backoff := e.Config.RetryMinBackoff
 	for {
-		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", e.Config.NodeID, backoff)
+		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", engine.POD_NAME, backoff)
 		err := e.Subscribe(ctx)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
-			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.Config.NodeID, err, ctx.Err())
+			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", engine.POD_NAME, err, ctx.Err())
 			return err
 		}
 		e.ready.Store(false)
-		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", e.Config.NodeID, err, backoff)
+		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", engine.POD_NAME, err, backoff)
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

@@ -19,7 +19,7 @@ import (
 func main() {
 	var cfg slave.Config
 	var cacheRoot string
-	flag.StringVar(&cfg.NodeID, "node-id", envOr("LUNA_NODE_ID", ""), "slave node id")
+	flag.StringVar(&cfg.NodeID, "node-id", envOr("LUNA_NODE_ID", enginepkg.POD_NAME), "slave node id")
 	flag.StringVar(&cfg.MasterAddress, "master-address", envOr("LUNA_MASTER_ADDRESS", "luna-master.luna-edge.svc.cluster.local:50051"), "master replication address")
 	flag.StringVar(&cfg.MasterManageURL, "master-manage-url", envOr("LUNA_MASTER_MANAGE_URL", "http://luna-master.luna-edge.svc.cluster.local:8080"), "master manage http base url")
 	flag.BoolVar(&cfg.SubscribeSnapshot, "subscribe-snapshot", envOr("LUNA_SUBSCRIBE_SNAPSHOT", "1") != "0", "request initial snapshot")

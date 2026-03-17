@@ -191,10 +191,10 @@ spec:
             - configMapRef:
                 name: luna-edge-slave-config
           env:
-            - name: LUNA_NODE_ID
+            - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: spec.nodeName
+                  fieldPath: metadata.name
           ports:
             - name: dns-udp
               containerPort: 53

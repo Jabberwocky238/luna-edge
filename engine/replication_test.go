@@ -70,7 +70,6 @@ func newReplicationLocalStore(t *testing.T, name string) *slavepkg.LocalStore {
 func newReplicationSlave(t *testing.T, nodeID, masterAddress string, store *slavepkg.LocalStore) *slavepkg.Engine {
 	t.Helper()
 	engine, err := slavepkg.New(slavepkg.Config{
-		NodeID:            nodeID,
 		MasterAddress:     masterAddress,
 		SubscribeSnapshot: true,
 		RetryMinBackoff:   10 * time.Millisecond,

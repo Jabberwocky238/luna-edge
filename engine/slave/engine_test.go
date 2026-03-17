@@ -85,7 +85,6 @@ func TestEngineStartAttemptsSubscribe(t *testing.T) {
 	sub := &stubSubscriber{}
 	eng := &Engine{
 		Config: Config{
-			NodeID:            "node-1",
 			SubscribeSnapshot: true,
 			RetryMinBackoff:   time.Millisecond,
 			RetryMaxBackoff:   time.Millisecond,
