@@ -32,6 +32,48 @@ stringData:
   LUNA_S3_SESSION_TOKEN: ""
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: luna-edge-master
+  namespace: luna-edge
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: luna-edge-master
+  namespace: luna-edge
+rules:
+  - apiGroups: ["luna-edge.io"]
+    resources: ["dnsdomainrecords"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources:
+      - gateways
+      - httproutes
+      - grpcroutes
+      - tlsroutes
+      - tcproutes
+      - udproutes
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: luna-edge-master
+  namespace: luna-edge
+subjects:
+  - kind: ServiceAccount
+    name: luna-edge-master
+    namespace: luna-edge
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: luna-edge-master
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: luna-master
@@ -62,6 +104,7 @@ spec:
       labels:
         app: luna-master
     spec:
+      serviceAccountName: luna-edge-master
       containers:
         - name: master
           image: ghcr.io/jabberwocky238/luna-edge:latest
