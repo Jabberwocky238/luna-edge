@@ -344,6 +344,11 @@ func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMater
 			}
 		}
 	}
+	for host, item := range out {
+		item.backends = dedupeServiceBackendRefs(item.backends)
+		item.routes = dedupeHTTPRoutes(item.routes)
+		out[host] = item
+	}
 	return out
 }
 
@@ -661,4 +666,36 @@ func normalizePath(path string) string {
 		return "/"
 	}
 	return path
+}
+
+func dedupeServiceBackendRefs(in []metadata.ServiceBackendRef) []metadata.ServiceBackendRef {
+	if len(in) < 2 {
+		return in
+	}
+	out := make([]metadata.ServiceBackendRef, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for i := range in {
+		if _, ok := seen[in[i].ID]; ok {
+			continue
+		}
+		seen[in[i].ID] = struct{}{}
+		out = append(out, in[i])
+	}
+	return out
+}
+
+func dedupeHTTPRoutes(in []metadata.HTTPRoute) []metadata.HTTPRoute {
+	if len(in) < 2 {
+		return in
+	}
+	out := make([]metadata.HTTPRoute, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for i := range in {
+		if _, ok := seen[in[i].ID]; ok {
+			continue
+		}
+		seen[in[i].ID] = struct{}{}
+		out = append(out, in[i])
+	}
+	return out
 }

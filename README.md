@@ -2,81 +2,68 @@
 
 [中文说明](./README.zh-CN.md)
 
-Luna Edge is a unified edge control plane for DNS, HTTP ingress, TLS, certificate issuance, and certificate distribution.
+Luna Edge is a cloud-native multi-cluster edge convergence gateway.
 
-## Current Architecture
+It unifies DNS, HTTP ingress, TLS termination, certificate issuance, certificate distribution, and Kubernetes materialization into one control plane.
 
-- `master` is the single writer.
-- `master` stores desired state in SQLite or Postgres.
-- `master` watches Kubernetes resources through `engine/master/k8s_bridge`.
-- `master` materializes them into repository rows, triggers certificate side effects, then publishes replication changelogs.
-- `slave` keeps a local SQLite cache plus certificate files on disk.
-- `slave` serves DNS and ingress only from local state.
+It supports Kubernetes `Ingress` and the 2026 experimental Gateway API surface, and because its repository model is deeply fused with Kubernetes materialization, it can provide a Quicksilver-like effect: control-plane desired state is written once, materialized once, and then streamed to edge nodes as small changelogs instead of rebuilding the whole world every time.
 
-## Replication Model
+The master can be driven from both sides:
 
-Replication is now split into two explicit paths:
+- Kubernetes resources can control master through the built-in bridge
+- manage endpoints can control master directly through the built-in `lnctl` client
 
-- `Subscribe` is the primary realtime path.
-  It delivers one `ChangeNotification` per materialized DNS or domain change.
-- `GetSnapshot` is the recovery path.
-  It is used for initial catch-up or when a slave detects a gap in `snapshot_record_id`.
+## Positioning
 
-Normal steady-state updates should not abuse full snapshot rebuilds.
+- cloud-native edge gateway
+- multi-cluster control and edge distribution
+- Kubernetes-native materialization model
+- Kubernetes can directly control master through bridge watchers
+- Gateway API experimental support for 2026 Kubernetes
+- Quicksilver-like incremental propagation based on repository + replication
+- fully controllable manage endpoint through `lnctl`
 
-Current payload model:
+## Architecture
 
-- `DNSRecord` carries `deleted`
-- `DomainEntryProjection` carries `deleted`
-- slave applies these changes directly to local cache rows
-
-## Certificate Flow
-
-- `master` decides whether a hostname needs a certificate through the cert reconciler.
-- ACME http-01 challenge data is served directly by master HTTP endpoints.
-- Issued certificate metadata is stored in the main repository.
-- Actual bundle bytes are fetched by slaves through replication RPC `FetchCertificateBundle`.
-- slave writes `tls.crt`, `tls.key`, and `metadata.json` under its local certificate root.
-
-## Kubernetes Flow
-
-`master` owns Kubernetes listening.
-
-- `engine/master/k8s_bridge/dns.go` watches DNS CRDs and writes `DNSRecord`
-- `engine/master/k8s_bridge/ingress.go` watches `Ingress` and writes `DomainEndpoint`, `HTTPRoute`, and `ServiceBackendRef`
-- `engine/master/k8s_bridge/gateway*.go` watches Gateway API resources and writes the same materialized model
-
-The write order is:
-
-1. write master database
-2. trigger side effects such as certificate reconciliation
-3. publish replication changelog
-
-## Main Directories
-
-- `cmd/master`: master binary entrypoint
-- `cmd/slave`: slave binary entrypoint
-- `cmd/lnctl`: CLI wrapper around the manage API
-- `engine/master`: control-plane runtime
-- `engine/slave`: slave runtime and local store
-- `dns`: authoritative DNS runtime
-- `ingress`: HTTP/TLS runtime
-- `replication`: protobuf and generated RPC bindings
-- `repository`: storage interfaces, models, and Gorm implementations
-- `deploy`: Kubernetes manifests
-
-## Status Notes
-
-- architecture is in active migration
-- compatibility is not the priority
-- read the module `README.md` files for the current responsibilities and known issues
-
+```text
+                    +-----------------------------+
+     Kubernetes Ingress / Gateway API              lnctl / manage API
+                    |                                   |
+                    +-----------------+-----------------+
+                                      |
+                                      v
+                    +-----------------------------+
+                    |           master            |
+                    |  k8s bridge + repository    |
+                    |  cert reconcile + ACME      |
+                    |  changelog publisher        |
+                    +-------------+---------------+
+                                  |
+                     Subscribe / GetSnapshot / FetchCertificateBundle
+                                  |
+                +-----------------+-----------------+
+                |                                   |
+                v                                   v
+      +---------------------+             +---------------------+
+      |       slave A       |             |       slave B       |
+      | local sqlite cache  |             | local sqlite cache  |
+      | cert files on disk  |             | cert files on disk  |
+      | DNS + ingress serve |             | DNS + ingress serve |
+      +---------------------+             +---------------------+
+```
 ## Development
 
 ```bash
-go test ./...
+bash <(curl -fsSL https://raw.githubusercontent.com/jabberwocky238/luna-edge/main/deploy/prepare.sh)
+
+bash run.sh up master
+bash run.sh up slave
+
+# for test
+bash run.sh up ngg # nginx k8s gateway api
+bash run.sh up ngi # nginx k8s ingress
 ```
 
 ## License
 
-MIT. See [LICENSE](./LICENSE).
+See [LICENSE](./LICENSE).

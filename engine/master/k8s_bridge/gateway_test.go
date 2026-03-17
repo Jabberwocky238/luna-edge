@@ -326,6 +326,43 @@ func TestGatewayBridgeMergesWebAndWebsecureIntoHTTPBoth(t *testing.T) {
 	if len(recorder.events) != 2 || recorder.events[0] != "cert:app.example.com" || recorder.events[1] != "publish" {
 		t.Fatalf("unexpected side effects: %+v", recorder.events)
 	}
+
+	recorder.events = nil
+	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "Gateway",
+		"metadata": map[string]interface{}{
+			"name":      "edge",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"listeners": []interface{}{
+				map[string]interface{}{"name": "web", "protocol": "HTTP", "port": int64(80), "hostname": "app.example.com"},
+				map[string]interface{}{"name": "websecure", "protocol": "HTTPS", "port": int64(443), "hostname": "app.example.com"},
+			},
+		},
+	}})
+	bridge.storeHTTPRoute(&unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "gateway.networking.k8s.io/v1",
+		"kind":       "HTTPRoute",
+		"metadata": map[string]interface{}{
+			"name":      "app",
+			"namespace": "default",
+		},
+		"spec": map[string]interface{}{
+			"parentRefs": []interface{}{
+				map[string]interface{}{"name": "edge", "sectionName": "web"},
+				map[string]interface{}{"name": "edge", "sectionName": "websecure"},
+			},
+			"hostnames": []interface{}{"app.example.com"},
+			"rules": []interface{}{map[string]interface{}{
+				"backendRefs": []interface{}{map[string]interface{}{"name": "svc-app", "port": int64(8080)}},
+			}},
+		},
+	}})
+	if len(recorder.events) != 0 {
+		t.Fatalf("expected no side effects after identical resync, got %+v", recorder.events)
+	}
 }
 
 func TestGatewayBridgeNoopUpdateDoesNotBroadcast(t *testing.T) {
