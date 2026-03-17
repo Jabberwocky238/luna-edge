@@ -141,7 +141,7 @@ func (b *K8sBridge) rebuildGatewayRoutesLocked() {
 		b.materializeGRPCFamilyLocked(route.namespace, route.name, route.hostnames, route.parentRefs, route.rules)
 	}
 	for _, route := range b.tlsRoutes {
-		b.materializeL4Locked(metadata.ServiceBindingRouteKindTLSRoute, route)
+		b.materializeL4Locked(metadata.ServiceBindingRouteKindTLSTerminate, route)
 	}
 	for _, route := range b.tcpRoutes {
 		b.materializeL4Locked(metadata.ServiceBindingRouteKindTCP, route)
@@ -225,11 +225,11 @@ func (b *K8sBridge) materializeL4Locked(kind metadata.ServiceBindingRouteKind, r
 				routeJSON, _ := json.Marshal(route.backend)
 				materialized := b.newMaterializedRoute(kind, route.namespace, route.name, host, listener.port, route.backend, routeJSON, 0)
 				materialized.listener = listener.name
-				if kind == metadata.ServiceBindingRouteKindTLSRoute && strings.EqualFold(listener.tlsMode, "Passthrough") {
+				if kind == metadata.ServiceBindingRouteKindTLSTerminate && strings.EqualFold(listener.tlsMode, "Passthrough") {
 					materialized.kind = metadata.ServiceBindingRouteKindTLSPassthrough
 				}
 				switch materialized.kind {
-				case metadata.ServiceBindingRouteKindTLSRoute, metadata.ServiceBindingRouteKindTLSPassthrough:
+				case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
 					if host != "" {
 						b.tlsResolved[host] = append(b.tlsResolved[host], materialized)
 					}
@@ -284,8 +284,8 @@ func listenerAllowsKind(listener k8sGatewayListenerState, kind metadata.ServiceB
 		return listener.routeKind == metadata.ServiceBindingRouteKindHTTPS
 	case metadata.ServiceBindingRouteKindGRPC:
 		return listener.routeKind == metadata.ServiceBindingRouteKindGRPC || listener.routeKind == metadata.ServiceBindingRouteKindHTTP
-	case metadata.ServiceBindingRouteKindTLSRoute, metadata.ServiceBindingRouteKindTLSPassthrough:
-		return listener.routeKind == metadata.ServiceBindingRouteKindTLSRoute
+	case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
+		return listener.routeKind == metadata.ServiceBindingRouteKindTLSTerminate
 	case metadata.ServiceBindingRouteKindTCP:
 		return listener.routeKind == metadata.ServiceBindingRouteKindTCP
 	case metadata.ServiceBindingRouteKindUDP:
@@ -474,7 +474,7 @@ func routeKindFromListener(name, protocol, tlsMode string) metadata.ServiceBindi
 	case "GRPC", "HTTPS+GRPC":
 		return metadata.ServiceBindingRouteKindGRPC
 	case "TLS":
-		return metadata.ServiceBindingRouteKindTLSRoute
+		return metadata.ServiceBindingRouteKindTLSTerminate
 	case "TCP":
 		return metadata.ServiceBindingRouteKindTCP
 	case "UDP":

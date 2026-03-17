@@ -9,17 +9,11 @@ import (
 // AllModels 返回所有需要参与迁移的元数据模型。
 func AllModels() []interface{} {
 	return []interface{}{
-		&Zone{},
 		&DomainEndpoint{},
-		&DomainEndpointStatus{},
-		&ServiceBinding{},
+		&ServiceBackendRef{},
 		&HTTPRoute{},
 		&DNSRecord{},
 		&CertificateRevision{},
-		&ACMEOrder{},
-		&ACMEChallenge{},
-		&Node{},
-		&Attachment{},
 	}
 }
 
@@ -29,10 +23,8 @@ func AutoMigrate(db *gorm.DB) error {
 }
 
 type Shared struct {
-	// 根据engine替我增长的epoch标志着snapshot大版本
-	SyncEpoch int64 `json:"sync_epoch" gorm:"column:sync_epoch;not null"`
-	// 根据engine替我增长的index标志着snapshot小版本，1000为一个周期
-	SyncIndex int64 `json:"sync_index" gorm:"column:sync_index;not null"`
+	// 逻辑删除位
+	Deleted bool `json:"deleted" gorm:"column:deleted;not null;default:false"`
 	// CreatedAt 是节点记录创建时间。
 	CreatedAt time.Time `json:"created_at" gorm:"column:created_at;not null;autoCreateTime"`
 	// UpdatedAt 是节点记录最后一次更新时间。

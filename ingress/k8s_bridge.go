@@ -196,7 +196,7 @@ func (b *K8sBridge) ResolveHTTPS(host, requestPath string) (*K8sResolvedBackend,
 }
 
 func (b *K8sBridge) ResolveTLS(serverName string) (*K8sResolvedBackend, bool) {
-	return b.resolveHostPath(metadata.ServiceBindingRouteKindTLSRoute, serverName, "/")
+	return b.resolveHostPath(metadata.ServiceBindingRouteKindTLSTerminate, serverName, "/")
 }
 
 func (b *K8sBridge) ResolveTLSPassthrough(serverName string) (*K8sResolvedBackend, bool) {
@@ -229,7 +229,7 @@ func (b *K8sBridge) resolveHostPath(kind metadata.ServiceBindingRouteKind, host,
 		routes = b.httpsResolved[host]
 	case metadata.ServiceBindingRouteKindGRPC:
 		routes = b.grpcResolved[host]
-	case metadata.ServiceBindingRouteKindTLSRoute, metadata.ServiceBindingRouteKindTLSPassthrough:
+	case metadata.ServiceBindingRouteKindTLSTerminate, metadata.ServiceBindingRouteKindTLSPassthrough:
 		routes = b.tlsResolved[host]
 	default:
 		return nil, false
