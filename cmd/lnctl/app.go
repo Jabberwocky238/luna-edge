@@ -51,7 +51,7 @@ func parseGlobalConfig(args []string) globalConfig {
 	fs.SetOutput(ioDiscard{})
 
 	cfg := globalConfig{}
-	fs.StringVar(&cfg.baseURL, "master", envOr("LUNA_MASTER_MANAGE_URL", "http://127.0.0.1:8080"), "master manage base url")
+	fs.StringVar(&cfg.baseURL, "master", envOr("LUNA_MASTER_MANAGE_URL", "http://luna-master.luna-edge.svc.cluster.local:8080"), "master manage base url")
 	fs.BoolVar(&cfg.help, "h", false, "show help")
 	fs.BoolVar(&cfg.help, "help", false, "show help")
 	if err := fs.Parse(args); err != nil {
