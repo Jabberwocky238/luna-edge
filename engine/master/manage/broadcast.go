@@ -25,6 +25,10 @@ func publishDeleteForDomain(ctx context.Context, w *Wrapper, _ string, _ any, _ 
 }
 
 func publishAll(ctx context.Context, w *Wrapper) error {
+	if batch := batchFromContext(ctx); batch != nil {
+		batch.publish = true
+		return nil
+	}
 	if w.publisher == nil {
 		return nil
 	}

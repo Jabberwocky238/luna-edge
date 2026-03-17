@@ -28,20 +28,19 @@ var dnsDomainRecordGVR = schema.GroupVersionResource{
 	Resource: "dnsdomainrecords",
 }
 
-type publisher interface {
-	PublishNode(ctx context.Context, nodeID string) error
-}
-
 type DNSBridge struct {
 	namespace     string
 	dynamicClient dynamic.Interface
 	factory       dynamicinformer.DynamicSharedInformerFactory
 	stopCh        chan struct{}
 	repo          repository.Repository
-	publisher     publisher
 
 	mu      sync.RWMutex
 	records map[string]*dnsDomainRecordState
+}
+
+type batchRepository interface {
+	Batch(ctx context.Context, fn func(repo repository.Repository) error) error
 }
 
 type dnsDomainRecordState struct {
@@ -49,7 +48,7 @@ type dnsDomainRecordState struct {
 	records []metadata.DNSRecord
 }
 
-func NewDNSBridge(namespace string, repo repository.Repository, pub publisher) (*DNSBridge, error) {
+func NewDNSBridge(namespace string, repo repository.Repository) (*DNSBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -65,10 +64,10 @@ func NewDNSBridge(namespace string, repo repository.Repository, pub publisher) (
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic k8s client: %w", err)
 	}
-	return NewDNSBridgeWithClient(namespace, client, repo, pub), nil
+	return NewDNSBridgeWithClient(namespace, client, repo), nil
 }
 
-func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository, pub publisher) *DNSBridge {
+func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository) *DNSBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -80,7 +79,6 @@ func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, r
 		dynamicClient: dynamicClient,
 		stopCh:        make(chan struct{}),
 		repo:          repo,
-		publisher:     pub,
 		records:       make(map[string]*dnsDomainRecordState),
 	}
 	bridge.ensureInformer()
@@ -175,8 +173,17 @@ func (b *DNSBridge) syncRecords(ctx context.Context, records []metadata.DNSRecor
 	if b == nil || b.repo == nil {
 		return nil
 	}
+	if batcher, ok := b.repo.(batchRepository); ok {
+		return batcher.Batch(ctx, func(repo repository.Repository) error {
+			return syncDNSRecords(ctx, repo, records)
+		})
+	}
+	return syncDNSRecords(ctx, b.repo, records)
+}
+
+func syncDNSRecords(ctx context.Context, repo repository.Repository, records []metadata.DNSRecord) error {
 	var existing []metadata.DNSRecord
-	if err := b.repo.DNSRecords().ListResource(ctx, &existing, "id asc"); err != nil {
+	if err := repo.DNSRecords().ListResource(ctx, &existing, "id asc"); err != nil {
 		return err
 	}
 	existingByID := make(map[string]metadata.DNSRecord, len(existing))
@@ -188,7 +195,7 @@ func (b *DNSBridge) syncRecords(ctx context.Context, records []metadata.DNSRecor
 	nextIDs := make(map[string]struct{}, len(records))
 	for i := range records {
 		nextIDs[records[i].ID] = struct{}{}
-		if err := b.repo.DNSRecords().UpsertResource(ctx, &records[i]); err != nil {
+		if err := repo.DNSRecords().UpsertResource(ctx, &records[i]); err != nil {
 			return err
 		}
 	}
@@ -196,12 +203,9 @@ func (b *DNSBridge) syncRecords(ctx context.Context, records []metadata.DNSRecor
 		if _, ok := nextIDs[id]; ok {
 			continue
 		}
-		if err := b.repo.DNSRecords().DeleteResourceByField(ctx, &metadata.DNSRecord{}, "id", id); err != nil {
+		if err := repo.DNSRecords().DeleteResourceByField(ctx, &metadata.DNSRecord{}, "id", id); err != nil {
 			return err
 		}
-	}
-	if b.publisher != nil {
-		return b.publisher.PublishNode(ctx, "")
 	}
 	return nil
 }

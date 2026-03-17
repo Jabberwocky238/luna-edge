@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) DNSRecords() GenericRepository[*metadata.DNSRecord] {
-	return &gormGenericRepository[*metadata.DNSRecord]{db: r.db}
+	return &GormGenericRepository[*metadata.DNSRecord]{db: r.db}
 }
 
 func (r *GormRepository) ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error {

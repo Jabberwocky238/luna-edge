@@ -48,6 +48,7 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 	defer func() { _ = factory.Close() }()
 
 	repo := factory.Repository()
+	wrapper := manage.NewWrapper(repo, nil, nil)
 	ctx := context.Background()
 	if err := repo.DomainEndpoints().UpsertResource(ctx, &metadata.DomainEndpoint{
 		ID:          "domain-1",
@@ -96,7 +97,7 @@ func TestBuildSnapshotIncludesDNSRecordsAndDomainEntries(t *testing.T) {
 	}
 	eng := &Engine{
 		Factory: factory,
-		Repo:    repo,
+		Repo:    wrapper,
 		Hub:     NewHub(),
 	}
 

@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) ServiceBindingRefs() GenericRepository[*metadata.ServiceBackendRef] {
-	return &gormGenericRepository[*metadata.ServiceBackendRef]{db: r.db}
+	return &GormGenericRepository[*metadata.ServiceBackendRef]{db: r.db}
 }
 
 func (r *GormRepository) GetServiceBindingByDomainID(ctx context.Context, domainID string) (*metadata.ServiceBackendRef, error) {

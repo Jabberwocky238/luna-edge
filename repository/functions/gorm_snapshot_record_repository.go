@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) SnapshotRecords() GenericRepository[*metadata.SnapshotRecord] {
-	return &gormGenericRepository[*metadata.SnapshotRecord]{db: r.db}
+	return &GormGenericRepository[*metadata.SnapshotRecord]{db: r.db}
 }
 
 func (r *GormRepository) AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error {

@@ -26,12 +26,11 @@ type IngressBridge struct {
 	factory      informers.SharedInformerFactory
 	stopCh       chan struct{}
 	repo         repository.Repository
-	publisher    publisher
 
 	ingresses map[string]*networkingv1.Ingress
 }
 
-func NewIngressBridge(namespace, ingressClass string, repo repository.Repository, pub publisher) (*IngressBridge, error) {
+func NewIngressBridge(namespace, ingressClass string, repo repository.Repository) (*IngressBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -46,10 +45,10 @@ func NewIngressBridge(namespace, ingressClass string, repo repository.Repository
 	if err != nil {
 		return nil, fmt.Errorf("create k8s client: %w", err)
 	}
-	return NewIngressBridgeWithClient(namespace, ingressClass, client, repo, pub), nil
+	return NewIngressBridgeWithClient(namespace, ingressClass, client, repo), nil
 }
 
-func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernetes.Interface, repo repository.Repository, pub publisher) *IngressBridge {
+func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernetes.Interface, repo repository.Repository) *IngressBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -62,7 +61,6 @@ func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernete
 		client:       client,
 		stopCh:       make(chan struct{}),
 		repo:         repo,
-		publisher:    pub,
 		ingresses:    map[string]*networkingv1.Ingress{},
 	}
 	bridge.ensureInformer()
@@ -126,7 +124,7 @@ func (b *IngressBridge) ensureInformer() {
 		informers.WithTweakListOptions(tweak),
 	)
 	b.factory.Networking().V1().Ingresses().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) { b.storeIngress(obj) },
+		AddFunc:    func(obj interface{}) { b.storeIngress(obj) },
 		UpdateFunc: func(_, newObj interface{}) { b.storeIngress(newObj) },
 		DeleteFunc: func(obj interface{}) { b.deleteIngress(obj) },
 	})
@@ -174,7 +172,7 @@ func (b *IngressBridge) deleteIngress(obj interface{}) {
 
 func (b *IngressBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHost(affectedHosts)
-	return syncDomainSet(ctx, b.repo, b.publisher, next, affectedHosts, removedHosts)
+	return syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
 }
 
 func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMaterialized {

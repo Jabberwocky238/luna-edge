@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -18,6 +20,10 @@ import (
 
 type fakePublisher struct {
 	count int
+}
+
+func (f *fakePublisher) PublishSnapshot(_ context.Context, _ *engine.Snapshot) error {
+	return nil
 }
 
 func (f *fakePublisher) PublishNode(_ context.Context, _ string) error {
@@ -43,7 +49,8 @@ func TestDNSBridgeSyncsDnsDomainRecordIntoRepository(t *testing.T) {
 		},
 	)
 	pub := &fakePublisher{}
-	bridge := NewDNSBridgeWithClient("luna-edge", client, factory.Repository(), pub)
+	repo := manage.NewWrapper(factory.Repository(), pub, nil)
+	bridge := NewDNSBridgeWithClient("luna-edge", client, repo)
 
 	crd := &unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "luna-edge.io/v1alpha1",
@@ -103,7 +110,8 @@ func TestDNSBridgeTracksAddUpdateDelete(t *testing.T) {
 		},
 	)
 	pub := &fakePublisher{}
-	bridge := NewDNSBridgeWithClient("luna-edge", client, factory.Repository(), pub)
+	repo := manage.NewWrapper(factory.Repository(), pub, nil)
+	bridge := NewDNSBridgeWithClient("luna-edge", client, repo)
 	bridge.Listen()
 	if !cache.WaitForCacheSync(context.Background().Done(), bridge.factory.ForResource(dnsDomainRecordGVR).Informer().HasSynced) {
 		t.Fatal("wait for informer sync")

@@ -78,34 +78,32 @@ func New(cfg Config) (*Engine, error) {
 	engine := &Engine{
 		Config:  cfg,
 		Factory: factory,
-		Repo:    repo,
 		Hub:     NewHub(),
 	}
+	wrapper := manage.NewWrapper(repo, engine, engine)
+	engine.Repo = wrapper
 	if cfg.S3.Enabled() {
-		bundles, err := NewS3CertificateBundleProvider(repo, cfg.S3)
+		bundles, err := NewS3CertificateBundleProvider(wrapper, cfg.S3)
 		if err != nil {
 			_ = factory.Close()
 			return nil, err
 		}
 		engine.Bundles = bundles
 	}
-	engine.ACME = acme.NewService(cfg.ACME, repo, engine, engine.Bundles, acme.LegoIssuerFactory{})
-	engine.Certs = NewCertReconciler(repo, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
+	engine.ACME = acme.NewService(cfg.ACME, wrapper, engine, engine.Bundles, acme.LegoIssuerFactory{})
+	engine.Certs = NewCertReconciler(wrapper, engine.ACME, defaultCertReconcileInterval, defaultCertRenewBefore)
 	if cfg.K8sBridgeEnabled {
 		bridge, err := masterk8s.New(masterk8s.Config{
-			Namespace:     cfg.K8sNamespace,
-			IngressClass:  cfg.K8sIngressClass,
-			EnableDNS:     true,
-			EnableIngress: true,
-			EnableGateway: true,
-		}, repo, engine)
+			Namespace:    cfg.K8sNamespace,
+			IngressClass: cfg.K8sIngressClass,
+			Enabled:      true,
+		}, wrapper)
 		if err != nil {
 			_ = factory.Close()
 			return nil, err
 		}
 		engine.K8sBridge = bridge
 	}
-	wrapper := manage.NewWrapper(repo, nil, engine)
 	engine.Manage = manage.NewAPI(wrapper)
 	return engine, nil
 }

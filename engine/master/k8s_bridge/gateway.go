@@ -26,10 +26,6 @@ var (
 	tlsRouteGVR  = schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1alpha2", Resource: "tlsroutes"}
 )
 
-type certNotifier interface {
-	NotifyCertificateDesired(ctx context.Context, fqdn string) error
-}
-
 // GatewayBridge 预留给 Gateway API 控制面桥。
 // 当前先保留生命周期与共享按域名写库逻辑，后续再补完整监听与物化。
 type GatewayBridge struct {
@@ -38,13 +34,12 @@ type GatewayBridge struct {
 	factory       dynamicinformer.DynamicSharedInformerFactory
 	stopCh        chan struct{}
 	repo          repository.Repository
-	publisher     publisher
 	gateways      map[string]*gatewayState
 	httpRoutes    map[string]*httpRouteState
 	tlsRoutes     map[string]*tlsRouteState
 }
 
-func NewGatewayBridge(namespace string, repo repository.Repository, pub publisher) (*GatewayBridge, error) {
+func NewGatewayBridge(namespace string, repo repository.Repository) (*GatewayBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -59,10 +54,10 @@ func NewGatewayBridge(namespace string, repo repository.Repository, pub publishe
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic k8s client: %w", err)
 	}
-	return NewGatewayBridgeWithClient(namespace, client, repo, pub), nil
+	return NewGatewayBridgeWithClient(namespace, client, repo), nil
 }
 
-func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository, pub publisher) *GatewayBridge {
+func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository) *GatewayBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -74,7 +69,6 @@ func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interfac
 		dynamicClient: dynamicClient,
 		stopCh:        make(chan struct{}),
 		repo:          repo,
-		publisher:     pub,
 		gateways:      map[string]*gatewayState{},
 		httpRoutes:    map[string]*httpRouteState{},
 		tlsRoutes:     map[string]*tlsRouteState{},
@@ -204,7 +198,7 @@ func (b *GatewayBridge) collectHosts() []string {
 
 func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHost(affectedHosts)
-	return syncDomainSet(ctx, b.repo, b.publisher, next, affectedHosts, removedHosts)
+	return syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
 }
 
 func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMaterialized {
@@ -439,10 +433,23 @@ type domainMaterialized struct {
 	routes   []metadata.HTTPRoute
 }
 
-func syncDomainSet(ctx context.Context, repo repository.Repository, pub publisher, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {
+type certificateDesiredMarker interface {
+	MarkCertificateDesired(ctx context.Context, hostname string)
+}
+
+func syncDomainSet(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {
 	if repo == nil {
 		return nil
 	}
+	if batcher, ok := repo.(batchRepository); ok {
+		return batcher.Batch(ctx, func(repo repository.Repository) error {
+			return syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts)
+		})
+	}
+	return syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts)
+}
+
+func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {
 	seen := map[string]struct{}{}
 	for _, host := range affectedHosts {
 		host = normalizeHost(host)
@@ -463,6 +470,11 @@ func syncDomainSet(ctx context.Context, repo repository.Repository, pub publishe
 		if err := upsertManagedDomain(ctx, repo, item); err != nil {
 			return err
 		}
+		if item.domain.NeedCert {
+			if marker, ok := repo.(certificateDesiredMarker); ok {
+				marker.MarkCertificateDesired(ctx, item.domain.Hostname)
+			}
+		}
 	}
 	for _, host := range removedHosts {
 		host = normalizeHost(host)
@@ -474,22 +486,6 @@ func syncDomainSet(ctx context.Context, repo repository.Repository, pub publishe
 		}
 		seen[host] = struct{}{}
 		if err := deleteManagedDomain(ctx, repo, host); err != nil {
-			return err
-		}
-	}
-	if notifier, ok := pub.(certNotifier); ok {
-		for _, host := range affectedHosts {
-			item, exists := next[normalizeHost(host)]
-			if !exists || !item.domain.NeedCert {
-				continue
-			}
-			if err := notifier.NotifyCertificateDesired(ctx, item.domain.Hostname); err != nil {
-				return err
-			}
-		}
-	}
-	if pub != nil && (len(affectedHosts) > 0 || len(removedHosts) > 0) {
-		if err := pub.PublishNode(ctx, ""); err != nil {
 			return err
 		}
 	}

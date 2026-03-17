@@ -11,9 +11,7 @@ import (
 type Config struct {
 	Namespace     string
 	IngressClass  string
-	EnableDNS     bool
-	EnableIngress bool
-	EnableGateway bool
+	Enabled       bool
 	KubeClient    kubernetes.Interface
 	DynamicClient dynamic.Interface
 }
@@ -26,51 +24,38 @@ type Bridge struct {
 	Gateway *GatewayBridge
 }
 
-func New(cfg Config, repo repository.Repository, pub publisher) (*Bridge, error) {
+func New(cfg Config, repo repository.Repository) (*Bridge, error) {
 	bridge := &Bridge{}
-	if cfg.EnableDNS {
+	if cfg.Enabled {
 		var dnsBridge *DNSBridge
+		var ingressBridge *IngressBridge
+		var gatewayBridge *GatewayBridge
 		var err error
 		if cfg.DynamicClient != nil {
-			dnsBridge = NewDNSBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, pub)
+			dnsBridge = NewDNSBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo)
+			ingressBridge = NewIngressBridgeWithClient(cfg.Namespace, cfg.IngressClass, cfg.KubeClient, repo)
+			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo)
 		} else {
-			dnsBridge, err = NewDNSBridge(cfg.Namespace, repo, pub)
+			dnsBridge, err = NewDNSBridge(cfg.Namespace, repo)
+			if err != nil {
+				return nil, err
+			}
+			ingressBridge, err = NewIngressBridge(cfg.Namespace, cfg.IngressClass, repo)
+			if err != nil {
+				return nil, err
+			}
+			gatewayBridge, err = NewGatewayBridge(cfg.Namespace, repo)
 			if err != nil {
 				return nil, err
 			}
 		}
 		bridge.DNS = dnsBridge
-	}
-	if cfg.EnableIngress {
-		var ingressBridge *IngressBridge
-		var err error
-		if cfg.KubeClient != nil {
-			ingressBridge = NewIngressBridgeWithClient(cfg.Namespace, cfg.IngressClass, cfg.KubeClient, repo, pub)
-		} else {
-			ingressBridge, err = NewIngressBridge(cfg.Namespace, cfg.IngressClass, repo, pub)
-			if err != nil {
-				return nil, err
-			}
-		}
 		bridge.Ingress = ingressBridge
-	}
-	if cfg.EnableGateway {
-		var gatewayBridge *GatewayBridge
-		var err error
-		if cfg.DynamicClient != nil {
-			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, pub)
-		} else {
-			gatewayBridge, err = NewGatewayBridge(cfg.Namespace, repo, pub)
-			if err != nil {
-				return nil, err
-			}
-		}
 		bridge.Gateway = gatewayBridge
-	}
-	if bridge.empty() {
+		return bridge, nil
+	} else {
 		return nil, nil
 	}
-	return bridge, nil
 }
 
 func (b *Bridge) LoadInitial(ctx context.Context) error {
@@ -131,8 +116,4 @@ func (b *Bridge) Stop() error {
 		}
 	}
 	return firstErr
-}
-
-func (b *Bridge) empty() bool {
-	return b == nil || (b.DNS == nil && b.Ingress == nil && b.Gateway == nil)
 }

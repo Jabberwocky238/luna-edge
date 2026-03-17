@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) HTTPRoutes() GenericRepository[*metadata.HTTPRoute] {
-	return &gormGenericRepository[*metadata.HTTPRoute]{db: r.db}
+	return &GormGenericRepository[*metadata.HTTPRoute]{db: r.db}
 }
 
 func (r *GormRepository) ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error) {

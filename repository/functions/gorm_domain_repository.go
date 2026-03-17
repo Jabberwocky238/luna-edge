@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) DomainEndpoints() GenericRepository[*metadata.DomainEndpoint] {
-	return &gormGenericRepository[*metadata.DomainEndpoint]{db: r.db}
+	return &GormGenericRepository[*metadata.DomainEndpoint]{db: r.db}
 }
 
 func (r *GormRepository) GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error) {

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -27,7 +28,8 @@ func TestGatewayBridgeWritesMasterThenCertThenBroadcast(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",
 		"kind":       "Gateway",
@@ -98,7 +100,8 @@ func TestGatewayBridgeIgnoresHTTPListenerForCertificateRequest(t *testing.T) {
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",
 		"kind":       "Gateway",
@@ -154,7 +157,8 @@ func TestGatewayBridgeTLSRouteWritesBoundBackendAndCertPolicy(t *testing.T) {
 
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",
@@ -238,7 +242,8 @@ func TestGatewayBridgeDeleteHTTPRouteRemovesManagedDomain(t *testing.T) {
 
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",
 		"kind":       "Gateway",
@@ -292,7 +297,8 @@ func TestGatewayBridgeUpdateListenerModeRecomputesNeedCert(t *testing.T) {
 
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",
@@ -370,7 +376,8 @@ func TestGatewayBridgeDeleteTLSRouteRemovesManagedDomain(t *testing.T) {
 
 	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	recorder := &effectRecorder{}
-	bridge := NewGatewayBridgeWithClient("default", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewGatewayBridgeWithClient("default", client, repo)
 
 	bridge.storeGateway(&unstructured.Unstructured{Object: map[string]interface{}{
 		"apiVersion": "gateway.networking.k8s.io/v1",

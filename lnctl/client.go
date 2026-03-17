@@ -40,20 +40,12 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) Zones() ResourceClient[metadata.Zone] {
-	return newResourceClient(c, "zones", func(model metadata.Zone) string { return model.ID })
-}
-
 func (c *Client) DomainEndpoints() ResourceClient[metadata.DomainEndpoint] {
 	return newResourceClient(c, "domain_endpoints", func(model metadata.DomainEndpoint) string { return model.ID })
 }
 
-func (c *Client) DomainEndpointStatuses() ResourceClient[metadata.DomainEndpointStatus] {
-	return newResourceClient(c, "domain_endpoint_status", func(model metadata.DomainEndpointStatus) string { return model.DomainEndpointID })
-}
-
-func (c *Client) ServiceBindings() ResourceClient[metadata.ServiceBinding] {
-	return newResourceClient(c, "service_bindings", func(model metadata.ServiceBinding) string { return model.ID })
+func (c *Client) ServiceBackendRefs() ResourceClient[metadata.ServiceBackendRef] {
+	return newResourceClient(c, "service_backend_refs", func(model metadata.ServiceBackendRef) string { return model.ID })
 }
 
 func (c *Client) HTTPRoutes() ResourceClient[metadata.HTTPRoute] {
@@ -68,46 +60,24 @@ func (c *Client) CertificateRevisions() ResourceClient[metadata.CertificateRevis
 	return newResourceClient(c, "certificate_revisions", func(model metadata.CertificateRevision) string { return model.ID })
 }
 
-func (c *Client) ACMEOrders() ResourceClient[metadata.ACMEOrder] {
-	return newResourceClient(c, "acme_orders", func(model metadata.ACMEOrder) string { return model.ID })
-}
-
-func (c *Client) ACMEChallenges() ResourceClient[metadata.ACMEChallenge] {
-	return newResourceClient(c, "acme_challenges", func(model metadata.ACMEChallenge) string { return model.ID })
-}
-
-func (c *Client) Nodes() ResourceClient[metadata.Node] {
-	return newResourceClient(c, "nodes", func(model metadata.Node) string { return model.ID })
-}
-
-func (c *Client) Attachments() ResourceClient[metadata.Attachment] {
-	return newResourceClient(c, "attachments", func(model metadata.Attachment) string { return model.ID })
+func (c *Client) SnapshotRecords() ResourceClient[metadata.SnapshotRecord] {
+	return newResourceClient(c, "snapshot_records", func(model metadata.SnapshotRecord) string { return fmt.Sprintf("%d", model.ID) })
 }
 
 func (c *Client) ManageResource(resource string) (AnyResourceClient, error) {
 	switch resource {
-	case "zones":
-		return managedResourceAdapter[metadata.Zone]{resourceClient: c.Zones()}, nil
 	case "domain_endpoints":
 		return managedResourceAdapter[metadata.DomainEndpoint]{resourceClient: c.DomainEndpoints()}, nil
-	case "domain_endpoint_status":
-		return managedResourceAdapter[metadata.DomainEndpointStatus]{resourceClient: c.DomainEndpointStatuses()}, nil
-	case "service_bindings":
-		return managedResourceAdapter[metadata.ServiceBinding]{resourceClient: c.ServiceBindings()}, nil
+	case "service_backend_refs":
+		return managedResourceAdapter[metadata.ServiceBackendRef]{resourceClient: c.ServiceBackendRefs()}, nil
 	case "http_routes":
 		return managedResourceAdapter[metadata.HTTPRoute]{resourceClient: c.HTTPRoutes()}, nil
 	case "dns_records":
 		return managedResourceAdapter[metadata.DNSRecord]{resourceClient: c.DNSRecords()}, nil
 	case "certificate_revisions":
 		return managedResourceAdapter[metadata.CertificateRevision]{resourceClient: c.CertificateRevisions()}, nil
-	case "acme_orders":
-		return managedResourceAdapter[metadata.ACMEOrder]{resourceClient: c.ACMEOrders()}, nil
-	case "acme_challenges":
-		return managedResourceAdapter[metadata.ACMEChallenge]{resourceClient: c.ACMEChallenges()}, nil
-	case "nodes":
-		return managedResourceAdapter[metadata.Node]{resourceClient: c.Nodes()}, nil
-	case "attachments":
-		return managedResourceAdapter[metadata.Attachment]{resourceClient: c.Attachments()}, nil
+	case "snapshot_records":
+		return managedResourceAdapter[metadata.SnapshotRecord]{resourceClient: c.SnapshotRecords()}, nil
 	default:
 		return nil, fmt.Errorf("unsupported resource %q", resource)
 	}

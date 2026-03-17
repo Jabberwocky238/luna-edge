@@ -9,7 +9,7 @@ import (
 
 // GormRepository 是基于 GORM 的统一仓储实现。
 type GormRepository struct {
-	db *gorm.DB
+	db  *gorm.DB
 }
 
 // NewGormRepository 创建一个基于 GORM 的仓储实现。
@@ -20,32 +20,32 @@ func NewGormRepository(db *gorm.DB) Repository {
 // GetDomainEntryProjectionByDomain 按域名聚合查询 DomainEntryProjection。
 func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error) {
 	type domainEntryProjectionRow struct {
-		DomainID               string                    `gorm:"column:domain_id"`
-		DomainHost             string                    `gorm:"column:domain_hostname"`
-		BackendType            metadata.BackendType      `gorm:"column:backend_type"`
-		CertID                 *string                   `gorm:"column:cert_id"`
-		CertDomainID           *string                   `gorm:"column:cert_domain_endpoint_id"`
-		CertHostname           *string                   `gorm:"column:cert_hostname"`
-		CertRevision           *uint64                   `gorm:"column:cert_revision"`
-		CertProvider           *string                   `gorm:"column:cert_provider"`
-		CertType               *metadata.ChallengeType   `gorm:"column:cert_challenge_type"`
-		CertBucket             *string                   `gorm:"column:cert_artifact_bucket"`
-		CertPrefix             *string                   `gorm:"column:cert_artifact_prefix"`
-		CertSHA256Crt          *string                   `gorm:"column:cert_sha256_crt"`
-		CertSHA256Key          *string                   `gorm:"column:cert_sha256_key"`
-		RouteID                *string                   `gorm:"column:route_id"`
-		RouteDomainID          *string                   `gorm:"column:route_domain_endpoint_id"`
-		RouteHost              *string                   `gorm:"column:route_hostname"`
-		RoutePath              *string                   `gorm:"column:route_path"`
-		RoutePriority          *int32                    `gorm:"column:route_priority"`
-		RouteBackendRefID      *string                   `gorm:"column:route_backend_ref_id"`
-		RouteServiceNamespace  *string                   `gorm:"column:route_service_namespace"`
-		RouteServiceName       *string                   `gorm:"column:route_service_name"`
-		RouteServicePort       *uint32                   `gorm:"column:route_service_port"`
-		BindedBackendRefID     *string                   `gorm:"column:binded_backend_ref_id"`
-		BindedServiceNamespace *string                   `gorm:"column:binded_service_namespace"`
-		BindedServiceName      *string                   `gorm:"column:binded_service_name"`
-		BindedServicePort      *uint32                   `gorm:"column:binded_service_port"`
+		DomainID               string                  `gorm:"column:domain_id"`
+		DomainHost             string                  `gorm:"column:domain_hostname"`
+		BackendType            metadata.BackendType    `gorm:"column:backend_type"`
+		CertID                 *string                 `gorm:"column:cert_id"`
+		CertDomainID           *string                 `gorm:"column:cert_domain_endpoint_id"`
+		CertHostname           *string                 `gorm:"column:cert_hostname"`
+		CertRevision           *uint64                 `gorm:"column:cert_revision"`
+		CertProvider           *string                 `gorm:"column:cert_provider"`
+		CertType               *metadata.ChallengeType `gorm:"column:cert_challenge_type"`
+		CertBucket             *string                 `gorm:"column:cert_artifact_bucket"`
+		CertPrefix             *string                 `gorm:"column:cert_artifact_prefix"`
+		CertSHA256Crt          *string                 `gorm:"column:cert_sha256_crt"`
+		CertSHA256Key          *string                 `gorm:"column:cert_sha256_key"`
+		RouteID                *string                 `gorm:"column:route_id"`
+		RouteDomainID          *string                 `gorm:"column:route_domain_endpoint_id"`
+		RouteHost              *string                 `gorm:"column:route_hostname"`
+		RoutePath              *string                 `gorm:"column:route_path"`
+		RoutePriority          *int32                  `gorm:"column:route_priority"`
+		RouteBackendRefID      *string                 `gorm:"column:route_backend_ref_id"`
+		RouteServiceNamespace  *string                 `gorm:"column:route_service_namespace"`
+		RouteServiceName       *string                 `gorm:"column:route_service_name"`
+		RouteServicePort       *uint32                 `gorm:"column:route_service_port"`
+		BindedBackendRefID     *string                 `gorm:"column:binded_backend_ref_id"`
+		BindedServiceNamespace *string                 `gorm:"column:binded_service_namespace"`
+		BindedServiceName      *string                 `gorm:"column:binded_service_name"`
+		BindedServicePort      *uint32                 `gorm:"column:binded_service_port"`
 	}
 
 	var rows []domainEntryProjectionRow

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/engine/master/manage"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -15,6 +17,11 @@ import (
 
 type effectRecorder struct {
 	events []string
+}
+
+// PublishSnapshot implements [engine.Publisher].
+func (r *effectRecorder) PublishSnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
+	panic("unimplemented")
 }
 
 func (r *effectRecorder) NotifyCertificateDesired(_ context.Context, fqdn string) error {
@@ -71,7 +78,8 @@ func TestIngressBridgeWritesMasterThenCertThenBroadcast(t *testing.T) {
 	})
 
 	recorder := &effectRecorder{}
-	bridge := NewIngressBridgeWithClient("default", "luna-edge", client, factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewIngressBridgeWithClient("default", "luna-edge", client, repo)
 	if err := bridge.LoadInitial(context.Background()); err != nil {
 		t.Fatalf("load initial: %v", err)
 	}
@@ -116,7 +124,8 @@ func TestIngressBridgeUpdateRebuildsAffectedDomain(t *testing.T) {
 	pathType := networkingv1.PathTypePrefix
 	className := "luna-edge"
 	recorder := &effectRecorder{}
-	bridge := NewIngressBridgeWithClient("default", "luna-edge", fake.NewSimpleClientset(), factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewIngressBridgeWithClient("default", "luna-edge", fake.NewSimpleClientset(), repo)
 
 	bridge.storeIngress(&networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -125,7 +134,7 @@ func TestIngressBridgeUpdateRebuildsAffectedDomain(t *testing.T) {
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
-			TLS: []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
+			TLS:              []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
 			Rules: []networkingv1.IngressRule{{
 				Host: "app.example.com",
 				IngressRuleValue: networkingv1.IngressRuleValue{
@@ -154,7 +163,7 @@ func TestIngressBridgeUpdateRebuildsAffectedDomain(t *testing.T) {
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
-			TLS: []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
+			TLS:              []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
 			Rules: []networkingv1.IngressRule{{
 				Host: "app.example.com",
 				IngressRuleValue: networkingv1.IngressRuleValue{
@@ -212,7 +221,8 @@ func TestIngressBridgeDeleteRemovesManagedDomain(t *testing.T) {
 	pathType := networkingv1.PathTypePrefix
 	className := "luna-edge"
 	recorder := &effectRecorder{}
-	bridge := NewIngressBridgeWithClient("default", "luna-edge", fake.NewSimpleClientset(), factory.Repository(), recorder)
+	repo := manage.NewWrapper(factory.Repository(), recorder, recorder)
+	bridge := NewIngressBridgeWithClient("default", "luna-edge", fake.NewSimpleClientset(), repo)
 
 	ing := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -221,7 +231,7 @@ func TestIngressBridgeDeleteRemovesManagedDomain(t *testing.T) {
 		},
 		Spec: networkingv1.IngressSpec{
 			IngressClassName: &className,
-			TLS: []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
+			TLS:              []networkingv1.IngressTLS{{Hosts: []string{"app.example.com"}}},
 			Rules: []networkingv1.IngressRule{{
 				Host: "app.example.com",
 				IngressRuleValue: networkingv1.IngressRuleValue{

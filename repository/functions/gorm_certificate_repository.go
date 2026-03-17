@@ -7,7 +7,7 @@ import (
 )
 
 func (r *GormRepository) CertificateRevisions() GenericRepository[*metadata.CertificateRevision] {
-	return &gormGenericRepository[*metadata.CertificateRevision]{db: r.db}
+	return &GormGenericRepository[*metadata.CertificateRevision]{db: r.db}
 }
 
 func (r *GormRepository) UpsertCertificateRevision(ctx context.Context, revision *metadata.CertificateRevision) error {
