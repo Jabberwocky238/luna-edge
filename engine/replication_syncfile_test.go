@@ -72,6 +72,17 @@ func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 			},
 		},
 	}
+	entry, err := masterRepo.GetDomainEntryProjectionByDomain(context.Background(), bundle.Hostname)
+	if err != nil {
+		t.Fatalf("load domain projection: %v", err)
+	}
+	if err := masterEngine.PublishChangeLog(context.Background(), &enginepkg.ChangeNotification{
+		NodeID:      "test-master",
+		CreatedAt:   time.Now().UTC(),
+		DomainEntry: entry,
+	}); err != nil {
+		t.Fatalf("publish domain changelog: %v", err)
+	}
 
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

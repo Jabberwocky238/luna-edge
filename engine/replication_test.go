@@ -185,6 +185,69 @@ func TestReplicationReconnectResyncsLatestFinalState(t *testing.T) {
 	}
 }
 
+func TestReplicationDeleteChangeRemovesSlaveState(t *testing.T) {
+	t.Parallel()
+
+	masterEngine, lis, cleanup := newReplicationMaster(t)
+	defer cleanup()
+
+	slaveStore := newReplicationLocalStore(t, "slave")
+	defer func() { _ = slaveStore.Close() }()
+	slaveEngine := newReplicationSlave(t, "node-1", lis.Addr().String(), slaveStore)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- slaveEngine.Start(ctx) }()
+
+	waitForCondition(t, func() bool {
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err == nil && entry != nil
+	})
+	waitForCondition(t, func() bool {
+		records, err := slaveStore.GetDNSRecordsByHostname(context.Background(), "app.example.com")
+		return err == nil && len(records) == 1
+	})
+
+	mustUpsert(t, masterEngine.PublishChangeLog(context.Background(), &enginepkg.ChangeNotification{
+		NodeID:    "test-master",
+		CreatedAt: time.Now().UTC(),
+		DNSRecord: &metadata.DNSRecord{
+			Shared: metadata.Shared{Deleted: true},
+			ID:     "dns-1",
+			FQDN:   "app.example.com",
+		},
+	}))
+	mustUpsert(t, masterEngine.PublishChangeLog(context.Background(), &enginepkg.ChangeNotification{
+		NodeID:    "test-master",
+		CreatedAt: time.Now().UTC(),
+		DomainEntry: &metadata.DomainEntryProjection{
+			ID:       "domain-1",
+			Hostname: "app.example.com",
+			Deleted:  true,
+		},
+	}))
+
+	waitForCondition(t, func() bool {
+		records, err := slaveStore.GetDNSRecordsByHostname(context.Background(), "app.example.com")
+		return err == nil && len(records) == 0
+	})
+	waitForCondition(t, func() bool {
+		entry, err := slaveStore.GetDomainEntryByHostname(context.Background(), "app.example.com")
+		return err != nil && entry == nil
+	})
+
+	cancel()
+	select {
+	case err := <-errCh:
+		if err != nil && err != context.Canceled && status.Code(err) != codes.Canceled {
+			t.Fatalf("unexpected slave start error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for slave to stop")
+	}
+}
+
 func newReplicationMaster(t *testing.T) (*masterpkg.Engine, net.Listener, func()) {
 	t.Helper()
 
