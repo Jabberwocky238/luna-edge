@@ -2,7 +2,7 @@ package slave
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -45,13 +45,14 @@ type Config struct {
 
 // Engine 是 slave 模式核心。
 type Engine struct {
-	Config *Config
-	Cache  *LocalStore
-	Client *engine.Client
-	ready  atomic.Bool
+	Config     *Config
+	Cache      *LocalStore
+	grpcClient *engine.GRPCClient
+	ready      atomic.Bool
 
 	// 核心组件
 	DNS     *dns.Engine
+	dnsChan chan []metadata.DNSRecord
 	Ingress *ingress.Engine
 
 	// 健康检查服务器
@@ -59,32 +60,22 @@ type Engine struct {
 	healthListener net.Listener
 }
 
-type IngressRouteLookupReader interface {
-	GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
-}
-type SlaveStore interface {
-	ReadCache() IngressRouteLookupReader
-}
-
 // New 创建 slave engine。
 func New(cfg *Config) (*Engine, error) {
-	localStore, err := NewLocalStore(cfg.CacheRoot)
-	if err != nil {
-		return nil, err
-	}
 	if cfg.RetryMinBackoff <= 0 {
 		cfg.RetryMinBackoff = time.Second
 	}
 	if cfg.RetryMaxBackoff <= 0 {
 		cfg.RetryMaxBackoff = 30 * time.Second
 	}
-	eng := &Engine{
-		Config:     cfg,
-		Cache:      localStore,
-		Subscriber: subscriber,
+	dnsChan := make(chan []metadata.DNSRecord, 100)
+	eng := &Engine{Config: cfg, dnsChan: dnsChan}
+	localStore, err := NewLocalStore(cfg.CacheRoot, eng, dnsChan)
+	if err != nil {
+		return nil, err
 	}
-	eng.ready.Store(false)
-	if eng.Cache != nil && cfg.DNSListenAddr != "" {
+	eng.Cache = localStore
+	if cfg.DNSListenAddr != "" {
 		eng.DNS = dns.NewEngine(dns.EngineOptions{
 			Forwarder: dns.ForwarderConfig{
 				Enabled: cfg.DNSForwardEnabled,
@@ -96,16 +87,11 @@ func New(cfg *Config) (*Engine, error) {
 			K8sEnabled:    cfg.DNSK8sEnabled,
 			K8sNamespace:  engine.POD_NAMESPACE,
 		})
-		if err := eng.restoreDNSRuntime(context.Background()); err != nil {
-			_ = conn.Close()
-			return nil, err
-		}
 	}
 	if cfg.IngressHTTPAddr != "" || cfg.IngressTLSAddr != "" {
 		certRoot := eng.Cache.CertificatesRoot()
 		resolver, err := ingress.NewLunaTLSCertResolver(certRoot, cfg.IngressLRUSize)
 		if err != nil {
-			_ = conn.Close()
 			return nil, err
 		}
 		ing, err := ingress.NewEngine(ingress.EngineOptions{
@@ -117,60 +103,60 @@ func New(cfg *Config) (*Engine, error) {
 			LRUSize:              cfg.IngressLRUSize,
 			MasterHTTP01ProxyURL: cfg.MasterManageURL,
 		}, resolver)
-		if err != nil {
-			_ = conn.Close()
-			return nil, err
-		}
 		ing.InjectSlave(eng)
 		eng.Ingress = ing
 	}
 	return eng, nil
 }
 
-// Subscribe 拉取 master 复制流。
-func (e *Engine) Subscribe(ctx context.Context) error {
-	if e.Subscriber == nil {
-		return fmt.Errorf("subscriber is not configured")
-	}
-	log.Printf("slave: subscribe begin node_id=%s master=%s", engine.POD_NAME, e.Config.MasterAddress)
-	return e.Subscriber.Subscribe(ctx, engine.POD_NAME)
+func (e *Engine) ReadCache() ingress.RouteLookupReader {
+	return e.Cache
 }
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
 	log.Printf("slave: start begin node_id=%s master=%s", engine.POD_NAME, e.Config.MasterAddress)
+
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
 			return err
 		}
+		if err := e.DNS.Listen(e.Config.DNSListenAddr); err != nil {
+			return err
+		}
+		go e.DNSRestoreLoop()
+		defer e.DNS.Stop()
+		defer close(e.dnsChan)
 	}
 	if e.Ingress != nil {
 		if err := e.Ingress.BindContext(ctx); err != nil {
 			return err
 		}
+		if err := e.Ingress.Listen(); err != nil {
+			return err
+		}
+		defer e.Ingress.Stop()
 	}
+	if e.Cache != nil {
+		if err := e.Cache.Start(); err != nil {
+			return err
+		}
+		defer e.Cache.Close()
+	}
+	e.grpcClient = engine.NewGRPCClientEasy(e.Config.MasterAddress)
+	if e.grpcClient == nil {
+		return errors.New("failed to dial gRPC to master at " + e.Config.MasterAddress)
+	}
+	defer e.grpcClient.Close()
 	if err := e.startHealthServer(); err != nil {
 		return err
 	}
-	if e.DNS != nil {
-		if err := e.DNS.Listen(e.Config.DNSListenAddr); err != nil {
-			_ = e.stopHealthServer(context.Background())
-			return err
-		}
-	}
-	if e.Ingress != nil {
-		if err := e.Ingress.Listen(); err != nil {
-			if e.DNS != nil {
-				_ = e.DNS.Stop()
-			}
-			_ = e.stopHealthServer(context.Background())
-			return err
-		}
-	}
+	defer e.stopHealthServer(ctx)
+
 	backoff := e.Config.RetryMinBackoff
 	for {
 		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", engine.POD_NAME, backoff)
-		err := e.Subscribe(ctx)
+		err := e.Subscribe(ctx, engine.POD_NAME)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
 			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", engine.POD_NAME, err, ctx.Err())
@@ -190,31 +176,6 @@ func (e *Engine) Start(ctx context.Context) error {
 			backoff = e.Config.RetryMaxBackoff
 		}
 	}
-}
-
-// Stop 关闭 slave engine。
-func (e *Engine) Stop(ctx context.Context) error {
-	var firstErr error
-	e.ready.Store(false)
-	if err := e.stopHealthServer(ctx); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if e.Ingress != nil {
-		if err := e.Ingress.Stop(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	if e.DNS != nil {
-		if err := e.DNS.Stop(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	if e.Client != nil {
-		if err := e.Client.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
 }
 
 func (e *Engine) startHealthServer() error {
@@ -262,40 +223,8 @@ func (e *Engine) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok\n"))
 }
 
-func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
-	log.Printf("slave: refresh runtime begin snapshot_record_id=%d dns=%d domains=%d", snapshot.SnapshotRecordID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-	if syncer, ok := e.Applier.(CertificateSyncer); ok {
-		for _, changelog := range changelogsFromSnapshot(snapshot) {
-			if err := syncer.SyncChangelogCertificates(ctx, changelog); err != nil {
-				log.Printf("slave: sync changelog certificates failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
-				return err
-			}
-		}
-		log.Printf("slave: sync changelog certificates done snapshot_record_id=%d", snapshot.SnapshotRecordID)
+func (e *Engine) DNSRestoreLoop() {
+	for items := range e.dnsChan {
+		e.DNS.RestoreRecords(items)
 	}
-	if e.DNS != nil {
-		if err := e.restoreDNSRuntime(context.Background()); err != nil {
-			log.Printf("slave: restore dns runtime failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
-			return err
-		}
-		log.Printf("slave: restore dns runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
-	}
-	if e.Ingress != nil {
-		e.Ingress.RefreshAll()
-		log.Printf("slave: ingress runtime refreshed snapshot_record_id=%d", snapshot.SnapshotRecordID)
-	}
-	log.Printf("slave: refresh runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
-	return nil
-}
-
-func (e *Engine) restoreDNSRuntime(ctx context.Context) error {
-	if e == nil || e.DNS == nil || e.Cache == nil {
-		return nil
-	}
-	records, err := e.Cache.ListDNSRecords(ctx)
-	if err != nil {
-		return err
-	}
-	e.DNS.RestoreRecords(records)
-	return nil
 }

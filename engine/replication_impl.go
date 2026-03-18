@@ -8,10 +8,20 @@ import (
 
 	"github.com/jabberwocky238/luna-edge/replication/replpb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type GRPCClient struct {
 	client replpb.ReplicationServiceClient
+	closer func() error
+}
+
+func NewGRPCClientEasy(masterAddress string) *GRPCClient {
+	conn, err := grpc.NewClient(masterAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatalf("failed to connect to master: %v", err)
+	}
+	return &GRPCClient{client: replpb.NewReplicationServiceClient(conn), closer: func() error { return conn.Close() }}
 }
 
 func NewGRPCClient(conn grpc.ClientConnInterface) *GRPCClient {
@@ -52,6 +62,13 @@ func (c *GRPCClient) FetchCertificateBundle(ctx context.Context, hostname string
 	}
 	log.Printf("replication-client: fetch certificate bundle done hostname=%s revision=%d crt_bytes=%d key_bytes=%d", resp.GetHostname(), resp.GetRevision(), len(resp.GetTlsCrt()), len(resp.GetTlsKey()))
 	return &CertificateBundle{Hostname: resp.GetHostname(), Revision: resp.GetRevision(), TLSCrt: append([]byte(nil), resp.GetTlsCrt()...), TLSKey: append([]byte(nil), resp.GetTlsKey()...), MetadataJSON: append([]byte(nil), resp.GetMetadataJson()...)}, nil
+}
+
+func (c *GRPCClient) Close() error {
+	if c.closer != nil {
+		c.closer()
+	}
+	return nil
 }
 
 type grpcSnapshotStream struct {

@@ -18,6 +18,7 @@ import (
 // - 命中 HTTPS: 本地终止 TLS，再交给 HTTP 处理层
 // - 未命中: 回退到本地 TLS 终止 + HTTP 处理层
 type TLSEngine struct {
+	ctx      context.Context
 	resolver TLSCertResolver
 	handler  http.Handler
 	server   *http.Server
@@ -41,6 +42,7 @@ func NewTLSEngine(resolver TLSCertResolver, server *http.Server, bridge *K8sBrid
 		handler:  server.Handler,
 		server:   server,
 		bridge:   bridge,
+		ctx:      context.Background(),
 	}, nil
 }
 
@@ -176,14 +178,14 @@ func (e *TLSEngine) resolveMemoryBackend(serverName string, kind RouteKind) (*K8
 }
 
 // Stop 停止 TLS 监听。
-func (e *TLSEngine) Stop(ctx context.Context) error {
+func (e *TLSEngine) Stop() error {
 	if e.listener != nil {
 		_ = e.listener.Close()
 	}
 	if e.server == nil {
 		return nil
 	}
-	return e.server.Shutdown(ctx)
+	return e.server.Shutdown(e.ctx)
 }
 
 type singleConnListener struct {

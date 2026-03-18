@@ -148,18 +148,18 @@ func (e *Engine) Listen() error {
 }
 
 // Stop 停止 ingress 监听。
-func (e *Engine) Stop(ctx context.Context) error {
+func (e *Engine) Stop() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	var errs []string
 	if e.httpEngine != nil {
-		if err := e.httpEngine.Stop(ctx); err != nil {
+		if err := e.httpEngine.Stop(); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}
 	if e.tlsEngine != nil {
-		if err := e.tlsEngine.Stop(ctx); err != nil {
+		if err := e.tlsEngine.Stop(); err != nil {
 			errs = append(errs, err.Error())
 		}
 	}

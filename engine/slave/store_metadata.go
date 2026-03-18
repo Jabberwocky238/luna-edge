@@ -9,9 +9,12 @@ import (
 
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
+	"github.com/jabberwocky238/luna-edge/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+var ErrSnapshotOutOfOrder = errors.New("snapshot out of order")
 
 type dnsRecordCacheRow struct {
 	ID         string `gorm:"column:id;primaryKey;type:text"`
@@ -33,19 +36,16 @@ type domainEntryCacheRow struct {
 func (domainEntryCacheRow) TableName() string { return "domain_entries_cache" }
 
 type syncStateRow struct {
-	Key   string `gorm:"column:key;primaryKey;type:text"`
-	Value string `gorm:"column:value;not null;type:text"`
+	SnapshotRecordID uint64 `gorm:"column:snapshot_record_id;primaryKey"`
+	AffectedTable    string `gorm:"column:affected_table;primaryKey;type:text"`
+	AffectedTableID  string `gorm:"column:value;not null;type:text"`
+	CreatedAt        int64  `gorm:"column:created_at;autoCreateTime"`
 }
 
 func (syncStateRow) TableName() string { return "sync_state" }
 
 func (s *LocalStore) initSchema() error {
 	return s.db.AutoMigrate(&dnsRecordCacheRow{}, &domainEntryCacheRow{}, &syncStateRow{})
-}
-
-func (s *LocalStore) GetSnapshot(ctx context.Context, snapshotRecordID uint64) (*engine.Snapshot, error) {
-	var snapshot engine.Snapshot
-	snapshot.SnapshotRecordID = snapshotRecordID
 }
 
 func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
@@ -65,78 +65,13 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	}()
 
 	for i := range snapshot.DNSRecords {
-		if snapshot.DNSRecords[i].Deleted {
-			if execErr := tx.Delete(&dnsRecordCacheRow{}, "id = ?", snapshot.DNSRecords[i].ID).Error; execErr != nil {
-				err = execErr
-				log.Printf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", snapshot.SnapshotRecordID, snapshot.DNSRecords[i].ID, execErr)
-				return err
-			}
-			log.Printf("slave-store: delete dns row snapshot_record_id=%d dns_id=%s", snapshot.SnapshotRecordID, snapshot.DNSRecords[i].ID)
-			continue
-		}
-		payload, marshalErr := json.Marshal(snapshot.DNSRecords[i])
-		if marshalErr != nil {
-			err = marshalErr
-			return err
-		}
-		row := &dnsRecordCacheRow{
-			ID:         snapshot.DNSRecords[i].ID,
-			FQDN:       snapshot.DNSRecords[i].FQDN,
-			RecordType: string(snapshot.DNSRecords[i].RecordType),
-			DetailJSON: string(payload),
-		}
-		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-			err = execErr
-			log.Printf("slave-store: upsert dns row failed snapshot_record_id=%d dns_id=%s err=%v", snapshot.SnapshotRecordID, row.ID, execErr)
-			return err
-		}
-		log.Printf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", snapshot.SnapshotRecordID, row.ID, row.FQDN)
+		s.dealDNSRecords(ctx, tx, &snapshot.DNSRecords[i], snapshot.SnapshotRecordID)
+		s.updateSnapshotRecordID(ctx, tx, snapshot.SnapshotRecordID, "dns_records", snapshot.DNSRecords[i].ID)
 	}
 
 	for i := range snapshot.DomainEntries {
-		if snapshot.DomainEntries[i].Deleted {
-			if execErr := tx.Delete(&domainEntryCacheRow{}, "hostname = ?", snapshot.DomainEntries[i].Hostname).Error; execErr != nil {
-				err = execErr
-				log.Printf("slave-store: delete domain row failed snapshot_record_id=%d hostname=%s err=%v", snapshot.SnapshotRecordID, snapshot.DomainEntries[i].Hostname, execErr)
-				return err
-			}
-			log.Printf("slave-store: delete domain row snapshot_record_id=%d hostname=%s", snapshot.SnapshotRecordID, snapshot.DomainEntries[i].Hostname)
-			continue
-		}
-		payload, marshalErr := json.Marshal(snapshot.DomainEntries[i])
-		if marshalErr != nil {
-			err = marshalErr
-			return err
-		}
-		certHostname := ""
-		var certRevision uint64
-		if snapshot.DomainEntries[i].Cert != nil {
-			certHostname = snapshot.DomainEntries[i].Hostname
-			certRevision = snapshot.DomainEntries[i].Cert.Revision
-		}
-		row := &domainEntryCacheRow{
-			ID:           snapshot.DomainEntries[i].ID,
-			Hostname:     snapshot.DomainEntries[i].Hostname,
-			CertHostname: certHostname,
-			CertRevision: certRevision,
-			DetailJSON:   string(payload),
-		}
-		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-			err = execErr
-			log.Printf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", snapshot.SnapshotRecordID, row.ID, execErr)
-			return err
-		}
-		log.Printf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", snapshot.SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
-	}
-
-	if snapshot.Last {
-		row := &syncStateRow{Key: snapshotCursorStateKey, Value: fmt.Sprintf("%d", snapshot.SnapshotRecordID)}
-		if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-			err = execErr
-			log.Printf("slave-store: update cursor failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, execErr)
-			return err
-		}
-		log.Printf("slave-store: cursor updated snapshot_record_id=%d", snapshot.SnapshotRecordID)
+		s.dealDomainEntries(ctx, tx, &snapshot.DomainEntries[i], snapshot.SnapshotRecordID)
+		s.updateSnapshotRecordID(ctx, tx, snapshot.SnapshotRecordID, "domain_entries", snapshot.DomainEntries[i].ID)
 	}
 
 	err = tx.Commit().Error
@@ -148,20 +83,142 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	return err
 }
 
-func (s *LocalStore) ListDNSRecords(ctx context.Context) ([]metadata.DNSRecord, error) {
-	var cacheRows []dnsRecordCacheRow
-	if err := s.db.WithContext(ctx).Order("fqdn asc, record_type asc, id asc").Find(&cacheRows).Error; err != nil {
-		return nil, err
+func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *engine.ChangeNotification) error {
+	var err error
+	if changelog == nil {
+		return nil
 	}
-	var out []metadata.DNSRecord
-	for i := range cacheRows {
-		var record metadata.DNSRecord
-		if err := json.Unmarshal([]byte(cacheRows[i].DetailJSON), &record); err != nil {
-			return nil, err
+	cursor, err := s.GetSnapshotRecordID(ctx)
+	if cursor >= changelog.SnapshotRecordID {
+		log.Printf("slave-store: skip changelog with old snapshot record ID snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
+		return nil
+	} else if cursor+1 < changelog.SnapshotRecordID {
+		log.Printf("slave-store: snapshot record ID out of order snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
+		return ErrSnapshotOutOfOrder
+	} else {
+		// changelog.SnapshotRecordID is exactly cursor+1, which is expected.
+	}
+	tx := s.db.WithContext(ctx).Begin()
+	err = tx.Error
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback().Error
 		}
-		out = append(out, record)
+	}()
+	if changelog.DNSRecord != nil {
+		s.dealDNSRecords(ctx, tx, changelog.DNSRecord, changelog.SnapshotRecordID)
+		s.updateSnapshotRecordID(ctx, tx, changelog.SnapshotRecordID, "dns_records", changelog.DNSRecord.ID)
 	}
-	return out, nil
+	if changelog.DomainEntry != nil {
+		s.dealDomainEntries(ctx, tx, changelog.DomainEntry, changelog.SnapshotRecordID)
+		s.updateSnapshotRecordID(ctx, tx, changelog.SnapshotRecordID, "domain_entries", changelog.DomainEntry.ID)
+	}
+	err = tx.Commit().Error
+	if err != nil {
+		log.Printf("slave-store: apply changelog commit failed snapshot_record_id=%d err=%v", changelog.SnapshotRecordID, err)
+		return err
+	}
+	return nil
+}
+
+func (s *LocalStore) dealDNSRecords(ctx context.Context, tx *gorm.DB, input *metadata.DNSRecord, SnapshotRecordID uint64) error {
+	if input.Deleted {
+		if execErr := tx.Delete(&dnsRecordCacheRow{}, "id = ?", input.ID).Error; execErr != nil {
+			log.Printf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, input.ID, execErr)
+			return execErr
+		}
+		log.Printf("slave-store: delete dns row snapshot_record_id=%d dns_id=%s", SnapshotRecordID, input.ID)
+		return nil
+	}
+	payload, marshalErr := json.Marshal(input)
+	if marshalErr != nil {
+		return marshalErr
+	}
+	row := &dnsRecordCacheRow{
+		ID:         input.ID,
+		FQDN:       input.FQDN,
+		RecordType: string(input.RecordType),
+		DetailJSON: string(payload),
+	}
+	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
+		log.Printf("slave-store: upsert dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
+		return execErr
+	}
+	log.Printf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", SnapshotRecordID, row.ID, row.FQDN)
+	return nil
+}
+
+func (s *LocalStore) dealDomainEntries(ctx context.Context, tx *gorm.DB, input *metadata.DomainEntryProjection, SnapshotRecordID uint64) error {
+	if input.Deleted {
+		if execErr := tx.Delete(&domainEntryCacheRow{}, "hostname = ?", input.Hostname).Error; execErr != nil {
+			log.Printf("slave-store: delete domain row failed snapshot_record_id=%d hostname=%s err=%v", SnapshotRecordID, input.Hostname, execErr)
+			return execErr
+		}
+		log.Printf("slave-store: delete domain row snapshot_record_id=%d hostname=%s", SnapshotRecordID, input.Hostname)
+		return nil
+	}
+	payload, marshalErr := json.Marshal(input)
+	if marshalErr != nil {
+		return marshalErr
+	}
+	certHostname := ""
+	var certRevision uint64
+	if input.Cert != nil {
+		certHostname = input.Hostname
+		certRevision = input.Cert.Revision
+		// check if certificate bundle already exists before fetch,
+		// to avoid unnecessary fetch and write when the same cert revision already exists.
+		ok, err := s.CheckCertificateBundle(ctx, certHostname, certRevision)
+		if err != nil {
+			panic("THIS SHOULD NOT HAPPEN: failed to check certificate bundle existence: " + err.Error())
+		}
+		if ok {
+			utils.CertLogf("slave-store: certificate bundle already exists hostname=%s revision=%d", certHostname, certRevision)
+		} else {
+			utils.CertLogf("slave-store: certificate bundle not exists, starting fetch, hostname=%s revision=%d", certHostname, certRevision)
+			go func() {
+				bundle, err := s.bundleFetcher.FetchCertificateBundle(ctx, certHostname, certRevision)
+				if err != nil || bundle == nil {
+					utils.CertLogf("slave-store: get certificate bundle failed hostname=%s revision=%d err=%v", certHostname, certRevision, err)
+					return
+				}
+				if err := s.PutCertificateBundle(ctx, bundle); err != nil {
+					utils.CertLogf("slave-store: put certificate bundle failed hostname=%s revision=%d err=%v", certHostname, certRevision, err)
+					return
+				}
+			}()
+		}
+	}
+	row := &domainEntryCacheRow{
+		ID:           input.ID,
+		Hostname:     input.Hostname,
+		CertHostname: certHostname,
+		CertRevision: certRevision,
+		DetailJSON:   string(payload),
+	}
+	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
+		log.Printf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
+		return execErr
+	}
+	log.Printf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
+	return nil
+}
+
+func (s *LocalStore) updateSnapshotRecordID(ctx context.Context, tx *gorm.DB, snapshotRecordID uint64, table string, tableID string) error {
+	row := &syncStateRow{
+		SnapshotRecordID: snapshotRecordID,
+		AffectedTable:    table,
+		AffectedTableID:  tableID,
+	}
+	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
+		log.Printf("slave-store: update snapshot record ID failed snapshot_record_id=%d err=%v", snapshotRecordID, execErr)
+		return execErr
+	}
+	log.Printf("slave-store: update snapshot record ID snapshot_record_id=%d", snapshotRecordID)
+	return nil
 }
 
 func (s *LocalStore) GetDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error) {
@@ -184,15 +241,13 @@ func (s *LocalStore) GetDNSRecordsByHostname(ctx context.Context, hostname strin
 
 func (s *LocalStore) GetSnapshotRecordID(ctx context.Context) (uint64, error) {
 	var row syncStateRow
-	if err := s.db.WithContext(ctx).First(&row, "key = ?", snapshotCursorStateKey).Error; err != nil {
+	if err := s.db.WithContext(ctx).Order("created_at desc").First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}
 		return 0, err
 	}
-	var out uint64
-	_, err := fmt.Sscanf(row.Value, "%d", &out)
-	return out, err
+	return row.SnapshotRecordID, nil
 }
 
 func (s *LocalStore) GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error) {

@@ -3,6 +3,7 @@ package slave
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,65 +14,40 @@ import (
 	"github.com/jabberwocky238/luna-edge/utils"
 )
 
-func (s *LocalStore) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {
-	if s == nil || strings.TrimSpace(hostname) == "" {
-		return nil, fmt.Errorf("hostname is required")
-	}
-}
-
-func (s *LocalStore) SyncChangelogCertificates(ctx context.Context, changelog *engine.ChangeNotification) error {
-	if s == nil || changelog == nil {
-		return nil
-	}
-	if changelog.DomainEntry == nil {
-		return nil
-	}
-	entry := changelog.DomainEntry
-	utils.CertLogf("slave-store: sync changelog certificates begin snapshot_record_id=%d hostname=%s deleted=%v", changelog.SnapshotRecordID, entry.Hostname, entry.Deleted)
-	hostname := strings.TrimSpace(entry.Hostname)
-	if hostname == "" {
-		return nil
-	}
-	if entry.Deleted {
-		if err := removeCertificateFiles(s.certRoot, hostname); err != nil {
-			utils.CertLogf("slave-store: remove certificate files failed snapshot_record_id=%d hostname=%s err=%v", changelog.SnapshotRecordID, hostname, err)
-			return err
-		}
-		utils.CertLogf("slave-store: remove certificate files done snapshot_record_id=%d hostname=%s", changelog.SnapshotRecordID, hostname)
-		return nil
-	}
-	cert := entry.Cert
-	if cert == nil {
-		return nil
-	}
-	if err := s.SyncCertificateBundle(ctx, &engine.CertificateBundle{Hostname: hostname, Revision: cert.Revision}); err != nil {
-		utils.CertLogf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", changelog.SnapshotRecordID, hostname, cert.Revision, err)
-		return err
-	}
-	utils.CertLogf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", changelog.SnapshotRecordID, hostname, cert.Revision)
-	return nil
-}
-
-func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.CertificateBundle) error {
-	if s == nil || cert == nil || strings.TrimSpace(cert.Hostname) == "" || strings.TrimSpace(s.certRoot) == "" {
-		return nil
-	}
-	if s.fetcher == nil {
-		utils.CertLogf("slave-store: skip fetch certificate bundle hostname=%s revision=%d reason=no_fetcher", cert.Hostname, cert.Revision)
-		return nil
-	}
-	utils.CertLogf("slave-store: fetch certificate bundle begin hostname=%s revision=%d", cert.Hostname, cert.Revision)
-	bundle, err := s.fetcher.FetchCertificateBundle(ctx, cert.Hostname, cert.Revision)
-	if err != nil {
-		utils.CertLogf("slave-store: fetch certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
-		return err
+func (s *LocalStore) PutCertificateBundle(ctx context.Context, bundle *engine.CertificateBundle) error {
+	if bundle == nil {
+		return errors.New("bundle is nil")
 	}
 	if err := writeCertificateBundle(s.certRoot, bundle); err != nil {
-		utils.CertLogf("slave-store: write certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
+		utils.CertLogf("slave-store: write certificate bundle failed hostname=%s revision=%d err=%v", bundle.Hostname, bundle.Revision, err)
 		return err
 	}
-	utils.CertLogf("slave-store: write certificate bundle done hostname=%s revision=%d", cert.Hostname, cert.Revision)
+	utils.CertLogf("slave-store: write certificate bundle done hostname=%s revision=%d", bundle.Hostname, bundle.Revision)
 	return nil
+}
+
+func (s *LocalStore) CheckCertificateBundle(ctx context.Context, hostname string, revision uint64) (bool, error) {
+	if s == nil || strings.TrimSpace(hostname) == "" {
+		return false, fmt.Errorf("hostname is required")
+	}
+	dir := filepath.Join(s.certRoot, ingress.CertificateDirectoryName(hostname))
+	var err error
+	_, err = os.Stat(filepath.Join(dir, "tls.crt"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	_, err = os.Stat(filepath.Join(dir, "tls.key"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	_, err = os.Stat(filepath.Join(dir, "metadata.json"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.New("failed to stat certificate files: " + err.Error())
+	}
+	return true, nil
 }
 
 func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {

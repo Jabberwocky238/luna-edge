@@ -1,12 +1,14 @@
 package slave
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -14,17 +16,18 @@ import (
 const (
 	DefaultMetadataDBName  = "meta.db"
 	DefaultCertificatesDir = "certs"
-	snapshotCursorStateKey = "snapshot_record_id"
 )
 
-func normalizeCacheRoot(root string) (string, error) {
-
+type BundleFetcher interface {
+	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error)
 }
 
 type LocalStore struct {
-	CacheRoot string
-	certRoot  string
-	db        *gorm.DB
+	CacheRoot     string
+	certRoot      string
+	db            *gorm.DB
+	bundleFetcher BundleFetcher
+	dnsChan       chan []metadata.DNSRecord
 }
 
 func (s *LocalStore) MetadataDBPath() string {
@@ -35,29 +38,35 @@ func (s *LocalStore) CertificatesRoot() string {
 	return filepath.Join(s.CacheRoot, DefaultCertificatesDir)
 }
 
-func NewLocalStore(cacheRoot string) (engine.Client, error) {
+func NewLocalStore(cacheRoot string, bundleFetcher BundleFetcher, dnsChan chan []metadata.DNSRecord) (*LocalStore, error) {
 	store := new(LocalStore)
 	cacheRoot = strings.TrimSpace(cacheRoot)
 	if cacheRoot == "" {
 		return nil, fmt.Errorf("cache root is required")
 	}
 	store.CacheRoot = cacheRoot
-	if err := os.MkdirAll(store.CacheRoot, 0o755); err != nil {
-		return nil, err
-	}
 	store.certRoot = store.CertificatesRoot()
-	if err := os.MkdirAll(store.certRoot, 0o755); err != nil {
-		return nil, err
-	}
-	db, err := gorm.Open(sqlite.Open(store.MetadataDBPath()), &gorm.Config{})
-	if err != nil {
-		return nil, err
-	}
-	store.db = db
-	if err := store.initSchema(); err != nil {
-		return nil, err
-	}
+	store.bundleFetcher = bundleFetcher
+	store.dnsChan = dnsChan
 	return store, nil
+}
+
+func (s *LocalStore) Start() error {
+	if err := os.MkdirAll(s.CacheRoot, 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.certRoot, 0o755); err != nil {
+		return err
+	}
+	db, err := gorm.Open(sqlite.Open(s.MetadataDBPath()), &gorm.Config{})
+	if err != nil {
+		return err
+	}
+	s.db = db
+	if err := s.initSchema(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *LocalStore) Close() error {

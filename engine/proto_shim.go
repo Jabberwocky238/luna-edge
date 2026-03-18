@@ -180,3 +180,19 @@ func ChangelogsFromSnapshot(snapshot *Snapshot) []*ChangeNotification {
 	}
 	return out
 }
+
+func SnapshotFromNotice(notice *ChangeNotification) *Snapshot {
+	snapshot := &Snapshot{
+		NodeID:           notice.NodeID,
+		CreatedAt:        notice.CreatedAt,
+		SnapshotRecordID: notice.SnapshotRecordID,
+		Last:             true,
+	}
+	if notice.DNSRecord != nil {
+		snapshot.DNSRecords = append(snapshot.DNSRecords, *notice.DNSRecord)
+	}
+	if notice.DomainEntry != nil {
+		snapshot.DomainEntries = append(snapshot.DomainEntries, *notice.DomainEntry)
+	}
+	return snapshot
+}

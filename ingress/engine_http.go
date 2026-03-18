@@ -12,6 +12,7 @@ import (
 
 // HTTPEngine 负责纯 HTTP 监听，并把请求转发给底层 serveHTTP。
 type HTTPEngine struct {
+	ctx        context.Context
 	server     *http.Server
 	listenAddr string
 	listener   net.Listener
@@ -30,6 +31,7 @@ func NewHTTPEngine(listenAddr string, server *http.Server) (*HTTPEngine, error) 
 	}
 
 	return &HTTPEngine{
+		ctx:        context.Background(),
 		server:     server,
 		listenAddr: listenAddr,
 	}, nil
@@ -55,11 +57,11 @@ func (e *HTTPEngine) Listen() error {
 }
 
 // Stop 停止 HTTP 监听。
-func (e *HTTPEngine) Stop(ctx context.Context) error {
+func (e *HTTPEngine) Stop() error {
 	if e.server == nil {
 		return nil
 	}
-	return e.server.Shutdown(ctx)
+	return e.server.Shutdown(e.ctx)
 }
 
 // NewHTTPHandler 返回经过中间件包装的 HTTP 处理器。
