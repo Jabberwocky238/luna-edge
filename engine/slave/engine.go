@@ -3,7 +3,6 @@ package slave
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -15,16 +14,16 @@ import (
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/ingress"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Config 定义 slave 模式核心配置。
 type Config struct {
-	MasterAddress     string
-	SubscribeSnapshot bool
-	RetryMinBackoff   time.Duration
-	RetryMaxBackoff   time.Duration
+	CacheRoot     string
+	MasterAddress string
+
+	RetryMinBackoff time.Duration
+	RetryMaxBackoff time.Duration
+
 	DNSListenAddr     string
 	DNSForwardEnabled bool
 	DNSForwardServers []string
@@ -32,42 +31,24 @@ type Config struct {
 	DNSGeoIPEnabled   bool
 	DNSGeoIPMMDBPath  string
 	DNSK8sEnabled     bool
+
 	IngressHTTPAddr   string
 	IngressTLSAddr    string
 	IngressK8sEnabled bool
 	IngressK8sNS      string
 	IngressK8sClass   string
 	IngressLRUSize    int
-	MasterManageURL   string
-	HealthListenAddr  string
-}
 
-type Reader interface {
-	GetCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error)
-	GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
-	GetDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error)
-	ListDNSRecords(ctx context.Context) ([]metadata.DNSRecord, error)
-	GetSnapshotRecordID(ctx context.Context) (uint64, error)
-}
-
-type Writer interface {
-	ApplySnapshot(ctx context.Context, snapshot *engine.Snapshot) error
-}
-
-type Store interface {
-	Reader
-	Writer
+	MasterManageURL  string
+	HealthListenAddr string
 }
 
 // Engine 是 slave 模式核心。
 type Engine struct {
-	Config     Config
-	CacheRoot  string
-	Cache      Reader
-	Subscriber engine.Client
-	Applier    engine.SnapshotApplier
-	ClientConn *grpc.ClientConn
-	ready      atomic.Bool
+	Config *Config
+	Cache  *LocalStore
+	Client *engine.Client
+	ready  atomic.Bool
 
 	// 核心组件
 	DNS     *dns.Engine
@@ -78,19 +59,18 @@ type Engine struct {
 	healthListener net.Listener
 }
 
-type CertificateSyncer interface {
-	SyncChangelogCertificates(ctx context.Context, changelog *engine.ChangeNotification) error
+type IngressRouteLookupReader interface {
+	GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
 }
-
-type CertificateRootProvider interface {
-	CertificatesRoot() string
+type SlaveStore interface {
+	ReadCache() IngressRouteLookupReader
 }
 
 // New 创建 slave engine。
-func New(cfg Config, cacheRoot string, cache Reader) (*Engine, error) {
-	cacheRoot = strings.TrimSpace(cacheRoot)
-	if cacheRoot == "" {
-		return nil, fmt.Errorf("cache root is required")
+func New(cfg *Config) (*Engine, error) {
+	localStore, err := NewLocalStore(cfg.CacheRoot)
+	if err != nil {
+		return nil, err
 	}
 	if cfg.RetryMinBackoff <= 0 {
 		cfg.RetryMinBackoff = time.Second
@@ -98,34 +78,12 @@ func New(cfg Config, cacheRoot string, cache Reader) (*Engine, error) {
 	if cfg.RetryMaxBackoff <= 0 {
 		cfg.RetryMaxBackoff = 30 * time.Second
 	}
-	conn, err := grpc.NewClient(cfg.MasterAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, err
-	}
-	client := engine.NewGRPCClient(conn)
-	subscriber := &streamSubscriber{
-		Client:  client,
-		Applier: applier,
-	}
 	eng := &Engine{
 		Config:     cfg,
-		CacheRoot:  cacheRoot,
-		Cache:      cache,
+		Cache:      localStore,
 		Subscriber: subscriber,
-		Applier:    applier,
-		ClientConn: conn,
 	}
 	eng.ready.Store(false)
-	subscriber.OnSnapshot = func(ctx context.Context, snapshot *engine.Snapshot) error {
-		return eng.refreshRuntimeOnSnapshot(ctx, snapshot)
-	}
-	subscriber.OnConnect = func() { eng.ready.Store(true) }
-	subscriber.OnDisconnect = func() { eng.ready.Store(false) }
-	if store, ok := applier.(interface {
-		SetCertificateBundleFetcher(CertificateBundleFetcher)
-	}); ok {
-		store.SetCertificateBundleFetcher(client)
-	}
 	if eng.Cache != nil && cfg.DNSListenAddr != "" {
 		eng.DNS = dns.NewEngine(dns.EngineOptions{
 			Forwarder: dns.ForwarderConfig{
@@ -144,10 +102,7 @@ func New(cfg Config, cacheRoot string, cache Reader) (*Engine, error) {
 		}
 	}
 	if cfg.IngressHTTPAddr != "" || cfg.IngressTLSAddr != "" {
-		certRoot := certificatesRootFor(eng.CacheRoot)
-		if provider, ok := applier.(CertificateRootProvider); ok {
-			certRoot = provider.CertificatesRoot()
-		}
+		certRoot := eng.Cache.CertificatesRoot()
 		resolver, err := ingress.NewLunaTLSCertResolver(certRoot, cfg.IngressLRUSize)
 		if err != nil {
 			_ = conn.Close()
@@ -170,10 +125,6 @@ func New(cfg Config, cacheRoot string, cache Reader) (*Engine, error) {
 		eng.Ingress = ing
 	}
 	return eng, nil
-}
-
-func (e *Engine) ReadCache() ingress.RouteLookupReader {
-	return e.Cache
 }
 
 // Subscribe 拉取 master 复制流。
@@ -241,168 +192,6 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 }
 
-type streamSubscriber struct {
-	Client       engine.Client
-	Applier      engine.SnapshotApplier
-	OnSnapshot   func(context.Context, *engine.Snapshot) error
-	OnConnect    func()
-	OnDisconnect func()
-}
-
-func (s *streamSubscriber) Subscribe(ctx context.Context, nodeID string) error {
-	if s.Client == nil {
-		return fmt.Errorf("replication client is not configured")
-	}
-	if s.Applier == nil {
-		return fmt.Errorf("replication applier is not configured")
-	}
-	stream, err := s.Client.Subscribe(ctx, nodeID)
-	if err != nil {
-		log.Printf("slave: open notice stream failed node_id=%s err=%v", nodeID, err)
-		return err
-	}
-	log.Printf("slave: notice stream opened node_id=%s", nodeID)
-	if s.OnConnect != nil {
-		s.OnConnect()
-	}
-	defer func() {
-		if s.OnDisconnect != nil {
-			s.OnDisconnect()
-		}
-	}()
-	var cursor uint64
-	if provider, ok := s.Applier.(interface {
-		GetSnapshotRecordID(context.Context) (uint64, error)
-	}); ok {
-		value, err := provider.GetSnapshotRecordID(ctx)
-		if err != nil {
-			return err
-		}
-		cursor = value
-	}
-	log.Printf("slave: local snapshot cursor node_id=%s cursor=%d", nodeID, cursor)
-	if err := s.catchUpSnapshots(ctx, nodeID, cursor); err != nil {
-		log.Printf("slave: initial catch-up failed node_id=%s cursor=%d err=%v", nodeID, cursor, err)
-		return err
-	}
-	log.Printf("slave: initial catch-up done node_id=%s cursor=%d", nodeID, cursor)
-	if provider, ok := s.Applier.(interface {
-		GetSnapshotRecordID(context.Context) (uint64, error)
-	}); ok {
-		value, err := provider.GetSnapshotRecordID(ctx)
-		if err != nil {
-			return err
-		}
-		cursor = value
-	}
-
-	for {
-		notice, recvErr := stream.Recv()
-		if recvErr != nil {
-			if recvErr == io.EOF {
-				log.Printf("slave: notice stream closed by server node_id=%s", nodeID)
-				return nil
-			}
-			log.Printf("slave: notice recv failed node_id=%s err=%v", nodeID, recvErr)
-			return recvErr
-		}
-		if notice == nil {
-			continue
-		}
-		log.Printf("slave: notice received node_id=%s snapshot_record_id=%d dns=%v domain=%v", nodeID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
-		if notice.SnapshotRecordID <= cursor {
-			continue
-		}
-		if notice.SnapshotRecordID > cursor+1 {
-			if err := s.catchUpSnapshots(ctx, nodeID, cursor); err != nil {
-				log.Printf("slave: catch-up after notice failed node_id=%s snapshot_record_id=%d err=%v", nodeID, notice.SnapshotRecordID, err)
-				return err
-			}
-			if provider, ok := s.Applier.(interface {
-				GetSnapshotRecordID(context.Context) (uint64, error)
-			}); ok {
-				value, err := provider.GetSnapshotRecordID(ctx)
-				if err != nil {
-					return err
-				}
-				cursor = value
-			}
-			continue
-		}
-		snapshot := snapshotFromNotice(notice)
-		log.Printf("slave: apply notice snapshot begin node_id=%s snapshot_record_id=%d dns=%d domains=%d", nodeID, snapshot.SnapshotRecordID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-		if err := s.Applier.ApplySnapshot(ctx, snapshot); err != nil {
-			log.Printf("slave: apply notice snapshot failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
-			return err
-		}
-		log.Printf("slave: apply notice snapshot done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
-		if s.OnSnapshot != nil {
-			if err := s.OnSnapshot(ctx, snapshot); err != nil {
-				log.Printf("slave: on notice snapshot hook failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
-				return err
-			}
-			log.Printf("slave: on notice snapshot hook done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
-		}
-		cursor = notice.SnapshotRecordID
-	}
-}
-
-func snapshotFromNotice(notice *engine.ChangeNotification) *engine.Snapshot {
-	snapshot := &engine.Snapshot{
-		NodeID:           notice.NodeID,
-		CreatedAt:        notice.CreatedAt,
-		SnapshotRecordID: notice.SnapshotRecordID,
-		Last:             true,
-	}
-	if notice.DNSRecord != nil {
-		snapshot.DNSRecords = append(snapshot.DNSRecords, *notice.DNSRecord)
-	}
-	if notice.DomainEntry != nil {
-		snapshot.DomainEntries = append(snapshot.DomainEntries, *notice.DomainEntry)
-	}
-	return snapshot
-}
-
-func (s *streamSubscriber) catchUpSnapshots(ctx context.Context, nodeID string, cursor uint64) error {
-	log.Printf("slave: catch-up begin node_id=%s cursor=%d", nodeID, cursor)
-	snapshotStream, err := s.Client.GetSnapshot(ctx, nodeID, cursor)
-	if err != nil {
-		log.Printf("slave: catch-up open snapshot stream failed node_id=%s cursor=%d err=%v", nodeID, cursor, err)
-		return err
-	}
-	for {
-		snapshot, recvErr := snapshotStream.Recv()
-		if recvErr != nil {
-			if recvErr == io.EOF {
-				log.Printf("slave: catch-up stream eof node_id=%s cursor=%d", nodeID, cursor)
-				return nil
-			}
-			log.Printf("slave: catch-up recv failed node_id=%s cursor=%d err=%v", nodeID, cursor, recvErr)
-			return recvErr
-		}
-		if snapshot == nil {
-			continue
-		}
-		log.Printf("slave: apply snapshot begin node_id=%s snapshot_record_id=%d last=%v dns=%d domains=%d", nodeID, snapshot.SnapshotRecordID, snapshot.Last, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-		if err := s.Applier.ApplySnapshot(ctx, snapshot); err != nil {
-			log.Printf("slave: apply snapshot failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
-			return err
-		}
-		log.Printf("slave: apply snapshot done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
-		if s.OnSnapshot != nil {
-			if err := s.OnSnapshot(ctx, snapshot); err != nil {
-				log.Printf("slave: on snapshot hook failed node_id=%s snapshot_record_id=%d err=%v", nodeID, snapshot.SnapshotRecordID, err)
-				return err
-			}
-			log.Printf("slave: on snapshot hook done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
-		}
-		if snapshot.Last {
-			log.Printf("slave: catch-up done node_id=%s snapshot_record_id=%d", nodeID, snapshot.SnapshotRecordID)
-			return nil
-		}
-	}
-}
-
 // Stop 关闭 slave engine。
 func (e *Engine) Stop(ctx context.Context) error {
 	var firstErr error
@@ -420,8 +209,8 @@ func (e *Engine) Stop(ctx context.Context) error {
 			firstErr = err
 		}
 	}
-	if e.ClientConn != nil {
-		if err := e.ClientConn.Close(); err != nil && firstErr == nil {
+	if e.Client != nil {
+		if err := e.Client.Close(); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}

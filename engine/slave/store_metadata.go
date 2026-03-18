@@ -43,6 +43,11 @@ func (s *LocalStore) initSchema() error {
 	return s.db.AutoMigrate(&dnsRecordCacheRow{}, &domainEntryCacheRow{}, &syncStateRow{})
 }
 
+func (s *LocalStore) GetSnapshot(ctx context.Context, snapshotRecordID uint64) (*engine.Snapshot, error) {
+	var snapshot engine.Snapshot
+	snapshot.SnapshotRecordID = snapshotRecordID
+}
+
 func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
 	if snapshot == nil {
 		return nil

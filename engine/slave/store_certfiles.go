@@ -10,7 +10,14 @@ import (
 
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/ingress"
+	"github.com/jabberwocky238/luna-edge/utils"
 )
+
+func (s *LocalStore) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {
+	if s == nil || strings.TrimSpace(hostname) == "" {
+		return nil, fmt.Errorf("hostname is required")
+	}
+}
 
 func (s *LocalStore) SyncChangelogCertificates(ctx context.Context, changelog *engine.ChangeNotification) error {
 	if s == nil || changelog == nil {
@@ -20,17 +27,17 @@ func (s *LocalStore) SyncChangelogCertificates(ctx context.Context, changelog *e
 		return nil
 	}
 	entry := changelog.DomainEntry
-	certLogf("slave-store: sync changelog certificates begin snapshot_record_id=%d hostname=%s deleted=%v", changelog.SnapshotRecordID, entry.Hostname, entry.Deleted)
+	utils.CertLogf("slave-store: sync changelog certificates begin snapshot_record_id=%d hostname=%s deleted=%v", changelog.SnapshotRecordID, entry.Hostname, entry.Deleted)
 	hostname := strings.TrimSpace(entry.Hostname)
 	if hostname == "" {
 		return nil
 	}
 	if entry.Deleted {
 		if err := removeCertificateFiles(s.certRoot, hostname); err != nil {
-			certLogf("slave-store: remove certificate files failed snapshot_record_id=%d hostname=%s err=%v", changelog.SnapshotRecordID, hostname, err)
+			utils.CertLogf("slave-store: remove certificate files failed snapshot_record_id=%d hostname=%s err=%v", changelog.SnapshotRecordID, hostname, err)
 			return err
 		}
-		certLogf("slave-store: remove certificate files done snapshot_record_id=%d hostname=%s", changelog.SnapshotRecordID, hostname)
+		utils.CertLogf("slave-store: remove certificate files done snapshot_record_id=%d hostname=%s", changelog.SnapshotRecordID, hostname)
 		return nil
 	}
 	cert := entry.Cert
@@ -38,10 +45,10 @@ func (s *LocalStore) SyncChangelogCertificates(ctx context.Context, changelog *e
 		return nil
 	}
 	if err := s.SyncCertificateBundle(ctx, &engine.CertificateBundle{Hostname: hostname, Revision: cert.Revision}); err != nil {
-		certLogf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", changelog.SnapshotRecordID, hostname, cert.Revision, err)
+		utils.CertLogf("slave-store: sync certificate bundle failed snapshot_record_id=%d hostname=%s revision=%d err=%v", changelog.SnapshotRecordID, hostname, cert.Revision, err)
 		return err
 	}
-	certLogf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", changelog.SnapshotRecordID, hostname, cert.Revision)
+	utils.CertLogf("slave-store: sync certificate bundle done snapshot_record_id=%d hostname=%s revision=%d", changelog.SnapshotRecordID, hostname, cert.Revision)
 	return nil
 }
 
@@ -50,20 +57,20 @@ func (s *LocalStore) SyncCertificateBundle(ctx context.Context, cert *engine.Cer
 		return nil
 	}
 	if s.fetcher == nil {
-		certLogf("slave-store: skip fetch certificate bundle hostname=%s revision=%d reason=no_fetcher", cert.Hostname, cert.Revision)
+		utils.CertLogf("slave-store: skip fetch certificate bundle hostname=%s revision=%d reason=no_fetcher", cert.Hostname, cert.Revision)
 		return nil
 	}
-	certLogf("slave-store: fetch certificate bundle begin hostname=%s revision=%d", cert.Hostname, cert.Revision)
+	utils.CertLogf("slave-store: fetch certificate bundle begin hostname=%s revision=%d", cert.Hostname, cert.Revision)
 	bundle, err := s.fetcher.FetchCertificateBundle(ctx, cert.Hostname, cert.Revision)
 	if err != nil {
-		certLogf("slave-store: fetch certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
+		utils.CertLogf("slave-store: fetch certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
 		return err
 	}
 	if err := writeCertificateBundle(s.certRoot, bundle); err != nil {
-		certLogf("slave-store: write certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
+		utils.CertLogf("slave-store: write certificate bundle failed hostname=%s revision=%d err=%v", cert.Hostname, cert.Revision, err)
 		return err
 	}
-	certLogf("slave-store: write certificate bundle done hostname=%s revision=%d", cert.Hostname, cert.Revision)
+	utils.CertLogf("slave-store: write certificate bundle done hostname=%s revision=%d", cert.Hostname, cert.Revision)
 	return nil
 }
 

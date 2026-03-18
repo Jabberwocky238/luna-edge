@@ -44,6 +44,7 @@ type Client interface {
 	GetSnapshot(ctx context.Context, nodeID string, snapshotRecordID uint64) (SnapshotStream, error)
 	Subscribe(ctx context.Context, nodeID string) (NoticeStream, error)
 	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*CertificateBundle, error)
+	Close() error
 }
 
 type Publisher interface {

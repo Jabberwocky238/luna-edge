@@ -1,7 +1,6 @@
 package slave
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,48 +18,31 @@ const (
 )
 
 func normalizeCacheRoot(root string) (string, error) {
-	root = strings.TrimSpace(root)
-	if root == "" {
-		return "", fmt.Errorf("cache root is required")
-	}
-	return root, nil
-}
 
-func metadataDBPathFor(cacheRoot string) string {
-	return filepath.Join(cacheRoot, DefaultMetadataDBName)
-}
-
-func certificatesRootFor(cacheRoot string) string {
-	return filepath.Join(cacheRoot, DefaultCertificatesDir)
 }
 
 type LocalStore struct {
-	cacheRoot string
+	CacheRoot string
 	certRoot  string
-	fetcher   CertificateBundleFetcher
 	db        *gorm.DB
 }
 
-type CertificateBundleFetcher interface {
-	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error)
-}
-
 func (s *LocalStore) MetadataDBPath() string {
-	return metadataDBPathFor(s.cacheRoot)
+	return filepath.Join(s.CacheRoot, DefaultMetadataDBName)
 }
 
 func (s *LocalStore) CertificatesRoot() string {
-	return certificatesRootFor(s.cacheRoot)
+	return filepath.Join(s.CacheRoot, DefaultCertificatesDir)
 }
 
-func NewLocalStore(cacheRoot string) (*LocalStore, error) {
+func NewLocalStore(cacheRoot string) (engine.Client, error) {
 	store := new(LocalStore)
-	normalized, err := normalizeCacheRoot(cacheRoot)
-	if err != nil {
-		return nil, err
+	cacheRoot = strings.TrimSpace(cacheRoot)
+	if cacheRoot == "" {
+		return nil, fmt.Errorf("cache root is required")
 	}
-	store.cacheRoot = normalized
-	if err := os.MkdirAll(store.cacheRoot, 0o755); err != nil {
+	store.CacheRoot = cacheRoot
+	if err := os.MkdirAll(store.CacheRoot, 0o755); err != nil {
 		return nil, err
 	}
 	store.certRoot = store.CertificatesRoot()
@@ -87,11 +69,4 @@ func (s *LocalStore) Close() error {
 		return err
 	}
 	return sqlDB.Close()
-}
-
-func (s *LocalStore) SetCertificateBundleFetcher(fetcher CertificateBundleFetcher) {
-	if s == nil {
-		return
-	}
-	s.fetcher = fetcher
 }
