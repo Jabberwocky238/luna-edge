@@ -148,6 +148,7 @@ func (s *LocalStore) dealDNSRecords(ctx context.Context, tx *gorm.DB, input *met
 		return execErr
 	}
 	log.Printf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", SnapshotRecordID, row.ID, row.FQDN)
+	s.dnsChan <- []metadata.DNSRecord{*input}
 	return nil
 }
 
