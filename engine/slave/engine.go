@@ -64,7 +64,7 @@ type Engine struct {
 	Config     Config
 	CacheRoot  string
 	Cache      Reader
-	Subscriber engine.Subscriber
+	Subscriber engine.Client
 	Applier    engine.SnapshotApplier
 	ClientConn *grpc.ClientConn
 	ready      atomic.Bool
@@ -87,7 +87,7 @@ type CertificateRootProvider interface {
 }
 
 // New 创建 slave engine。
-func New(cfg Config, cacheRoot string, cache Reader, applier engine.SnapshotApplier) (*Engine, error) {
+func New(cfg Config, cacheRoot string, cache Reader) (*Engine, error) {
 	cacheRoot = strings.TrimSpace(cacheRoot)
 	if cacheRoot == "" {
 		return nil, fmt.Errorf("cache root is required")
@@ -497,32 +497,6 @@ func (e *Engine) refreshRuntimeOnSnapshot(ctx context.Context, snapshot *engine.
 	}
 	log.Printf("slave: refresh runtime done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	return nil
-}
-
-func changelogsFromSnapshot(snapshot *engine.Snapshot) []*engine.ChangeNotification {
-	if snapshot == nil {
-		return nil
-	}
-	out := make([]*engine.ChangeNotification, 0, len(snapshot.DNSRecords)+len(snapshot.DomainEntries))
-	for i := range snapshot.DNSRecords {
-		record := snapshot.DNSRecords[i]
-		out = append(out, &engine.ChangeNotification{
-			NodeID:           snapshot.NodeID,
-			CreatedAt:        snapshot.CreatedAt,
-			SnapshotRecordID: snapshot.SnapshotRecordID,
-			DNSRecord:        &record,
-		})
-	}
-	for i := range snapshot.DomainEntries {
-		entry := snapshot.DomainEntries[i]
-		out = append(out, &engine.ChangeNotification{
-			NodeID:           snapshot.NodeID,
-			CreatedAt:        snapshot.CreatedAt,
-			SnapshotRecordID: snapshot.SnapshotRecordID,
-			DomainEntry:      &entry,
-		})
-	}
-	return out
 }
 
 func (e *Engine) restoreDNSRuntime(ctx context.Context) error {

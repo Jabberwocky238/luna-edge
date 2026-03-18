@@ -75,7 +75,7 @@ func newReplicationSlave(t *testing.T, nodeID, masterAddress string, store *slav
 		SubscribeSnapshot: true,
 		RetryMinBackoff:   10 * time.Millisecond,
 		RetryMaxBackoff:   20 * time.Millisecond,
-	}, filepath.Join(t.TempDir(), nodeID), store, store)
+	}, filepath.Join(t.TempDir(), nodeID), store)
 	if err != nil {
 		t.Fatalf("new slave %s: %v", nodeID, err)
 	}

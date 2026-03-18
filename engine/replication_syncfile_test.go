@@ -107,7 +107,7 @@ func TestReplicationSlavePullsCertificateFilesFromMaster(t *testing.T) {
 		SubscribeSnapshot: true,
 		RetryMinBackoff:   10 * time.Millisecond,
 		RetryMaxBackoff:   20 * time.Millisecond,
-	}, cacheRoot, slaveStore, slaveStore)
+	}, cacheRoot, slaveStore)
 	if err != nil {
 		t.Fatalf("new slave engine: %v", err)
 	}
