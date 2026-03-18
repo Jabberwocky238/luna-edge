@@ -117,6 +117,11 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 	}
 	e.ctx = ctx
 	e.cancel = cancel
+	defer func() {
+		if err := e.shutdown(); err != nil {
+			log.Printf("master: shutdown failed err=%v", err)
+		}
+	}()
 	log.Printf("master: start begin replication=%s manage=%s k8s_bridge=%v", e.Config.ReplicationListenAddr, e.Config.ManageListenAddr, e.K8sBridge != nil)
 	if e.K8sBridge != nil {
 		log.Printf("master: k8s bridge load initial begin")
@@ -135,9 +140,6 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 	if e.Config.ReplicationListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ReplicationListenAddr)
 		if err != nil {
-			if e.Certs != nil {
-				e.Certs.Stop()
-			}
 			return err
 		}
 		e.grpcListener = lis
@@ -149,15 +151,6 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 	if e.Config.ManageListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ManageListenAddr)
 		if err != nil {
-			if e.Certs != nil {
-				e.Certs.Stop()
-			}
-			if e.grpcServer != nil {
-				e.grpcServer.GracefulStop()
-			}
-			if e.grpcListener != nil {
-				_ = e.grpcListener.Close()
-			}
 			return err
 		}
 		e.httpListener = lis
@@ -166,7 +159,9 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 		go func() { _ = e.httpServer.Serve(lis) }()
 	}
 	log.Printf("master: start done")
-	return nil
+	<-ctx.Done()
+	log.Printf("master: context done err=%v", ctx.Err())
+	return ctx.Err()
 }
 
 func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapshot) error {
@@ -363,7 +358,13 @@ func (e *Engine) FetchCertificateBundle(ctx context.Context, req *replpb.Certifi
 }
 
 func (e *Engine) Stop() error {
+	return e.shutdown()
+}
+
+func (e *Engine) shutdown() error {
 	var firstErr error
+	shutdownCtx, cancel := e.shutdownContext()
+	defer cancel()
 	if e.Certs != nil {
 		e.Certs.Stop()
 		e.Certs = nil
@@ -375,7 +376,7 @@ func (e *Engine) Stop() error {
 		e.K8sBridge = nil
 	}
 	if e.httpServer != nil {
-		if err := e.httpServer.Shutdown(e.ctx); err != nil && firstErr == nil {
+		if err := e.httpServer.Shutdown(shutdownCtx); err != nil && err != context.Canceled && firstErr == nil {
 			firstErr = err
 		}
 		e.httpServer = nil
@@ -393,10 +394,10 @@ func (e *Engine) Stop() error {
 			close(stopped)
 		}()
 		select {
-		case <-e.ctx.Done():
+		case <-shutdownCtx.Done():
 			e.grpcServer.Stop()
-			if firstErr == nil {
-				firstErr = e.ctx.Err()
+			if shutdownCtx.Err() != nil && shutdownCtx.Err() != context.Canceled && firstErr == nil {
+				firstErr = shutdownCtx.Err()
 			}
 		case <-stopped:
 		}
@@ -415,6 +416,14 @@ func (e *Engine) Stop() error {
 		e.Factory = nil
 	}
 	return firstErr
+}
+
+func (e *Engine) shutdownContext() (context.Context, context.CancelFunc) {
+	timeout := e.Config.ShutdownTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	return context.WithTimeout(context.Background(), timeout)
 }
 
 func (e *Engine) Notify(fqdn string) {

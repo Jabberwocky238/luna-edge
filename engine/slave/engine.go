@@ -124,8 +124,8 @@ func (e *Engine) Start(ctx context.Context) error {
 		if err := e.DNS.Listen(e.Config.DNSListenAddr); err != nil {
 			return err
 		}
-		go e.DNSRestoreLoop()
 		defer e.DNS.Stop()
+		go e.DNSRestoreLoop()
 		defer close(e.dnsChan)
 	}
 	if e.Ingress != nil {

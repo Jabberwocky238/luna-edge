@@ -20,7 +20,6 @@ func main() {
 	var cacheRoot string
 	flag.StringVar(&cfg.MasterAddress, "master-address", envOr("LUNA_MASTER_ADDRESS", "luna-master.luna-edge.svc.cluster.local:50051"), "master replication address")
 	flag.StringVar(&cfg.MasterManageURL, "master-manage-url", envOr("LUNA_MASTER_MANAGE_URL", "http://luna-master.luna-edge.svc.cluster.local:8080"), "master manage http base url")
-	flag.BoolVar(&cfg.SubscribeSnapshot, "subscribe-snapshot", envOr("LUNA_SUBSCRIBE_SNAPSHOT", "1") != "0", "request initial snapshot")
 	flag.DurationVar(&cfg.RetryMinBackoff, "retry-min-backoff", envDuration("LUNA_RETRY_MIN_BACKOFF", time.Second), "minimum retry backoff")
 	flag.DurationVar(&cfg.RetryMaxBackoff, "retry-max-backoff", envDuration("LUNA_RETRY_MAX_BACKOFF", 30*time.Second), "maximum retry backoff")
 
@@ -53,17 +52,7 @@ func main() {
 		cfg.DNSForwardServers = splitCSV(envOr("LUNA_DNS_FORWARD_SERVERS", "1.1.1.1:53"))
 	}
 
-	store, err := slave.NewLocalStore(cacheRoot)
-	if err != nil {
-		log.Fatalf("create slave store: %v", err)
-	}
-	defer func() {
-		if err := store.Close(); err != nil {
-			log.Printf("close slave store: %v", err)
-		}
-	}()
-
-	engine, err := slave.New(cfg, cacheRoot, store, store)
+	engine, err := slave.New(&cfg)
 	if err != nil {
 		log.Fatalf("create slave: %v", err)
 	}
@@ -73,9 +62,6 @@ func main() {
 	log.Printf("slave started: node=%s master=%s", enginepkg.POD_NAME, cfg.MasterAddress)
 	if err := engine.Start(ctx); err != nil && ctx.Err() == nil {
 		log.Fatalf("run slave: %v", err)
-	}
-	if err := engine.Stop(context.Background()); err != nil {
-		log.Fatalf("stop slave: %v", err)
 	}
 }
 
