@@ -70,15 +70,11 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := engine.Start(ctx, cancel); err != nil {
+	if err := engine.Start(ctx); err != nil {
 		log.Fatalf("start master: %v", err)
 	}
 	log.Printf("master started: replication=%s manage=%s", cfg.ReplicationListenAddr, cfg.ManageListenAddr)
 	<-ctx.Done()
-
-	if err := engine.Stop(); err != nil {
-		log.Fatalf("stop master: %v", err)
-	}
 }
 
 func envOr(key, fallback string) string {

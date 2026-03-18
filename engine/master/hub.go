@@ -48,19 +48,6 @@ func (h *Hub) Unsubscribe(nodeID string, id uint64) {
 	}
 }
 
-func (h *Hub) Publish(nodeID string, msg *enginepkg.ChangeNotification) {
-	h.mu.RLock()
-	nodeSubs := h.subscribers[nodeID]
-	targets := make([]chan *enginepkg.ChangeNotification, 0, len(nodeSubs))
-	for _, ch := range nodeSubs {
-		targets = append(targets, ch)
-	}
-	h.mu.RUnlock()
-	for _, ch := range targets {
-		ch <- msg
-	}
-}
-
 func (h *Hub) PublishAll(msg *enginepkg.ChangeNotification) {
 	h.mu.RLock()
 	targets := make([]chan *enginepkg.ChangeNotification, 0)

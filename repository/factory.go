@@ -16,26 +16,34 @@ type Factory interface {
 	Connection() connection.Connection
 	// Repository 返回聚合后的仓储接口。
 	Repository() Repository
+	// Start 初始化底层连接和仓储。
+	Start() error
 	// Close 关闭底层连接。
 	Close() error
 }
 
 type factory struct {
+	cfg  connection.Config
 	conn connection.Connection
 	repo functions.Repository
 }
 
 // NewFactory 根据数据库配置创建一个聚合仓储工厂。
-func NewFactory(cfg connection.Config) (Factory, error) {
-	conn, err := connection.Open(cfg)
-	if err != nil {
-		return nil, err
-	}
-
+func NewFactory(cfg connection.Config) Factory {
 	return &factory{
-		conn: conn,
-		repo: functions.NewGormRepository(conn.DB()),
-	}, nil
+		cfg: cfg,
+	}
+}
+
+func (f *factory) Start() error {
+	conn, err := connection.Open(f.cfg)
+	if err != nil {
+		return err
+	}
+	repo := functions.NewGormRepository(conn.DB())
+	f.conn = conn
+	f.repo = repo
+	return nil
 }
 
 func (f *factory) Connection() connection.Connection {

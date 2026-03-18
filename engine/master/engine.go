@@ -39,8 +39,7 @@ type Config struct {
 type Engine struct {
 	replpb.UnimplementedReplicationServiceServer
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx context.Context
 
 	Config    Config
 	Factory   repository.Factory
@@ -52,10 +51,8 @@ type Engine struct {
 	Certs     *CertReconciler
 	K8sBridge *masterk8s.Bridge
 
-	grpcServer   *grpc.Server
-	grpcListener net.Listener
-	httpServer   *http.Server
-	httpListener net.Listener
+	grpcServer *grpc.Server
+	httpServer *http.Server
 }
 
 type CertificateBundleProvider interface {
@@ -70,21 +67,21 @@ func New(cfg Config) (*Engine, error) {
 	if cfg.StorageDriver == "" {
 		cfg.StorageDriver = connection.DriverPostgres
 	}
-	factory, err := repository.NewFactory(connection.Config{
+	factory := repository.NewFactory(connection.Config{
 		Driver:      cfg.StorageDriver,
 		DSN:         cfg.PostgresDSN,
 		Path:        cfg.SQLitePath,
 		AutoMigrate: cfg.AutoMigrate,
 	})
-	if err != nil {
-		return nil, err
-	}
-	repo := factory.Repository()
 	engine := &Engine{
 		Config:  cfg,
 		Factory: factory,
 		Hub:     NewHub(),
 	}
+	if err := factory.Start(); err != nil {
+		return nil, err
+	}
+	repo := factory.Repository()
 	wrapper := manage.NewWrapper(repo, engine, engine)
 	engine.Repo = wrapper
 	engine.Manage = manage.NewAPI(wrapper)
@@ -111,15 +108,11 @@ func New(cfg Config) (*Engine, error) {
 	return engine, nil
 }
 
-func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
-	if ctx == nil {
-		return fmt.Errorf("start context is required")
-	}
+func (e *Engine) Start(ctx context.Context) error {
 	e.ctx = ctx
-	e.cancel = cancel
 	defer func() {
-		if err := e.shutdown(); err != nil {
-			log.Printf("master: shutdown failed err=%v", err)
+		if err := e.Factory.Close(); err != nil {
+			log.Printf("master: factory close failed err=%v", err)
 		}
 	}()
 	log.Printf("master: start begin replication=%s manage=%s k8s_bridge=%v", e.Config.ReplicationListenAddr, e.Config.ManageListenAddr, e.K8sBridge != nil)
@@ -132,9 +125,15 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 		log.Printf("master: k8s bridge load initial done")
 		e.K8sBridge.Listen(ctx)
 		log.Printf("master: k8s bridge listeners started")
+		defer func() {
+			if err := e.K8sBridge.Stop(); err != nil {
+				log.Printf("master: k8s bridge stop failed err=%v", err)
+			}
+		}()
 	}
 	if e.Certs != nil {
 		e.Certs.Start(ctx)
+		defer e.Certs.Stop()
 		log.Printf("master: cert reconciler started")
 	}
 	if e.Config.ReplicationListenAddr != "" {
@@ -142,55 +141,30 @@ func (e *Engine) Start(ctx context.Context, cancel context.CancelFunc) error {
 		if err != nil {
 			return err
 		}
-		e.grpcListener = lis
 		e.grpcServer = grpc.NewServer()
 		replpb.RegisterReplicationServiceServer(e.grpcServer, e)
 		log.Printf("master: replication listener ready addr=%s", lis.Addr().String())
 		go func() { _ = e.grpcServer.Serve(lis) }()
+		defer func() {
+			e.grpcServer.GracefulStop()
+		}()
 	}
 	if e.Config.ManageListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ManageListenAddr)
 		if err != nil {
 			return err
 		}
-		e.httpListener = lis
 		e.httpServer = &http.Server{Addr: e.Config.ManageListenAddr, Handler: e.Manage.Handler()}
 		log.Printf("master: manage listener ready addr=%s", lis.Addr().String())
 		go func() { _ = e.httpServer.Serve(lis) }()
+		defer func() {
+			e.httpServer.Shutdown(ctx)
+		}()
 	}
 	log.Printf("master: start done")
 	<-ctx.Done()
 	log.Printf("master: context done err=%v", ctx.Err())
 	return ctx.Err()
-}
-
-func (e *Engine) PublishSnapshot(ctx context.Context, snapshot *enginepkg.Snapshot) error {
-	if e == nil || e.Hub == nil || snapshot == nil {
-		return nil
-	}
-	log.Printf("replication: publish snapshot begin node_id=%s dns=%d domains=%d", snapshot.NodeID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-	for i := range snapshot.DNSRecords {
-		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, metadata.SnapshotActionUpsert)
-		if err != nil {
-			log.Printf("replication: append snapshot record failed type=%s sync_id=%s err=%v", metadata.SnapshotSyncTypeDNSRecord, snapshot.DNSRecords[i].ID, err)
-			return err
-		}
-		rec := snapshot.DNSRecords[i]
-		log.Printf("replication: publish dns change snapshot_record_id=%d dns_id=%s fqdn=%s type=%s", recordID, rec.ID, rec.FQDN, rec.RecordType)
-		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DNSRecord: &rec})
-	}
-	for i := range snapshot.DomainEntries {
-		recordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, metadata.SnapshotActionUpsert)
-		if err != nil {
-			log.Printf("replication: append snapshot record failed type=%s sync_id=%s err=%v", metadata.SnapshotSyncTypeDomainEntryProjection, snapshot.DomainEntries[i].ID, err)
-			return err
-		}
-		entry := snapshot.DomainEntries[i]
-		log.Printf("replication: publish domain change snapshot_record_id=%d domain_id=%s hostname=%s", recordID, entry.ID, entry.Hostname)
-		e.Hub.PublishAll(&enginepkg.ChangeNotification{NodeID: snapshot.NodeID, CreatedAt: time.Now().UTC(), SnapshotRecordID: recordID, DomainEntry: &entry})
-	}
-	log.Printf("replication: publish snapshot done node_id=%s", snapshot.NodeID)
-	return nil
 }
 
 func (e *Engine) PublishChangeLog(ctx context.Context, changelog *enginepkg.ChangeNotification) error {
@@ -217,34 +191,6 @@ func (e *Engine) PublishChangeLog(ctx context.Context, changelog *enginepkg.Chan
 	e.Hub.PublishAll(changelog)
 	log.Printf("replication: publish changelog done node_id=%s snapshot_record_id=%d", changelog.NodeID, changelog.SnapshotRecordID)
 	return nil
-}
-
-func (e *Engine) BuildSnapshot(ctx context.Context, nodeID string) (*enginepkg.Snapshot, error) {
-	log.Printf("replication: build snapshot begin node_id=%s", nodeID)
-	snapshot := &enginepkg.Snapshot{
-		NodeID:    nodeID,
-		CreatedAt: time.Now().UTC(),
-	}
-	if e == nil || e.Repo == nil {
-		return snapshot, nil
-	}
-	if err := e.Repo.DNSRecords().ListResource(ctx, &snapshot.DNSRecords, "fqdn asc, record_type asc, id asc"); err != nil {
-		log.Printf("replication: list dns records failed node_id=%s err=%v", nodeID, err)
-		return nil, err
-	}
-	var domains []metadata.DomainEndpoint
-	if err := e.Repo.DomainEndpoints().ListResource(ctx, &domains, "hostname asc"); err != nil {
-		log.Printf("replication: list domain endpoints failed node_id=%s err=%v", nodeID, err)
-		return nil, err
-	}
-	for i := range domains {
-		entry, err := e.Repo.GetDomainEntryProjectionByDomain(ctx, domains[i].Hostname)
-		if err == nil && entry != nil {
-			snapshot.DomainEntries = append(snapshot.DomainEntries, *entry)
-		}
-	}
-	log.Printf("replication: build snapshot done node_id=%s dns=%d domains=%d", nodeID, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
-	return snapshot, nil
 }
 
 func (e *Engine) appendSnapshotRecord(ctx context.Context, syncType metadata.SnapshotSyncType, syncID string, action metadata.SnapshotAction) (uint64, error) {
@@ -355,75 +301,6 @@ func (e *Engine) FetchCertificateBundle(ctx context.Context, req *replpb.Certifi
 		TlsKey:       slices.Clone(bundle.TLSKey),
 		MetadataJson: slices.Clone(bundle.MetadataJSON),
 	}, nil
-}
-
-func (e *Engine) Stop() error {
-	return e.shutdown()
-}
-
-func (e *Engine) shutdown() error {
-	var firstErr error
-	shutdownCtx, cancel := e.shutdownContext()
-	defer cancel()
-	if e.Certs != nil {
-		e.Certs.Stop()
-		e.Certs = nil
-	}
-	if e.K8sBridge != nil {
-		if err := e.K8sBridge.Stop(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		e.K8sBridge = nil
-	}
-	if e.httpServer != nil {
-		if err := e.httpServer.Shutdown(shutdownCtx); err != nil && err != context.Canceled && firstErr == nil {
-			firstErr = err
-		}
-		e.httpServer = nil
-	}
-	if e.httpListener != nil {
-		if err := e.httpListener.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		e.httpListener = nil
-	}
-	if e.grpcServer != nil {
-		stopped := make(chan struct{})
-		go func() {
-			e.grpcServer.GracefulStop()
-			close(stopped)
-		}()
-		select {
-		case <-shutdownCtx.Done():
-			e.grpcServer.Stop()
-			if shutdownCtx.Err() != nil && shutdownCtx.Err() != context.Canceled && firstErr == nil {
-				firstErr = shutdownCtx.Err()
-			}
-		case <-stopped:
-		}
-		e.grpcServer = nil
-	}
-	if e.grpcListener != nil {
-		if err := e.grpcListener.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		e.grpcListener = nil
-	}
-	if e.Factory != nil {
-		if err := e.Factory.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		e.Factory = nil
-	}
-	return firstErr
-}
-
-func (e *Engine) shutdownContext() (context.Context, context.CancelFunc) {
-	timeout := e.Config.ShutdownTimeout
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	return context.WithTimeout(context.Background(), timeout)
 }
 
 func (e *Engine) Notify(fqdn string) {

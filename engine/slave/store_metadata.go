@@ -124,7 +124,7 @@ func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *engine.Chang
 	return nil
 }
 
-func (s *LocalStore) dealDNSRecords(ctx context.Context, tx *gorm.DB, input *metadata.DNSRecord, SnapshotRecordID uint64) error {
+func (s *LocalStore) dealDNSRecords(_ context.Context, tx *gorm.DB, input *metadata.DNSRecord, SnapshotRecordID uint64) error {
 	if input.Deleted {
 		if execErr := tx.Delete(&dnsRecordCacheRow{}, "id = ?", input.ID).Error; execErr != nil {
 			log.Printf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, input.ID, execErr)
