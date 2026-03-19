@@ -285,16 +285,13 @@ func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMater
 				continue
 			}
 			item := out[host]
-			if item.domain.ID == "" {
-				item.domain = metadata.DomainEndpoint{
-					ID:          "k8s:domain:" + host,
-					Hostname:    host,
-					NeedCert:    tlsHosts[host],
-					BackendType: metadata.BackendTypeL7HTTP,
-				}
-				if tlsHosts[host] {
-					item.domain.BackendType = metadata.BackendTypeL7HTTPS
-				}
+			item.domain = metadata.DomainEndpoint{
+				Hostname:    host,
+				NeedCert:    tlsHosts[host],
+				BackendType: metadata.BackendTypeL7HTTP,
+			}
+			if tlsHosts[host] {
+				item.domain.BackendType = metadata.BackendTypeL7HTTPS
 			}
 			if tlsHosts[host] {
 				item.domain.NeedCert = true
@@ -325,11 +322,11 @@ func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMater
 						priority += 100000
 					}
 					item.routes = append(item.routes, metadata.HTTPRoute{
-						ID:               fmt.Sprintf("k8s:route:ingress:%s:%s:%s:%d", ing.Namespace, ing.Name, host, idx),
-						DomainEndpointID: item.domain.ID,
-						Path:             normalizePath(path.Path),
-						Priority:         priority,
-						BackendRefID:     backendID,
+						ID:           fmt.Sprintf("k8s:route:ingress:%s:%s:%s:%d", ing.Namespace, ing.Name, host, idx),
+						Hostname:     item.domain.Hostname,
+						Path:         normalizePath(path.Path),
+						Priority:     priority,
+						BackendRefID: backendID,
 					})
 				}
 			}

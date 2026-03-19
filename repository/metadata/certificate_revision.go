@@ -21,8 +21,8 @@ type CertificateRevision struct {
 	Shared
 	// ID 是证书版本对象的唯一标识。
 	ID string `json:"id" gorm:"column:id;primaryKey;type:text"`
-	// DomainEndpointID 是该证书版本所属的域名入口对象 ID。
-	DomainEndpointID string `json:"domain_endpoint_id" gorm:"column:domain_endpoint_id;not null;index;type:text"`
+	// Hostname 是该证书版本所属的域名入口对象的主机名。
+	Hostname string `json:"hostname" gorm:"column:hostname;not null;index;type:text"`
 	// Revision 是按域名递增的证书版本号。
 	Revision uint64 `json:"revision" gorm:"column:revision;not null"`
 	// Provider 是签发该证书的提供方。

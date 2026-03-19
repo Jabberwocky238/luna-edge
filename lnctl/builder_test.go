@@ -52,7 +52,6 @@ func TestBuilderBuildL7Plan(t *testing.T) {
 
 func TestBuilderBuildUpdatesExistingProjection(t *testing.T) {
 	existing := &metadata.DomainEntryProjection{
-		ID:          "domain:app.example.com",
 		Hostname:    "app.example.com",
 		NeedCert:    false,
 		BackendType: metadata.BackendTypeL7HTTP,
@@ -120,7 +119,6 @@ func TestBuilderBuildUpdatesExistingProjection(t *testing.T) {
 
 func TestBuilderBuildL4DeletesOldL7Routes(t *testing.T) {
 	existing := &metadata.DomainEntryProjection{
-		ID:          "domain:tcp.example.com",
 		Hostname:    "tcp.example.com",
 		NeedCert:    false,
 		BackendType: metadata.BackendTypeL7HTTP,
@@ -166,7 +164,6 @@ func TestBuilderBuildL4DeletesOldL7Routes(t *testing.T) {
 
 func TestBuilderBuildKeepsNeedCertWithoutIssuedCert(t *testing.T) {
 	existing := &metadata.DomainEntryProjection{
-		ID:          "domain:app.example.com",
 		Hostname:    "app.example.com",
 		NeedCert:    true,
 		BackendType: metadata.BackendTypeL7HTTPBoth,

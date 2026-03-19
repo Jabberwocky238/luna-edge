@@ -28,7 +28,6 @@ func TestApplyPlanCommitsResourcesAndNotifiesCerts(t *testing.T) {
 		DomainEndpoints: []lnctl.DomainEndpointChange{{
 			Action: lnctl.PlanActionCreate,
 			Desired: &metadata.DomainEndpoint{
-				ID:          "domain:nginx-lnctl.cluster-1.app238.com",
 				Hostname:    "nginx-lnctl.cluster-1.app238.com",
 				NeedCert:    true,
 				BackendType: metadata.BackendTypeL7HTTPBoth,
@@ -47,11 +46,11 @@ func TestApplyPlanCommitsResourcesAndNotifiesCerts(t *testing.T) {
 		HTTPRoutes: []lnctl.HTTPRouteChange{{
 			Action: lnctl.PlanActionCreate,
 			Desired: &metadata.HTTPRoute{
-				ID:               "route:nginx-lnctl.cluster-1.app238.com:root",
-				DomainEndpointID: "domain:nginx-lnctl.cluster-1.app238.com",
-				Path:             "/",
-				Priority:         1,
-				BackendRefID:     "backend:nginx-lnctl.cluster-1.app238.com:root",
+				ID:           "route:nginx-lnctl.cluster-1.app238.com:root",
+				Hostname:     "nginx-lnctl.cluster-1.app238.com",
+				Path:         "/",
+				Priority:     1,
+				BackendRefID: "backend:nginx-lnctl.cluster-1.app238.com:root",
 			},
 		}},
 	}
@@ -64,7 +63,7 @@ func TestApplyPlanCommitsResourcesAndNotifiesCerts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDomainEntryProjectionByDomain: %v", err)
 	}
-	if entry.ID != "domain:nginx-lnctl.cluster-1.app238.com" || !entry.NeedCert {
+	if entry.Hostname != plan.Hostname || !entry.NeedCert {
 		t.Fatalf("unexpected projection: %+v", entry)
 	}
 	if len(entry.HTTPRoutes) != 1 || entry.HTTPRoutes[0].BackendRef == nil {

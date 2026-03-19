@@ -7,20 +7,19 @@ import (
 )
 
 type SpecRepository interface {
-	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
 
-	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
+	GetDomainEntryProjectionByDomain(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error)
 
-	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
-	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
-	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
+	ListServiceBindingsByHostname(ctx context.Context, hostname string) ([]metadata.ServiceBackendRef, error)
+	ListHTTPRoutesByHostname(ctx context.Context, hostname string) ([]metadata.HTTPRoute, error)
+	ReplaceDNSRecords(ctx context.Context, hostname string, records []metadata.DNSRecord) error
 	ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error)
-	ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error)
-	GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error)
-	GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error)
+	ListDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error)
+	GetCertificateRevision(ctx context.Context, hostname string, revision uint64) (*metadata.CertificateRevision, error)
+	GetLatestCertificateRevision(ctx context.Context, hostname string) (*metadata.CertificateRevision, error)
 	GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error)
-	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
+	ListCertificateRevisions(ctx context.Context, hostname string) ([]metadata.CertificateRevision, error)
 	AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error
 	ListSnapshotRecordsAfter(ctx context.Context, afterID uint64) ([]metadata.SnapshotRecord, error)
 }

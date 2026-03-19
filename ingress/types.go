@@ -22,7 +22,6 @@ const (
 
 type BackendBinding struct {
 	ID            string
-	DomainID      string
 	Hostname      string
 	ServiceID     string
 	Namespace     string

@@ -4,8 +4,8 @@ package metadata
 type HTTPRoute struct {
 	Shared
 	ID string `json:"id" gorm:"column:id;primaryKey;type:text"`
-	// DomainEndpointID 是所属域名入口对象 ID。
-	DomainEndpointID string `json:"domain_endpoint_id" gorm:"column:domain_endpoint_id;not null;index;type:text"`
+	// Hostname 是所属域名入口对象的主机名。
+	Hostname string `json:"hostname" gorm:"column:hostname;not null;index;type:text"`
 	// Path 是该路由的请求路径前缀。
 	Path string `json:"path" gorm:"column:path;not null;default:'/';type:text"`
 	// Priority 越大优先级越高。

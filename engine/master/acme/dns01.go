@@ -42,5 +42,5 @@ func (p *masterChallengeProvider) cleanupDNS01(_ string, token, _ string) error 
 }
 
 func (p *masterChallengeProvider) dns01RecordID(token string) string {
-	return "acme-dns01-" + p.domain.ID + "-" + token
+	return "acme-dns01-" + p.domain.Hostname + "-" + token
 }

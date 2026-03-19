@@ -194,7 +194,7 @@ func (a *manageAPI) applyPlan(ctx context.Context, plan *lnctl.Plan) error {
 				if current, err := txRepo.GetDomainEntryProjectionByDomain(ctx, change.Current.Hostname); err == nil && current != nil {
 					broadcasts.deletedDomainEntries = append(broadcasts.deletedDomainEntries, *current)
 				}
-				if err := txRepo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", change.Current.ID); err != nil {
+				if err := txRepo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "hostname", change.Current.Hostname); err != nil {
 					return err
 				}
 			}
@@ -381,7 +381,7 @@ func (a *manageAPI) handlePutResource(w http.ResponseWriter, r *http.Request, re
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		item.ID = id
+		item.Hostname = id
 		if err := a.engine.Repo.DomainEndpoints().UpsertResource(ctx, &item); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

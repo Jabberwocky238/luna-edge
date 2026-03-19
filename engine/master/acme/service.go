@@ -34,7 +34,7 @@ type Config struct {
 }
 
 type IssueRequest struct {
-	DomainID      string
+	Hostname      string
 	Provider      metadata.ACMEProvider
 	ChallengeType metadata.ChallengeType
 	Email         string
@@ -107,26 +107,26 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	if s == nil || s.repo == nil {
 		return nil, fmt.Errorf("acme service repository is required")
 	}
-	utils.CertLogf("acme: issue requested domain_id=%s provider=%s challenge=%s", req.DomainID, req.Provider, req.ChallengeType)
-	domain, err := s.repo.GetDomainEndpointByID(ctx, req.DomainID)
+	utils.CertLogf("acme: issue requested  provider=%s challenge=%s", req.Hostname, req.Provider, req.ChallengeType)
+	domain, err := s.repo.GetDomainEndpointByHostname(ctx, req.Hostname)
 	if err != nil {
-		utils.CertLogf("acme: load domain failed domain_id=%s err=%v", req.DomainID, err)
+		utils.CertLogf("acme: load domain failed  err=%v", req.Hostname, err)
 		return nil, err
 	}
 	if domain == nil {
-		return nil, fmt.Errorf("domain endpoint %q not found", req.DomainID)
+		return nil, fmt.Errorf("domain endpoint %q not found", req.Hostname)
 	}
-	utils.CertLogf("acme: resolved domain domain_id=%s hostname=%s backend_type=%s", domain.ID, domain.Hostname, domain.BackendType)
+	utils.CertLogf("acme: resolved domain hostname=%s backend_type=%s", domain.Hostname, domain.BackendType)
 
 	issuerCfg, err := s.resolveIssuerConfig(req)
 	if err != nil {
-		utils.CertLogf("acme: resolve issuer config failed domain_id=%s hostname=%s err=%v", domain.ID, domain.Hostname, err)
+		utils.CertLogf("acme: resolve issuer config failed hostname=%s err=%v", domain.Hostname, err)
 		return nil, err
 	}
 	utils.CertLogf("acme: issuer config hostname=%s provider=%s directory=%s email=%s", domain.Hostname, issuerCfg.Provider, issuerCfg.Directory, issuerCfg.Email)
-	revisionNumber, err := s.nextRevision(ctx, domain.ID)
+	revisionNumber, err := s.nextRevision(ctx, domain.Hostname)
 	if err != nil {
-		utils.CertLogf("acme: next revision failed domain_id=%s err=%v", domain.ID, err)
+		utils.CertLogf("acme: next revision failed err=%v", err)
 		return nil, err
 	}
 	solver := &masterChallengeProvider{
@@ -157,17 +157,17 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	}
 	utils.CertLogf("acme: bundle built hostname=%s revision=%d not_before=%s not_after=%s", domain.Hostname, revisionNumber, certRevision.NotBefore.UTC().Format(time.RFC3339), certRevision.NotAfter.UTC().Format(time.RFC3339))
 	cert := &metadata.CertificateRevision{
-		ID:               "certrev-" + s.idSuffix(),
-		DomainEndpointID: domain.ID,
-		Revision:         revisionNumber,
-		Provider:         issuerCfg.Provider,
-		ChallengeType:    req.ChallengeType,
-		ArtifactBucket:   s.cfg.DefaultArtifactBucket,
-		ArtifactPrefix:   certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
-		NotBefore:        certRevision.NotBefore,
-		NotAfter:         certRevision.NotAfter,
-		SHA256Crt:        certRevision.SHA256Crt,
-		SHA256Key:        certRevision.SHA256Key,
+		ID:             "certrev-" + s.idSuffix(),
+		Hostname:       domain.Hostname,
+		Revision:       revisionNumber,
+		Provider:       issuerCfg.Provider,
+		ChallengeType:  req.ChallengeType,
+		ArtifactBucket: s.cfg.DefaultArtifactBucket,
+		ArtifactPrefix: certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
+		NotBefore:      certRevision.NotBefore,
+		NotAfter:       certRevision.NotAfter,
+		SHA256Crt:      certRevision.SHA256Crt,
+		SHA256Key:      certRevision.SHA256Key,
 	}
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
 		utils.CertLogf("acme: persist final cert failed hostname=%s cert_id=%s revision=%d err=%v", domain.Hostname, cert.ID, cert.Revision, err)
@@ -226,8 +226,8 @@ func (s *Service) resolveIssuerConfig(req IssueRequest) (IssuerConfig, error) {
 	return cfg, nil
 }
 
-func (s *Service) nextRevision(ctx context.Context, domainID string) (uint64, error) {
-	cert, err := s.repo.GetLatestCertificateRevision(ctx, domainID)
+func (s *Service) nextRevision(ctx context.Context, hostname string) (uint64, error) {
+	cert, err := s.repo.GetLatestCertificateRevision(ctx, hostname)
 	if err != nil {
 		return 1, nil
 	}

@@ -22,7 +22,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	ctx := context.Background()
 
 	domain := &metadata.DomainEndpoint{
-		ID:          "domain-1",
 		Hostname:    "app.example.com",
 		BackendType: metadata.BackendTypeL7HTTP,
 	}
@@ -31,15 +30,15 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	}
 
 	cert := &metadata.CertificateRevision{
-		ID:               "cert-1",
-		DomainEndpointID: "domain-1",
-		Revision:         7,
-		Provider:         "acme",
-		ChallengeType:    metadata.ChallengeTypeHTTP01,
-		ArtifactBucket:   "bucket-a",
-		ArtifactPrefix:   "certs/app",
-		SHA256Crt:        "crt-sha",
-		SHA256Key:        "key-sha",
+		ID:             "cert-1",
+		Hostname:       "app.example.com",
+		Revision:       7,
+		Provider:       "acme",
+		ChallengeType:  metadata.ChallengeTypeHTTP01,
+		ArtifactBucket: "bucket-a",
+		ArtifactPrefix: "certs/app",
+		SHA256Crt:      "crt-sha",
+		SHA256Key:      "key-sha",
 	}
 	if err := db.WithContext(ctx).Create(cert).Error; err != nil {
 		t.Fatalf("create cert: %v", err)
@@ -67,18 +66,18 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	}
 
 	route1 := &metadata.HTTPRoute{
-		ID:               "route-1",
-		DomainEndpointID: "domain-1",
-		Path:             "/api",
-		Priority:         20,
-		BackendRefID:     "backend-1",
+		ID:           "route-1",
+		Hostname:     "app.example.com",
+		Path:         "/api",
+		Priority:     20,
+		BackendRefID: "backend-1",
 	}
 	route2 := &metadata.HTTPRoute{
-		ID:               "route-2",
-		DomainEndpointID: "domain-1",
-		Path:             "/",
-		Priority:         10,
-		BackendRefID:     "backend-2",
+		ID:           "route-2",
+		Hostname:     "app.example.com",
+		Path:         "/",
+		Priority:     10,
+		BackendRefID: "backend-2",
 	}
 	if err := db.WithContext(ctx).Create(route1).Error; err != nil {
 		t.Fatalf("create route1: %v", err)
@@ -90,9 +89,6 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 	got, err := repo.GetDomainEntryProjectionByDomain(ctx, "app.example.com")
 	if err != nil {
 		t.Fatalf("GetDomainEntryProjectionByDomain: %v", err)
-	}
-	if got.ID != "domain-1" {
-		t.Fatalf("unexpected domain id: %s", got.ID)
 	}
 	if got.Hostname != "app.example.com" {
 		t.Fatalf("unexpected hostname: %s", got.Hostname)
@@ -144,7 +140,6 @@ func TestGetDomainEntryProjectionByDomain_L4UsesBindedBackendRef(t *testing.T) {
 	}
 
 	domain := &metadata.DomainEndpoint{
-		ID:              "domain-l4",
 		Hostname:        "tcp.example.com",
 		BackendType:     metadata.BackendTypeL4TLSPassthrough,
 		BindedServiceID: "backend-l4",
@@ -181,7 +176,6 @@ func TestGetDomainEntryProjectionByDomain_ExternalBackend(t *testing.T) {
 	ctx := context.Background()
 
 	domain := &metadata.DomainEndpoint{
-		ID:          "domain-ext",
 		Hostname:    "external.example.com",
 		BackendType: metadata.BackendTypeL7HTTP,
 	}
@@ -200,11 +194,11 @@ func TestGetDomainEntryProjectionByDomain_ExternalBackend(t *testing.T) {
 	}
 
 	route := &metadata.HTTPRoute{
-		ID:               "route-ext",
-		DomainEndpointID: domain.ID,
-		Path:             "/",
-		Priority:         1,
-		BackendRefID:     backend.ID,
+		ID:           "route-ext",
+		Hostname:     "external.example.com",
+		Path:         "/",
+		Priority:     1,
+		BackendRefID: backend.ID,
 	}
 	if err := db.WithContext(ctx).Create(route).Error; err != nil {
 		t.Fatalf("create route: %v", err)

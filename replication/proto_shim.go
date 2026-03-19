@@ -124,18 +124,18 @@ func certificateRevisionToProto(in *metadata.CertificateRevision) *replpb.Certif
 	if in == nil {
 		return nil
 	}
-	return &replpb.CertificateRevision{Id: in.ID, DomainEndpointId: in.DomainEndpointID, Revision: in.Revision, Provider: string(in.Provider), ChallengeType: string(in.ChallengeType), ArtifactBucket: in.ArtifactBucket, ArtifactPrefix: in.ArtifactPrefix, Sha256Crt: in.SHA256Crt, Sha256Key: in.SHA256Key, NotBefore: timeToProto(in.NotBefore), NotAfter: timeToProto(in.NotAfter)}
+	return &replpb.CertificateRevision{Id: in.ID, Hostname: in.Hostname, Revision: in.Revision, Provider: string(in.Provider), ChallengeType: string(in.ChallengeType), ArtifactBucket: in.ArtifactBucket, ArtifactPrefix: in.ArtifactPrefix, Sha256Crt: in.SHA256Crt, Sha256Key: in.SHA256Key, NotBefore: timeToProto(in.NotBefore), NotAfter: timeToProto(in.NotAfter)}
 }
 
 func certificateRevisionFromProto(in *replpb.CertificateRevision) *metadata.CertificateRevision {
 	if in == nil {
 		return nil
 	}
-	return &metadata.CertificateRevision{ID: in.GetId(), DomainEndpointID: in.GetDomainEndpointId(), Revision: in.GetRevision(), Provider: metadata.ACMEProvider(in.GetProvider()), ChallengeType: metadata.ChallengeType(in.GetChallengeType()), ArtifactBucket: in.GetArtifactBucket(), ArtifactPrefix: in.GetArtifactPrefix(), SHA256Crt: in.GetSha256Crt(), SHA256Key: in.GetSha256Key(), NotBefore: timeFromProto(in.GetNotBefore()), NotAfter: timeFromProto(in.GetNotAfter())}
+	return &metadata.CertificateRevision{ID: in.GetId(), Hostname: in.GetHostname(), Revision: in.GetRevision(), Provider: metadata.ACMEProvider(in.GetProvider()), ChallengeType: metadata.ChallengeType(in.GetChallengeType()), ArtifactBucket: in.GetArtifactBucket(), ArtifactPrefix: in.GetArtifactPrefix(), SHA256Crt: in.GetSha256Crt(), SHA256Key: in.GetSha256Key(), NotBefore: timeFromProto(in.GetNotBefore()), NotAfter: timeFromProto(in.GetNotAfter())}
 }
 
 func domainEntryProjectionToProto(in metadata.DomainEntryProjection) *replpb.DomainEntryProjection {
-	out := &replpb.DomainEntryProjection{Id: in.ID, Hostname: in.Hostname, BackendType: string(in.BackendType), Cert: certificateRevisionToProto(in.Cert), BindedBackendRef: serviceBackendRefToProto(in.BindedBackendRef), Deleted: in.Deleted}
+	out := &replpb.DomainEntryProjection{Hostname: in.Hostname, BackendType: string(in.BackendType), Cert: certificateRevisionToProto(in.Cert), BindedBackendRef: serviceBackendRefToProto(in.BindedBackendRef), Deleted: in.Deleted}
 	out.HttpRoutes = make([]*replpb.HTTPRouteProjection, 0, len(in.HTTPRoutes))
 	for i := range in.HTTPRoutes {
 		out.HttpRoutes = append(out.HttpRoutes, httpRouteProjectionToProto(in.HTTPRoutes[i]))
@@ -147,7 +147,7 @@ func domainEntryProjectionFromProto(in *replpb.DomainEntryProjection) metadata.D
 	if in == nil {
 		return metadata.DomainEntryProjection{}
 	}
-	out := metadata.DomainEntryProjection{ID: in.GetId(), Hostname: in.GetHostname(), Deleted: in.GetDeleted(), BackendType: metadata.BackendType(in.GetBackendType()), Cert: certificateRevisionFromProto(in.GetCert()), BindedBackendRef: serviceBackendRefFromProto(in.GetBindedBackendRef())}
+	out := metadata.DomainEntryProjection{Hostname: in.GetHostname(), Deleted: in.GetDeleted(), BackendType: metadata.BackendType(in.GetBackendType()), Cert: certificateRevisionFromProto(in.GetCert()), BindedBackendRef: serviceBackendRefFromProto(in.GetBindedBackendRef())}
 	out.HTTPRoutes = make([]metadata.HTTPRouteProjection, 0, len(in.GetHttpRoutes()))
 	for _, item := range in.GetHttpRoutes() {
 		out.HTTPRoutes = append(out.HTTPRoutes, httpRouteProjectionFromProto(item))

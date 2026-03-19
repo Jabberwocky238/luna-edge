@@ -313,33 +313,31 @@ func bindingFromProjection(entry *metadata.DomainEntryProjection, requestPath st
 			upstreamProtocol = RouteKindGRPC
 		}
 		return &BackendBinding{
-			ID:            route.ID,
-			Hostname:      entry.Hostname,
-			Namespace:     route.BackendRef.ServiceNamespace,
-			Name:          route.BackendRef.ServiceName,
-			Address:       backendAddress(route.BackendRef),
-			Port:          route.BackendRef.Port,
-			Protocol:      upstreamProtocol,
-			RouteVersion:  1,
-			Path:          route.Path,
-			Priority:      route.Priority,
-			BackendRef:    route.BackendRef,
-			DomainEntryID: entry.ID,
+			ID:           route.ID,
+			Hostname:     entry.Hostname,
+			Namespace:    route.BackendRef.ServiceNamespace,
+			Name:         route.BackendRef.ServiceName,
+			Address:      backendAddress(route.BackendRef),
+			Port:         route.BackendRef.Port,
+			Protocol:     upstreamProtocol,
+			RouteVersion: 1,
+			Path:         route.Path,
+			Priority:     route.Priority,
+			BackendRef:   route.BackendRef,
 		}
 	case RouteKindTLSTerminate, RouteKindTLSPassthrough, RouteKindTCP, RouteKindUDP:
 		if entry.BindedBackendRef == nil {
 			return nil
 		}
 		return &BackendBinding{
-			ID:            entry.BindedBackendRef.ID,
-			Hostname:      entry.Hostname,
-			Namespace:     entry.BindedBackendRef.ServiceNamespace,
-			Name:          entry.BindedBackendRef.ServiceName,
-			Address:       backendAddress(entry.BindedBackendRef),
-			Port:          entry.BindedBackendRef.Port,
-			Protocol:      kind,
-			BackendRef:    entry.BindedBackendRef,
-			DomainEntryID: entry.ID,
+			ID:         entry.BindedBackendRef.ID,
+			Hostname:   entry.Hostname,
+			Namespace:  entry.BindedBackendRef.ServiceNamespace,
+			Name:       entry.BindedBackendRef.ServiceName,
+			Address:    backendAddress(entry.BindedBackendRef),
+			Port:       entry.BindedBackendRef.Port,
+			Protocol:   kind,
+			BackendRef: entry.BindedBackendRef,
 		}
 	default:
 		return nil

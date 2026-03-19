@@ -191,7 +191,6 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 					port:     80,
 					binding: &BackendBinding{
 						ID:           bindingID,
-						DomainID:     bindingID,
 						Hostname:     host,
 						ServiceID:    fmt.Sprintf("%s/%s", ing.Namespace, service.Name),
 						Namespace:    ing.Namespace,

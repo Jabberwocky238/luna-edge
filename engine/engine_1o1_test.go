@@ -14,10 +14,10 @@ import (
 	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
-	"github.com/jabberwocky238/luna-edge/ingress"
 	masterpkg "github.com/jabberwocky238/luna-edge/engine/master"
 	masterk8s "github.com/jabberwocky238/luna-edge/engine/master/k8s_bridge"
 	slavepkg "github.com/jabberwocky238/luna-edge/engine/slave"
+	"github.com/jabberwocky238/luna-edge/ingress"
 	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
@@ -420,7 +420,6 @@ func (tc *engineTestCluster) UpsertDomainBase(t *testing.T, hostname string) {
 	t.Helper()
 	repo := tc.master.Repo
 	domain := &metadata.DomainEndpoint{
-		ID:          "domain:" + hostname,
 		Hostname:    hostname,
 		NeedCert:    true,
 		BackendType: metadata.BackendTypeL7HTTPS,
@@ -433,11 +432,11 @@ func (tc *engineTestCluster) UpsertDomainBase(t *testing.T, hostname string) {
 		Port:             8443,
 	}
 	route := &metadata.HTTPRoute{
-		ID:               "route:" + hostname,
-		DomainEndpointID: domain.ID,
-		Path:             "/",
-		Priority:         1,
-		BackendRefID:     backend.ID,
+		ID:           "route:" + hostname,
+		Hostname:     hostname,
+		Path:         "/",
+		Priority:     1,
+		BackendRefID: backend.ID,
 	}
 	if err := repo.DomainEndpoints().UpsertResource(context.Background(), domain); err != nil {
 		t.Fatalf("upsert domain: %v", err)
@@ -461,17 +460,17 @@ func (tc *engineTestCluster) UpsertCertificateAndBroadcast(t *testing.T, hostnam
 		t.Fatalf("get domain by hostname: %v", err)
 	}
 	cert := &metadata.CertificateRevision{
-		ID:               fmt.Sprintf("cert:%s:%d", hostname, revision),
-		DomainEndpointID: domain.ID,
-		Revision:         revision,
-		Provider:         metadata.ProviderLetsEncrypt,
-		ChallengeType:    metadata.ChallengeTypeHTTP01,
-		ArtifactBucket:   "test",
-		ArtifactPrefix:   fmt.Sprintf("certs/%s/%d", hostname, revision),
-		SHA256Crt:        fmt.Sprintf("crt-%d", revision),
-		SHA256Key:        fmt.Sprintf("key-%d", revision),
-		NotBefore:        time.Now().UTC().Add(-time.Hour),
-		NotAfter:         time.Now().UTC().Add(24 * time.Hour),
+		ID:             fmt.Sprintf("cert:%s:%d", hostname, revision),
+		Hostname:       domain.Hostname,
+		Revision:       revision,
+		Provider:       metadata.ProviderLetsEncrypt,
+		ChallengeType:  metadata.ChallengeTypeHTTP01,
+		ArtifactBucket: "test",
+		ArtifactPrefix: fmt.Sprintf("certs/%s/%d", hostname, revision),
+		SHA256Crt:      fmt.Sprintf("crt-%d", revision),
+		SHA256Key:      fmt.Sprintf("key-%d", revision),
+		NotBefore:      time.Now().UTC().Add(-time.Hour),
+		NotAfter:       time.Now().UTC().Add(24 * time.Hour),
 	}
 	if err := repo.CertificateRevisions().UpsertResource(context.Background(), cert); err != nil {
 		t.Fatalf("upsert certificate: %v", err)

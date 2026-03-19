@@ -77,7 +77,6 @@ message HTTPRouteProjection {
 
 message CertificateRevision {
   string id = 1;
-  string domain_endpoint_id = 2;
   string hostname = 3;
   uint64 revision = 4;
   string provider = 5;
@@ -91,9 +90,9 @@ message CertificateRevision {
 }
 
 message DomainEntryProjection {
-  string id = 1;
-  string hostname = 2;
-  string backend_type = 3;
+  string hostname = 1;
+  string backend_type = 2;
+  bool need_cert = 3;
   CertificateRevision cert = 4;
   repeated HTTPRouteProjection http_routes = 5;
   ServiceBackendRef binded_backend_ref = 6;

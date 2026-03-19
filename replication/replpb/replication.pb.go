@@ -697,21 +697,20 @@ func (x *HTTPRouteProjection) GetBackendRef() *ServiceBackendRef {
 }
 
 type CertificateRevision struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DomainEndpointId string                 `protobuf:"bytes,2,opt,name=domain_endpoint_id,json=domainEndpointId,proto3" json:"domain_endpoint_id,omitempty"`
-	Hostname         string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Revision         uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
-	Provider         string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
-	ChallengeType    string                 `protobuf:"bytes,6,opt,name=challenge_type,json=challengeType,proto3" json:"challenge_type,omitempty"`
-	ArtifactBucket   string                 `protobuf:"bytes,7,opt,name=artifact_bucket,json=artifactBucket,proto3" json:"artifact_bucket,omitempty"`
-	ArtifactPrefix   string                 `protobuf:"bytes,8,opt,name=artifact_prefix,json=artifactPrefix,proto3" json:"artifact_prefix,omitempty"`
-	Sha256Crt        string                 `protobuf:"bytes,9,opt,name=sha256_crt,json=sha256Crt,proto3" json:"sha256_crt,omitempty"`
-	Sha256Key        string                 `protobuf:"bytes,10,opt,name=sha256_key,json=sha256Key,proto3" json:"sha256_key,omitempty"`
-	NotBefore        *timestamp.Timestamp   `protobuf:"bytes,11,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
-	NotAfter         *timestamp.Timestamp   `protobuf:"bytes,12,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Hostname       string                 `protobuf:"bytes,3,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Revision       uint64                 `protobuf:"varint,4,opt,name=revision,proto3" json:"revision,omitempty"`
+	Provider       string                 `protobuf:"bytes,5,opt,name=provider,proto3" json:"provider,omitempty"`
+	ChallengeType  string                 `protobuf:"bytes,6,opt,name=challenge_type,json=challengeType,proto3" json:"challenge_type,omitempty"`
+	ArtifactBucket string                 `protobuf:"bytes,7,opt,name=artifact_bucket,json=artifactBucket,proto3" json:"artifact_bucket,omitempty"`
+	ArtifactPrefix string                 `protobuf:"bytes,8,opt,name=artifact_prefix,json=artifactPrefix,proto3" json:"artifact_prefix,omitempty"`
+	Sha256Crt      string                 `protobuf:"bytes,9,opt,name=sha256_crt,json=sha256Crt,proto3" json:"sha256_crt,omitempty"`
+	Sha256Key      string                 `protobuf:"bytes,10,opt,name=sha256_key,json=sha256Key,proto3" json:"sha256_key,omitempty"`
+	NotBefore      *timestamp.Timestamp   `protobuf:"bytes,11,opt,name=not_before,json=notBefore,proto3" json:"not_before,omitempty"`
+	NotAfter       *timestamp.Timestamp   `protobuf:"bytes,12,opt,name=not_after,json=notAfter,proto3" json:"not_after,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CertificateRevision) Reset() {
@@ -747,13 +746,6 @@ func (*CertificateRevision) Descriptor() ([]byte, []int) {
 func (x *CertificateRevision) GetId() string {
 	if x != nil {
 		return x.Id
-	}
-	return ""
-}
-
-func (x *CertificateRevision) GetDomainEndpointId() string {
-	if x != nil {
-		return x.DomainEndpointId
 	}
 	return ""
 }
@@ -830,9 +822,9 @@ func (x *CertificateRevision) GetNotAfter() *timestamp.Timestamp {
 
 type DomainEntryProjection struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Hostname         string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	BackendType      string                 `protobuf:"bytes,3,opt,name=backend_type,json=backendType,proto3" json:"backend_type,omitempty"`
+	Hostname         string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	BackendType      string                 `protobuf:"bytes,2,opt,name=backend_type,json=backendType,proto3" json:"backend_type,omitempty"`
+	NeedCert         bool                   `protobuf:"varint,3,opt,name=need_cert,json=needCert,proto3" json:"need_cert,omitempty"`
 	Cert             *CertificateRevision   `protobuf:"bytes,4,opt,name=cert,proto3" json:"cert,omitempty"`
 	HttpRoutes       []*HTTPRouteProjection `protobuf:"bytes,5,rep,name=http_routes,json=httpRoutes,proto3" json:"http_routes,omitempty"`
 	BindedBackendRef *ServiceBackendRef     `protobuf:"bytes,6,opt,name=binded_backend_ref,json=bindedBackendRef,proto3" json:"binded_backend_ref,omitempty"`
@@ -871,13 +863,6 @@ func (*DomainEntryProjection) Descriptor() ([]byte, []int) {
 	return file_replication_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *DomainEntryProjection) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
 func (x *DomainEntryProjection) GetHostname() string {
 	if x != nil {
 		return x.Hostname
@@ -890,6 +875,13 @@ func (x *DomainEntryProjection) GetBackendType() string {
 		return x.BackendType
 	}
 	return ""
+}
+
+func (x *DomainEntryProjection) GetNeedCert() bool {
+	if x != nil {
+		return x.NeedCert
+	}
+	return false
 }
 
 func (x *DomainEntryProjection) GetCert() *CertificateRevision {
@@ -983,10 +975,9 @@ const file_replication_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1a\n" +
 	"\bpriority\x18\x03 \x01(\x05R\bpriority\x12G\n" +
 	"\vbackend_ref\x18\x04 \x01(\v2&.luna.replication.v1.ServiceBackendRefR\n" +
-	"backendRef\"\xd2\x03\n" +
+	"backendRef\"\xa4\x03\n" +
 	"\x13CertificateRevision\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
-	"\x12domain_endpoint_id\x18\x02 \x01(\tR\x10domainEndpointId\x12\x1a\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bhostname\x18\x03 \x01(\tR\bhostname\x12\x1a\n" +
 	"\brevision\x18\x04 \x01(\x04R\brevision\x12\x1a\n" +
 	"\bprovider\x18\x05 \x01(\tR\bprovider\x12%\n" +
@@ -1000,11 +991,11 @@ const file_replication_proto_rawDesc = "" +
 	" \x01(\tR\tsha256Key\x129\n" +
 	"\n" +
 	"not_before\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tnotBefore\x127\n" +
-	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\xdf\x02\n" +
-	"\x15DomainEntryProjection\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\bhostname\x18\x02 \x01(\tR\bhostname\x12!\n" +
-	"\fbackend_type\x18\x03 \x01(\tR\vbackendType\x12<\n" +
+	"\tnot_after\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter\"\xec\x02\n" +
+	"\x15DomainEntryProjection\x12\x1a\n" +
+	"\bhostname\x18\x01 \x01(\tR\bhostname\x12!\n" +
+	"\fbackend_type\x18\x02 \x01(\tR\vbackendType\x12\x1b\n" +
+	"\tneed_cert\x18\x03 \x01(\bR\bneedCert\x12<\n" +
 	"\x04cert\x18\x04 \x01(\v2(.luna.replication.v1.CertificateRevisionR\x04cert\x12I\n" +
 	"\vhttp_routes\x18\x05 \x03(\v2(.luna.replication.v1.HTTPRouteProjectionR\n" +
 	"httpRoutes\x12T\n" +

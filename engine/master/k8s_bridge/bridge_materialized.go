@@ -83,15 +83,15 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 }
 
 func upsertManagedDomain(ctx context.Context, repo repository.Repository, item domainMaterialized) (bool, error) {
-	existing, err := repo.GetDomainEndpointByID(ctx, item.domain.ID)
+	existing, err := repo.GetDomainEndpointByHostname(ctx, item.domain.Hostname)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
-	currentRoutes, err := repo.ListHTTPRoutesByDomainID(ctx, item.domain.ID)
+	currentRoutes, err := repo.ListHTTPRoutesByHostname(ctx, item.domain.Hostname)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
-	currentBackends, err := repo.ListServiceBindingsByDomainID(ctx, item.domain.ID)
+	currentBackends, err := repo.ListServiceBindingsByHostname(ctx, item.domain.Hostname)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
@@ -152,10 +152,7 @@ func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostna
 		}
 		return false, err
 	}
-	if domain == nil || !strings.HasPrefix(domain.ID, "k8s:domain:") {
-		return false, nil
-	}
-	routes, err := repo.ListHTTPRoutesByDomainID(ctx, domain.ID)
+	routes, err := repo.ListHTTPRoutesByHostname(ctx, domain.Hostname)
 	if err == nil {
 		for i := range routes {
 			if err := repo.HTTPRoutes().DeleteResourceByField(ctx, &metadata.HTTPRoute{}, "id", routes[i].ID); err != nil {
@@ -173,7 +170,7 @@ func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostna
 			return false, err
 		}
 	}
-	if err := repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", domain.ID); err != nil {
+	if err := repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "hostname", domain.Hostname); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -195,7 +192,7 @@ func managedDomainUnchanged(existing *metadata.DomainEndpoint, currentRoutes []m
 	}
 	for i := range item.routes {
 		current, ok := currentRouteMap[item.routes[i].ID]
-		if !ok || current.DomainEndpointID != item.routes[i].DomainEndpointID || current.Path != item.routes[i].Path || current.Priority != item.routes[i].Priority || current.BackendRefID != item.routes[i].BackendRefID {
+		if !ok || current.Hostname != item.routes[i].Hostname || current.Path != item.routes[i].Path || current.Priority != item.routes[i].Priority || current.BackendRefID != item.routes[i].BackendRefID {
 			return false
 		}
 	}

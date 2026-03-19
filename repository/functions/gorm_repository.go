@@ -59,7 +59,6 @@ func (r *GormRepository) MarkCertificateDesired(ctx context.Context, hostname st
 // GetDomainEntryProjectionByDomain 按域名聚合查询 DomainEntryProjection。
 func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error) {
 	type domainEntryProjectionRow struct {
-		DomainID                string                       `gorm:"column:domain_id"`
 		DomainHost              string                       `gorm:"column:domain_hostname"`
 		DomainNeedCert          bool                         `gorm:"column:domain_need_cert"`
 		BackendType             metadata.BackendType         `gorm:"column:backend_type"`
@@ -151,7 +150,6 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 	}
 
 	projection := &metadata.DomainEntryProjection{
-		ID:          rows[0].DomainID,
 		Hostname:    rows[0].DomainHost,
 		NeedCert:    rows[0].DomainNeedCert,
 		BackendType: rows[0].BackendType,
@@ -160,21 +158,20 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 	first := rows[0]
 	if first.CertID != nil && *first.CertID != "" {
 		projection.Cert = &metadata.CertificateRevision{
-			ID:               *first.CertID,
-			DomainEndpointID: derefString(first.CertDomainID),
-			Revision:         derefUint64(first.CertRevision),
-			Provider:         metadata.ACMEProvider(derefString(first.CertProvider)),
-			ChallengeType:    derefChallengeType(first.CertType),
-			ArtifactBucket:   derefString(first.CertBucket),
-			ArtifactPrefix:   derefString(first.CertPrefix),
-			SHA256Crt:        derefString(first.CertSHA256Crt),
-			SHA256Key:        derefString(first.CertSHA256Key),
+			ID:             *first.CertID,
+			Revision:       derefUint64(first.CertRevision),
+			Provider:       metadata.ACMEProvider(derefString(first.CertProvider)),
+			ChallengeType:  derefChallengeType(first.CertType),
+			ArtifactBucket: derefString(first.CertBucket),
+			ArtifactPrefix: derefString(first.CertPrefix),
+			SHA256Crt:      derefString(first.CertSHA256Crt),
+			SHA256Key:      derefString(first.CertSHA256Key),
 		}
 	}
 	if projection.Cert != nil {
-		log.Printf("repository: domain projection cert resolved hostname=%s domain_id=%s cert_id=%s revision=%d", projection.Hostname, projection.ID, projection.Cert.ID, projection.Cert.Revision)
+		log.Printf("repository: domain projection cert resolved hostname=%s cert_id=%s revision=%d", projection.Hostname, projection.Cert.ID, projection.Cert.Revision)
 	} else {
-		log.Printf("repository: domain projection cert missing hostname=%s domain_id=%s", projection.Hostname, projection.ID)
+		log.Printf("repository: domain projection cert missing hostname=%s", projection.Hostname)
 	}
 
 	if projection.BackendType == metadata.BackendTypeL4TLSPassthrough || projection.BackendType == metadata.BackendTypeL4TLSTermination {

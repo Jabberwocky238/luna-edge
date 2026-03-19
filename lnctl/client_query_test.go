@@ -26,7 +26,7 @@ func TestClientQueryDomainEntryProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryDomainEntryProjection: %v", err)
 	}
-	if got.ID != "domain:app.example.com" || got.Hostname != "app.example.com" {
+	if got.Hostname != "app.example.com" {
 		t.Fatalf("unexpected projection: %+v", got)
 	}
 }

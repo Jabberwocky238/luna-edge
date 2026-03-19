@@ -15,7 +15,6 @@ func TestSyncDomainSetOnlyReturnsChangedHosts(t *testing.T) {
 	ctx := context.Background()
 	item := domainMaterialized{
 		domain: metadata.DomainEndpoint{
-			ID:          "k8s:domain:nginx-gateway.cluster-1.app238.com",
 			Hostname:    "nginx-gateway.cluster-1.app238.com",
 			NeedCert:    true,
 			BackendType: metadata.BackendTypeL7HTTPS,
@@ -28,11 +27,11 @@ func TestSyncDomainSetOnlyReturnsChangedHosts(t *testing.T) {
 			Port:             443,
 		}},
 		routes: []metadata.HTTPRoute{{
-			ID:               "k8s:route:test",
-			DomainEndpointID: "k8s:domain:nginx-gateway.cluster-1.app238.com",
-			Path:             "/",
-			Priority:         1,
-			BackendRefID:     "k8s:backend:test",
+			ID:           "k8s:route:test",
+			Hostname:     "nginx-gateway.cluster-1.app238.com",
+			Path:         "/",
+			Priority:     1,
+			BackendRefID: "k8s:backend:test",
 		}},
 	}
 
@@ -69,7 +68,6 @@ func TestSyncDomainSetMarksCertificateDesiredForHTTPSDomain(t *testing.T) {
 	_, _, err := syncDomainSet(ctx, repo, map[string]domainMaterialized{
 		host: {
 			domain: metadata.DomainEndpoint{
-				ID:          "k8s:domain:" + host,
 				Hostname:    host,
 				NeedCert:    true,
 				BackendType: metadata.BackendTypeL7HTTPS,
@@ -82,11 +80,11 @@ func TestSyncDomainSetMarksCertificateDesiredForHTTPSDomain(t *testing.T) {
 				Port:             443,
 			}},
 			routes: []metadata.HTTPRoute{{
-				ID:               "k8s:route:test",
-				DomainEndpointID: "k8s:domain:" + host,
-				Path:             "/",
-				Priority:         1,
-				BackendRefID:     "k8s:backend:test",
+				ID:           "k8s:route:test",
+				Hostname:     host,
+				Path:         "/",
+				Priority:     1,
+				BackendRefID: "k8s:backend:test",
 			}},
 		},
 	}, []string{host}, nil)

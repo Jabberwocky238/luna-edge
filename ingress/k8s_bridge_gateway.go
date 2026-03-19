@@ -267,7 +267,6 @@ func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, h
 		pathKind: k8sRoutePathPrefix,
 		binding: &BackendBinding{
 			ID:           bindingID,
-			DomainID:     bindingID,
 			Hostname:     host,
 			ServiceID:    fmt.Sprintf("%s/%s", backend.namespace, backend.name),
 			Namespace:    backend.namespace,

@@ -163,7 +163,7 @@ func (r *CertReconciler) reconcileDomain(ctx context.Context, domain *metadata.D
 		return nil
 	}
 	_, err := r.issuer.IssueCertificate(ctx, acme.IssueRequest{
-		DomainID:      domain.ID,
+		Hostname:      domain.Hostname,
 		ChallengeType: challengeTypeForDomain(domain),
 		Provider:      *r.issueProvider,
 	})

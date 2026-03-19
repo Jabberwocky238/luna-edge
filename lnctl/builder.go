@@ -165,7 +165,7 @@ func (b *Builder) Build() (*Plan, error) {
 			plan.ServiceBackendRefs = append(plan.ServiceBackendRefs, diffServiceBackendRef(&backend, nil)...)
 		}
 	} else {
-		desiredRoutes, desiredBackends := b.buildDesiredL7Resources(desiredDomain.ID)
+		desiredRoutes, desiredBackends := b.buildDesiredL7Resources(desiredDomain.Hostname)
 		plan.HTTPRoutes = append(plan.HTTPRoutes, diffHTTPRoutes(b.currentHTTPRoutes(), desiredRoutes)...)
 		plan.ServiceBackendRefs = append(plan.ServiceBackendRefs, diffServiceBackendRefs(b.currentL7BackendRefs(), desiredBackends)...)
 		if current := b.currentL4BackendRef(); current != nil {
@@ -178,12 +178,7 @@ func (b *Builder) Build() (*Plan, error) {
 }
 
 func (b *Builder) buildDesiredDomainEndpoint() *metadata.DomainEndpoint {
-	id := "domain:" + b.hostname
-	if current := b.currentDomainEndpoint(); current != nil && current.ID != "" {
-		id = current.ID
-	}
 	out := &metadata.DomainEndpoint{
-		ID:          id,
 		Hostname:    b.hostname,
 		NeedCert:    b.desiredNeedCert,
 		BackendType: b.desiredBackendType,
@@ -194,18 +189,18 @@ func (b *Builder) buildDesiredDomainEndpoint() *metadata.DomainEndpoint {
 	return out
 }
 
-func (b *Builder) buildDesiredL7Resources(domainID string) ([]metadata.HTTPRoute, []metadata.ServiceBackendRef) {
+func (b *Builder) buildDesiredL7Resources(hostname string) ([]metadata.HTTPRoute, []metadata.ServiceBackendRef) {
 	routes := make([]metadata.HTTPRoute, 0, len(b.desiredRoutes))
 	backends := make([]metadata.ServiceBackendRef, 0, len(b.desiredRoutes))
 	for _, route := range b.desiredRoutes {
 		refID := b.backendRefID(route.Path)
 		backends = append(backends, b.buildBackendRef(route.Path, route.Backend))
 		routes = append(routes, metadata.HTTPRoute{
-			ID:               b.routeID(route.Path),
-			DomainEndpointID: domainID,
-			Path:             route.Path,
-			Priority:         int32(len(route.Path)),
-			BackendRefID:     refID,
+			ID:           b.routeID(route.Path),
+			Hostname:     hostname,
+			Path:         route.Path,
+			Priority:     int32(len(route.Path)),
+			BackendRefID: refID,
 		})
 	}
 	return routes, backends
@@ -244,7 +239,6 @@ func (b *Builder) currentDomainEndpoint() *metadata.DomainEndpoint {
 	}
 	return &metadata.DomainEndpoint{
 		Shared:          metadata.Shared{Deleted: b.existingProjection.Deleted},
-		ID:              b.existingProjection.ID,
 		Hostname:        b.existingProjection.Hostname,
 		NeedCert:        b.existingProjection.NeedCert,
 		BackendType:     b.existingProjection.BackendType,
@@ -285,10 +279,10 @@ func (b *Builder) currentHTTPRoutes() []metadata.HTTPRoute {
 	out := make([]metadata.HTTPRoute, 0, len(b.existingProjection.HTTPRoutes))
 	for _, route := range b.existingProjection.HTTPRoutes {
 		item := metadata.HTTPRoute{
-			ID:               route.ID,
-			DomainEndpointID: b.existingProjection.ID,
-			Path:             route.Path,
-			Priority:         route.Priority,
+			ID:       route.ID,
+			Hostname: b.existingProjection.Hostname,
+			Path:     route.Path,
+			Priority: route.Priority,
 		}
 		if route.BackendRef != nil {
 			item.BackendRefID = route.BackendRef.ID

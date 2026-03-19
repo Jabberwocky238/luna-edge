@@ -353,16 +353,13 @@ func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domai
 						continue
 					}
 					item := out[host]
-					if item.domain.ID == "" {
-						item.domain = metadata.DomainEndpoint{
-							ID:          "k8s:domain:" + host,
-							Hostname:    host,
-							NeedCert:    listener.protocol == "HTTPS",
-							BackendType: metadata.BackendTypeL7HTTP,
-						}
-						if listener.protocol == "HTTPS" {
-							item.domain.BackendType = metadata.BackendTypeL7HTTPS
-						}
+					item.domain = metadata.DomainEndpoint{
+						Hostname:    host,
+						NeedCert:    listener.protocol == "HTTPS",
+						BackendType: metadata.BackendTypeL7HTTP,
+					}
+					if listener.protocol == "HTTPS" {
+						item.domain.BackendType = metadata.BackendTypeL7HTTPS
 					}
 					if listener.protocol == "HTTPS" {
 						item.domain.NeedCert = true
@@ -392,11 +389,11 @@ func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domai
 							priority += 100000
 						}
 						item.routes = append(item.routes, metadata.HTTPRoute{
-							ID:               fmt.Sprintf("k8s:route:gateway:%s:%s:%s:%d:%d", route.namespace, route.name, host, idx, ruleIdx),
-							DomainEndpointID: item.domain.ID,
-							Path:             normalizePath(rule.path),
-							Priority:         priority,
-							BackendRefID:     backendID,
+							ID:           fmt.Sprintf("k8s:route:gateway:%s:%s:%s:%d:%d", route.namespace, route.name, host, idx, ruleIdx),
+							Hostname:     item.domain.Hostname,
+							Path:         normalizePath(rule.path),
+							Priority:     priority,
+							BackendRefID: backendID,
 						})
 					}
 					out[host] = item
@@ -429,7 +426,6 @@ func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domai
 					item := out[host]
 					backendID := fmt.Sprintf("k8s:backend:gateway-tls:%s:%s:%s:%d", route.namespace, route.name, host, idx)
 					item.domain = metadata.DomainEndpoint{
-						ID:              "k8s:domain:" + host,
 						Hostname:        host,
 						NeedCert:        !listener.passthrough,
 						BindedServiceID: backendID,

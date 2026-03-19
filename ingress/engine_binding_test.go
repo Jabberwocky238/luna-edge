@@ -8,7 +8,6 @@ import (
 
 func TestBindingFromProjection_ServiceBackendAddressing(t *testing.T) {
 	entry := &metadata.DomainEntryProjection{
-		ID:       "domain-1",
 		Hostname: "svc.example.com",
 		HTTPRoutes: []metadata.HTTPRouteProjection{{
 			ID:       "route-1",
@@ -35,7 +34,6 @@ func TestBindingFromProjection_ServiceBackendAddressing(t *testing.T) {
 
 func TestBindingFromProjection_ExternalBackendAddressing(t *testing.T) {
 	entry := &metadata.DomainEntryProjection{
-		ID:       "domain-ext",
 		Hostname: "ext.example.com",
 		HTTPRoutes: []metadata.HTTPRouteProjection{{
 			ID:       "route-ext",

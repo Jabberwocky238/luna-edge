@@ -41,14 +41,14 @@ func (r *GormRepository) GetActiveCertificateForDomain(ctx context.Context, doma
 	if domain == nil {
 		return nil, nil
 	}
-	domainID := strings.TrimSpace(domain.ID)
-	if domainID == "" {
+	hostname := strings.TrimSpace(domain.Hostname)
+	if hostname == "" {
 		return nil, nil
 	}
 	cert := &metadata.CertificateRevision{}
 	err := r.db.WithContext(ctx).
 		Where("deleted = ?", false).
-		Where("domain_endpoint_id = ?", domainID).
+		Where("hostname = ?", hostname).
 		Order("revision desc").
 		First(cert).Error
 	if err != nil {
@@ -60,11 +60,11 @@ func (r *GormRepository) GetActiveCertificateForDomain(ctx context.Context, doma
 	return cert, nil
 }
 
-func (r *GormRepository) ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error) {
+func (r *GormRepository) ListCertificateRevisions(ctx context.Context, hostname string) ([]metadata.CertificateRevision, error) {
 	var certs []metadata.CertificateRevision
 	err := r.db.WithContext(ctx).
 		Where("deleted = ?", false).
 		Order("revision desc").
-		Find(&certs, "domain_endpoint_id = ?", domainID).Error
+		Find(&certs, "hostname = ?", hostname).Error
 	return certs, err
 }

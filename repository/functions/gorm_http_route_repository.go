@@ -10,7 +10,7 @@ func (r *GormRepository) HTTPRoutes() GenericRepository[*metadata.HTTPRoute] {
 	return &GormGenericRepository[*metadata.HTTPRoute]{db: r.db}
 }
 
-func (r *GormRepository) ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error) {
+func (r *GormRepository) ListHTTPRoutesByHostname(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error) {
 	var routes []metadata.HTTPRoute
 	err := r.db.WithContext(ctx).
 		Where("deleted = ?", false).

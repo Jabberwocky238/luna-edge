@@ -28,7 +28,7 @@ func (r *GormRepository) GetServiceBindingByDomainID(ctx context.Context, domain
 	return backend, nil
 }
 
-func (r *GormRepository) ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error) {
+func (r *GormRepository) ListServiceBindingsByHostname(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error) {
 	var backends []metadata.ServiceBackendRef
 	err := r.db.WithContext(ctx).
 		Table((&metadata.ServiceBackendRef{}).TableName()+" AS backend_refs").

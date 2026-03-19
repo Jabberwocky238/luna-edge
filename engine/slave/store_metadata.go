@@ -24,8 +24,7 @@ type dnsRecordCacheRow struct {
 func (dnsRecordCacheRow) TableName() string { return "dns_records_cache" }
 
 type domainEntryCacheRow struct {
-	ID           string `gorm:"column:id;primaryKey;type:text"`
-	Hostname     string `gorm:"column:hostname;not null;uniqueIndex;index:idx_domain_entries_cache_hostname;type:text"`
+	Hostname     string `gorm:"column:hostname;not null;primaryKey;type:text"`
 	CertHostname string `gorm:"column:cert_hostname;not null;default:'';type:text"`
 	CertRevision uint64 `gorm:"column:cert_revision;not null;default:0"`
 	DetailJSON   string `gorm:"column:detail_json;not null;type:text"`
@@ -69,7 +68,7 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *replication.Sn
 
 	for i := range snapshot.DomainEntries {
 		s.dealDomainEntries(ctx, tx, &snapshot.DomainEntries[i], snapshot.SnapshotRecordID)
-		s.updateSnapshotRecordID(ctx, tx, snapshot.SnapshotRecordID, "domain_entries", snapshot.DomainEntries[i].ID)
+		s.updateSnapshotRecordID(ctx, tx, snapshot.SnapshotRecordID, "domain_entries", snapshot.DomainEntries[i].Hostname)
 	}
 
 	err = tx.Commit().Error
@@ -112,7 +111,7 @@ func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *replication.
 	}
 	if changelog.DomainEntry != nil {
 		s.dealDomainEntries(ctx, tx, changelog.DomainEntry, changelog.SnapshotRecordID)
-		s.updateSnapshotRecordID(ctx, tx, changelog.SnapshotRecordID, "domain_entries", changelog.DomainEntry.ID)
+		s.updateSnapshotRecordID(ctx, tx, changelog.SnapshotRecordID, "domain_entries", changelog.DomainEntry.Hostname)
 	}
 	err = tx.Commit().Error
 	if err != nil {
@@ -192,17 +191,16 @@ func (s *LocalStore) dealDomainEntries(ctx context.Context, tx *gorm.DB, input *
 		}
 	}
 	row := &domainEntryCacheRow{
-		ID:           input.ID,
 		Hostname:     input.Hostname,
 		CertHostname: certHostname,
 		CertRevision: certRevision,
 		DetailJSON:   string(payload),
 	}
 	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-		slaveLogf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
+		slaveLogf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", SnapshotRecordID, row.Hostname, execErr)
 		return execErr
 	}
-	slaveLogf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
+	slaveLogf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", SnapshotRecordID, row.Hostname, row.Hostname, row.CertRevision)
 	return nil
 }
 

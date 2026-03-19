@@ -21,9 +21,7 @@ const (
 type DomainEndpoint struct {
 	Shared
 	// ID 是域名入口对象的唯一标识。
-	ID string `json:"id" gorm:"column:id;primaryKey;type:text"`
-	// Hostname 是该入口对象管理的完整域名。
-	Hostname string `json:"hostname" gorm:"column:hostname;not null;uniqueIndex;type:text"`
+	Hostname string `json:"hostname" gorm:"column:hostname;not null;primaryKey;type:text"`
 	// 是否需要证书
 	NeedCert bool `json:"need_cert" gorm:"column:need_cert;not null;default:false"`
 	// 最新证书

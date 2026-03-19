@@ -33,11 +33,11 @@ func (r *GormRepository) ListDNSRecordsByQuestion(ctx context.Context, fqdn, rec
 	return records, err
 }
 
-func (r *GormRepository) ListDNSRecordsByDomainID(ctx context.Context, domainID string) ([]metadata.DNSRecord, error) {
+func (r *GormRepository) ListDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error) {
 	var records []metadata.DNSRecord
 	err := r.db.WithContext(ctx).
 		Where("deleted = ?", false).
 		Order("fqdn asc, record_type asc").
-		Find(&records, "domain_endpoint_id = ?", domainID).Error
+		Find(&records, "hostname = ?", hostname).Error
 	return records, err
 }
