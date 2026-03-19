@@ -54,6 +54,7 @@ func TestBuilderBuildUpdatesExistingProjection(t *testing.T) {
 	existing := &metadata.DomainEntryProjection{
 		ID:          "domain:app.example.com",
 		Hostname:    "app.example.com",
+		NeedCert:    false,
 		BackendType: metadata.BackendTypeL7HTTP,
 		HTTPRoutes: []metadata.HTTPRouteProjection{
 			{
@@ -121,6 +122,7 @@ func TestBuilderBuildL4DeletesOldL7Routes(t *testing.T) {
 	existing := &metadata.DomainEntryProjection{
 		ID:          "domain:tcp.example.com",
 		Hostname:    "tcp.example.com",
+		NeedCert:    false,
 		BackendType: metadata.BackendTypeL7HTTP,
 		HTTPRoutes: []metadata.HTTPRouteProjection{
 			{
@@ -159,5 +161,46 @@ func TestBuilderBuildL4DeletesOldL7Routes(t *testing.T) {
 	}
 	if len(plan.HTTPRoutes) != 1 || plan.HTTPRoutes[0].Action != PlanActionDelete {
 		t.Fatalf("unexpected route diff: %+v", plan.HTTPRoutes)
+	}
+}
+
+func TestBuilderBuildKeepsNeedCertWithoutIssuedCert(t *testing.T) {
+	existing := &metadata.DomainEntryProjection{
+		ID:          "domain:app.example.com",
+		Hostname:    "app.example.com",
+		NeedCert:    true,
+		BackendType: metadata.BackendTypeL7HTTPBoth,
+		HTTPRoutes: []metadata.HTTPRouteProjection{
+			{
+				ID:       "route:app.example.com:root",
+				Path:     "/",
+				Priority: 1,
+				BackendRef: &metadata.ServiceBackendRef{
+					ID:               "backend:app.example.com:root",
+					Type:             metadata.ServiceBackendTypeSVC,
+					ServiceNamespace: "default",
+					ServiceName:      "frontend",
+					Port:             8080,
+				},
+			},
+		},
+	}
+
+	plan, err := NewBuilder("app.example.com").
+		WithExistingProjection(existing).
+		AsL7HTTPBoth().
+		Route("/", BackendTarget{
+			Type:             metadata.ServiceBackendTypeSVC,
+			ServiceNamespace: "default",
+			ServiceName:      "frontend",
+			Port:             8080,
+		}).
+		Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	if len(plan.DomainEndpoints) != 0 {
+		t.Fatalf("expected no domain diff when need_cert is already desired, got: %+v", plan.DomainEndpoints)
 	}
 }

@@ -246,7 +246,7 @@ func (b *Builder) currentDomainEndpoint() *metadata.DomainEndpoint {
 		Shared:          metadata.Shared{Deleted: b.existingProjection.Deleted},
 		ID:              b.existingProjection.ID,
 		Hostname:        b.existingProjection.Hostname,
-		NeedCert:        b.existingProjection.Cert != nil,
+		NeedCert:        b.existingProjection.NeedCert,
 		BackendType:     b.existingProjection.BackendType,
 		BindedServiceID: currentBindedServiceID(b.existingProjection),
 	}

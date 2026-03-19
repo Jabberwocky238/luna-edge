@@ -5,6 +5,7 @@ type DomainEntryProjection struct {
 	ID               string                `json:"id"`
 	Hostname         string                `json:"hostname"`
 	Deleted          bool                  `json:"deleted"`
+	NeedCert         bool                  `json:"need_cert"`
 	Cert             *CertificateRevision  `json:"cert"`
 	BackendType      BackendType           `json:"backend_type"`
 	HTTPRoutes       []HTTPRouteProjection `json:"http_routes"`

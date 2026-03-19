@@ -61,6 +61,7 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 	type domainEntryProjectionRow struct {
 		DomainID                string                       `gorm:"column:domain_id"`
 		DomainHost              string                       `gorm:"column:domain_hostname"`
+		DomainNeedCert          bool                         `gorm:"column:domain_need_cert"`
 		BackendType             metadata.BackendType         `gorm:"column:backend_type"`
 		CertID                  *string                      `gorm:"column:cert_id"`
 		CertDomainID            *string                      `gorm:"column:cert_domain_endpoint_id"`
@@ -93,6 +94,7 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 SELECT
 	de.id AS domain_id,
 	de.hostname AS domain_hostname,
+	de.need_cert AS domain_need_cert,
 	de.backend_type AS backend_type,
 	cr.id AS cert_id,
 	cr.domain_endpoint_id AS cert_domain_endpoint_id,
@@ -151,6 +153,7 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 	projection := &metadata.DomainEntryProjection{
 		ID:          rows[0].DomainID,
 		Hostname:    rows[0].DomainHost,
+		NeedCert:    rows[0].DomainNeedCert,
 		BackendType: rows[0].BackendType,
 	}
 
