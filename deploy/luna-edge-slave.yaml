@@ -87,6 +87,9 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["gateway.networking.k8s.io"]
     resources:
       - gateways

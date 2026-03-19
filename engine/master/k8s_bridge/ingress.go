@@ -249,15 +249,16 @@ func (b *IngressBridge) runtimeContext() context.Context {
 
 func (b *IngressBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHost(affectedHosts)
-	if err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts); err != nil {
+	changedAffected, changedRemoved, err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
+	if err != nil {
 		return err
 	}
-	for _, host := range affectedHosts {
+	for _, host := range changedAffected {
 		if err := b.OnUpdate(ctx, host); err != nil {
 			return err
 		}
 	}
-	for _, host := range removedHosts {
+	for _, host := range changedRemoved {
 		if err := b.OnUpdate(ctx, host); err != nil {
 			return err
 		}

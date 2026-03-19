@@ -307,15 +307,16 @@ func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHos
 
 func (b *GatewayBridge) syncHostsLocked(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHostLocked(affectedHosts)
-	if err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts); err != nil {
+	changedAffected, changedRemoved, err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
+	if err != nil {
 		return err
 	}
-	for _, item := range removedHosts {
+	for _, item := range changedRemoved {
 		if err := b.OnUpdate(ctx, item); err != nil {
 			return err
 		}
 	}
-	for _, item := range affectedHosts {
+	for _, item := range changedAffected {
 		if err := b.OnUpdate(ctx, item); err != nil {
 			return err
 		}
@@ -578,22 +579,21 @@ type domainMaterialized struct {
 	routes   []metadata.HTTPRoute
 }
 
-type certificateDesiredMarker interface {
-	MarkCertificateDesired(ctx context.Context, hostname string)
-}
-
-func syncDomainSet(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {
+func syncDomainSet(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) ([]string, []string, error) {
 	if repo == nil {
-		return nil
+		return nil, nil, nil
 	}
-	if err := syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts); err != nil {
-		return err
+	changedAffected, changedRemoved, err := syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts)
+	if err != nil {
+		return nil, nil, err
 	}
-	return nil
+	return changedAffected, changedRemoved, nil
 }
 
-func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {
+func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) ([]string, []string, error) {
 	seen := map[string]struct{}{}
+	var changedAffected []string
+	var changedRemoved []string
 	for _, host := range affectedHosts {
 		host = normalizeHost(host)
 		if host == "" {
@@ -605,19 +605,24 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 		seen[host] = struct{}{}
 		item, ok := next[host]
 		if !ok {
-			if err := deleteManagedDomain(ctx, repo, host); err != nil {
-				return err
+			changed, err := deleteManagedDomain(ctx, repo, host)
+			if err != nil {
+				return nil, nil, err
+			}
+			if changed {
+				changedRemoved = append(changedRemoved, host)
 			}
 			continue
 		}
 		changed, err := upsertManagedDomain(ctx, repo, item)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		if changed && item.domain.NeedCert {
-			if marker, ok := repo.(certificateDesiredMarker); ok {
-				marker.MarkCertificateDesired(ctx, item.domain.Hostname)
-			}
+		if item.domain.NeedCert {
+			repo.MarkCertificateDesired(ctx, item.domain.Hostname)
+		}
+		if changed {
+			changedAffected = append(changedAffected, host)
 		}
 	}
 	for _, host := range removedHosts {
@@ -629,11 +634,15 @@ func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map
 			continue
 		}
 		seen[host] = struct{}{}
-		if err := deleteManagedDomain(ctx, repo, host); err != nil {
-			return err
+		changed, err := deleteManagedDomain(ctx, repo, host)
+		if err != nil {
+			return nil, nil, err
+		}
+		if changed {
+			changedRemoved = append(changedRemoved, host)
 		}
 	}
-	return nil
+	return changedAffected, changedRemoved, nil
 }
 
 func upsertManagedDomain(ctx context.Context, repo repository.Repository, item domainMaterialized) (bool, error) {
@@ -698,36 +707,39 @@ func upsertManagedDomain(ctx context.Context, repo repository.Repository, item d
 	return true, nil
 }
 
-func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostname string) error {
+func deleteManagedDomain(ctx context.Context, repo repository.Repository, hostname string) (bool, error) {
 	domain, err := repo.GetDomainEndpointByHostname(ctx, hostname)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 	if domain == nil || !strings.HasPrefix(domain.ID, "k8s:domain:") {
-		return nil
+		return false, nil
 	}
 	routes, err := repo.ListHTTPRoutesByDomainID(ctx, domain.ID)
 	if err == nil {
 		for i := range routes {
 			if err := repo.HTTPRoutes().DeleteResourceByField(ctx, &metadata.HTTPRoute{}, "id", routes[i].ID); err != nil {
-				return err
+				return false, err
 			}
 			if strings.HasPrefix(routes[i].BackendRefID, "k8s:backend:") {
 				if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", routes[i].BackendRefID); err != nil {
-					return err
+					return false, err
 				}
 			}
 		}
 	}
 	if domain.BindedServiceID != "" && strings.HasPrefix(domain.BindedServiceID, "k8s:backend:") {
 		if err := repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", domain.BindedServiceID); err != nil {
-			return err
+			return false, err
 		}
 	}
-	return repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", domain.ID)
+	if err := repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", domain.ID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func managedDomainUnchanged(existing *metadata.DomainEndpoint, currentRoutes []metadata.HTTPRoute, currentBackends []metadata.ServiceBackendRef, item domainMaterialized) bool {

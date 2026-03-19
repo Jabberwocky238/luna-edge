@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -260,28 +259,4 @@ func (s *LocalStore) GetDomainEntryByHostname(ctx context.Context, hostname stri
 		return nil, err
 	}
 	return &entry, nil
-}
-
-func serviceDNSName(ref *metadata.ServiceBackendRef) string {
-	if ref == nil {
-		return ""
-	}
-	if ref.Type == metadata.ServiceBackendTypeExternal {
-		return ref.ArbitraryEndpoint
-	}
-	if ref.ServiceNamespace == "" {
-		return ref.ServiceName
-	}
-	return fmt.Sprintf("%s.%s.svc.cluster.local", ref.ServiceName, ref.ServiceNamespace)
-}
-
-func protocolForBackendType(kind metadata.BackendType) string {
-	switch kind {
-	case metadata.BackendTypeL7HTTPS:
-		return "https"
-	case metadata.BackendTypeL4TLSPassthrough, metadata.BackendTypeL4TLSTermination:
-		return "tcp"
-	default:
-		return "http"
-	}
 }

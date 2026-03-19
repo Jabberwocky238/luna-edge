@@ -68,6 +68,7 @@ func (s *Engine) Subscribe(ctx context.Context, nodeID string) error {
 	if err != nil {
 		return err
 	}
+	slaveLogf("slave: start subscribe node_id=%s cursor=%d", nodeID, cursor)
 	for {
 		notice, recvErr := stream.Recv()
 		if recvErr != nil {
