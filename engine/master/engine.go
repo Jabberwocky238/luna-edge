@@ -107,10 +107,8 @@ func (e *Engine) Start(ctx context.Context) error {
 	e.Certs = NewCertReconciler(e.Repo, e.Config.ACME, defaultCertReconcileInterval, defaultCertRenewBefore, func(ctx context.Context, fqdn string) error {
 		return e.BoardcastDomainEndpointProjection(ctx, fqdn)
 	}, e.Bundles)
-	if notifierRepo, ok := e.Repo.(interface {
-		SetCertificateDesiredNotifier(func(context.Context, string))
-	}); ok && e.Certs != nil {
-		notifierRepo.SetCertificateDesiredNotifier(func(_ context.Context, fqdn string) {
+	if e.Certs != nil {
+		e.Repo.SetCertificateDesiredNotifier(func(_ context.Context, fqdn string) {
 			e.Certs.Notify(fqdn)
 		})
 	}

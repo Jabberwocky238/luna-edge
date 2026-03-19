@@ -21,7 +21,9 @@ type SpecRepository interface {
 	ListCertificateRevisions(ctx context.Context, domainID string) ([]metadata.CertificateRevision, error)
 	AppendSnapshotRecord(ctx context.Context, record *metadata.SnapshotRecord) error
 	ListSnapshotRecordsAfter(ctx context.Context, afterID uint64) ([]metadata.SnapshotRecord, error)
+
 	MarkCertificateDesired(ctx context.Context, hostname string)
+	SetCertificateDesiredNotifier(func(ctx context.Context, hostname string))
 }
 
 type GenericRepository[M any] interface {

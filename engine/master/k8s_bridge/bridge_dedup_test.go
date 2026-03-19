@@ -61,15 +61,9 @@ func TestSyncDomainSetMarksCertificateDesiredForHTTPSDomain(t *testing.T) {
 	repo := testBridgeRepository(t)
 	ctx := context.Background()
 	var notified []string
-	if notifierRepo, ok := repo.(interface {
-		SetCertificateDesiredNotifier(func(context.Context, string))
-	}); ok {
-		notifierRepo.SetCertificateDesiredNotifier(func(_ context.Context, hostname string) {
-			notified = append(notified, hostname)
-		})
-	} else {
-		t.Fatal("repo does not support certificate desired notifier")
-	}
+	repo.SetCertificateDesiredNotifier(func(_ context.Context, hostname string) {
+		notified = append(notified, hostname)
+	})
 
 	host := "nginx-gateway.cluster-1.app238.com"
 	_, _, err := syncDomainSet(ctx, repo, map[string]domainMaterialized{
