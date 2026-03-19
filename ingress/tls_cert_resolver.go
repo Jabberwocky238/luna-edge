@@ -16,6 +16,7 @@ const DefaultIngressLRUSize = 4096
 
 // TLSCertResolver 定义 TLS 证书解析行为。
 type TLSCertResolver interface {
+	Start() error
 	Load(hostname string) (*tls.Certificate, error)
 }
 
@@ -41,27 +42,16 @@ type LunaTLSCertResolver struct {
 }
 
 // NewLunaTLSCertResolver 创建默认 resolver。
-func NewLunaTLSCertResolver(certRoot string, lruSize int) (*LunaTLSCertResolver, error) {
+func NewLunaTLSCertResolver(certRoot string, lruSize int) *LunaTLSCertResolver {
 	resolver := &LunaTLSCertResolver{
 		certRoot: certRoot,
 		certs:    newCertLRU(resolveCertLRUSize(lruSize)),
 	}
-	if err := resolver.restartWatcher(certRoot); err != nil {
-		return nil, err
-	}
-	return resolver, nil
+	return resolver
 }
 
-// SetCertRoot 允许在初始化后再注入本地证书根目录。
-func (r *LunaTLSCertResolver) SetCertRoot(certRoot string) error {
-	if r == nil {
-		return nil
-	}
-	r.mu.Lock()
-	r.certRoot = certRoot
-	r.mu.Unlock()
-	r.Clear()
-	return r.restartWatcher(certRoot)
+func (r *LunaTLSCertResolver) Start() error {
+	return r.restartWatcher(r.certRoot)
 }
 
 func (r *LunaTLSCertResolver) Delete(hostname string) {

@@ -100,10 +100,7 @@ func New(nodeID string, cfg *Config) (*Engine, error) {
 	}
 	if cfg.IngressHTTPAddr != "" || cfg.IngressTLSAddr != "" {
 		certRoot := eng.Cache.CertificatesRoot()
-		resolver, err := ingress.NewLunaTLSCertResolver(certRoot, cfg.IngressLRUSize)
-		if err != nil {
-			return nil, err
-		}
+		resolver := ingress.NewLunaTLSCertResolver(certRoot, cfg.IngressLRUSize)
 		ing, err := ingress.NewEngine(ingress.EngineOptions{
 			HTTPListenAddr:       cfg.IngressHTTPAddr,
 			TLSListenAddr:        cfg.IngressTLSAddr,
@@ -113,6 +110,9 @@ func New(nodeID string, cfg *Config) (*Engine, error) {
 			LRUSize:              cfg.IngressLRUSize,
 			MasterHTTP01ProxyURL: cfg.MasterManageURL,
 		}, resolver)
+		if err != nil {
+			return nil, err
+		}
 		ing.InjectSlave(eng)
 		eng.Ingress = ing
 	}
@@ -126,7 +126,13 @@ func (e *Engine) ReadCache() ingress.RouteLookupReader {
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
 	slaveLogf("slave: start begin node_id=%s master=%s", e.NODE_ID, e.Config.MasterAddress)
-
+	// cache最先启动，确保路径存在，后续监听才能正常工作
+	if e.Cache != nil {
+		if err := e.Cache.Start(); err != nil {
+			return err
+		}
+		defer e.Cache.Close()
+	}
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
 			return err
@@ -147,12 +153,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 		defer e.Ingress.Stop()
 	}
-	if e.Cache != nil {
-		if err := e.Cache.Start(); err != nil {
-			return err
-		}
-		defer e.Cache.Close()
-	}
+
 	e.grpcClient = replication.NewGRPCClientEasy(e.Config.MasterAddress)
 	if e.grpcClient == nil {
 		return errors.New("failed to dial gRPC to master at " + e.Config.MasterAddress)

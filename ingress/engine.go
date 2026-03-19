@@ -127,7 +127,9 @@ func (e *Engine) BindContext(ctx context.Context) error {
 func (e *Engine) Listen() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
+	if err := e.tlsResolver.Start(); err != nil {
+		return fmt.Errorf("failed to start TLS certificate resolver")
+	}
 	if e.httpEngine == nil && e.tlsEngine == nil {
 		return fmt.Errorf("no ingress sub-engine configured")
 	}
