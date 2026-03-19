@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jabberwocky238/luna-edge/engine"
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
 	master "github.com/jabberwocky238/luna-edge/engine/master"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
@@ -64,7 +65,7 @@ func main() {
 	baseCtx := context.Background()
 	ctx, cancel := context.WithCancel(baseCtx)
 	defer cancel()
-	engine, err := master.New(cfg)
+	engine, err := master.New(engine.POD_NAME, &cfg)
 	if err != nil {
 		log.Fatalf("create master: %v", err)
 	}

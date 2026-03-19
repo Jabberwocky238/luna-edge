@@ -34,9 +34,10 @@ type Config struct {
 }
 
 type Engine struct {
-	ctx context.Context
+	NODE_ID string
+	ctx     context.Context
 
-	Config    Config
+	Config    *Config
 	Factory   repository.Factory
 	Repo      repository.Repository
 	Hub       *Hub
@@ -55,7 +56,7 @@ type HTTP01Registry interface {
 	Delete(token string)
 }
 
-func New(cfg Config) (*Engine, error) {
+func New(nodeID string, cfg *Config) (*Engine, error) {
 	if cfg.ShutdownTimeout <= 0 {
 		cfg.ShutdownTimeout = 5 * time.Second
 	}
@@ -69,6 +70,7 @@ func New(cfg Config) (*Engine, error) {
 		AutoMigrate: cfg.AutoMigrate,
 	})
 	engine := &Engine{
+		NODE_ID: nodeID,
 		Config:  cfg,
 		Factory: factory,
 		Hub:     NewHub(),
@@ -87,16 +89,18 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}()
 	e.Repo = e.Factory.Repository()
-	bundles, err := NewS3CertificateBundleProvider(e.Repo, e.Config.S3)
-	if err != nil {
-		return err
+	if e.Bundles == nil {
+		bundles, err := NewS3CertificateBundleProvider(e.Repo, e.Config.S3)
+		if err != nil {
+			return err
+		}
+		e.Bundles = bundles
 	}
-	e.Bundles = bundles
 	e.Certs = NewCertReconciler(e.Repo, e.Config.ACME, defaultCertReconcileInterval, defaultCertRenewBefore, func(ctx context.Context, fqdn string) error {
 		return e.BoardcastDomainEndpointProjection(ctx, fqdn)
-	}, bundles)
+	}, e.Bundles)
 	e.API = NewAPI(e.Certs.http01Registry)
-	if e.Config.K8sBridgeEnabled {
+	if e.Config.K8sBridgeEnabled && e.K8sBridge == nil {
 		bridge, err := masterk8s.New(masterk8s.Config{
 			Namespace:    e.Config.K8sNamespace,
 			IngressClass: e.Config.K8sIngressClass,

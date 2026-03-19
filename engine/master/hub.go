@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"gorm.io/gorm"
@@ -108,11 +107,15 @@ func (e *Engine) BoardcastDNSRecord(ctx context.Context, recordID string) error 
 			return metadata.SnapshotActionUpsert
 		}
 	}()
-	e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, recordID, snapshotAction)
+	snapshotRecordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDNSRecord, recordID, snapshotAction)
+	if err != nil {
+		return err
+	}
 	e.Hub.Boardcast(&replication.ChangeNotification{
-		NodeID:    engine.POD_NAME,
-		CreatedAt: time.Now().UTC(),
-		DNSRecord: record,
+		NodeID:           e.NODE_ID,
+		CreatedAt:        time.Now().UTC(),
+		SnapshotRecordID: snapshotRecordID,
+		DNSRecord:        record,
 	})
 	return nil
 }
@@ -135,11 +138,15 @@ func (e *Engine) BoardcastDomainEndpointProjection(ctx context.Context, hostname
 			return metadata.SnapshotActionUpsert
 		}
 	}()
-	e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, hostname, snapshotAction)
+	snapshotRecordID, err := e.appendSnapshotRecord(ctx, metadata.SnapshotSyncTypeDomainEntryProjection, hostname, snapshotAction)
+	if err != nil {
+		return err
+	}
 	e.Hub.Boardcast(&replication.ChangeNotification{
-		NodeID:      engine.POD_NAME,
-		CreatedAt:   time.Now().UTC(),
-		DomainEntry: entry,
+		NodeID:           e.NODE_ID,
+		CreatedAt:        time.Now().UTC(),
+		SnapshotRecordID: snapshotRecordID,
+		DomainEntry:      entry,
 	})
 	return nil
 }

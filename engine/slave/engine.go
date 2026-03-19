@@ -46,6 +46,7 @@ type Config struct {
 
 // Engine 是 slave 模式核心。
 type Engine struct {
+	NODE_ID    string
 	Config     *Config
 	Cache      *LocalStore
 	grpcClient *replication.GRPCClient
@@ -62,7 +63,7 @@ type Engine struct {
 }
 
 // New 创建 slave engine。
-func New(cfg *Config) (*Engine, error) {
+func New(nodeID string, cfg *Config) (*Engine, error) {
 	if cfg.RetryMinBackoff <= 0 {
 		cfg.RetryMinBackoff = time.Second
 	}
@@ -70,7 +71,7 @@ func New(cfg *Config) (*Engine, error) {
 		cfg.RetryMaxBackoff = 30 * time.Second
 	}
 	dnsChan := make(chan []metadata.DNSRecord, 100)
-	eng := &Engine{Config: cfg, dnsChan: dnsChan}
+	eng := &Engine{NODE_ID: nodeID, Config: cfg, dnsChan: dnsChan}
 	localStore, err := NewLocalStore(cfg.CacheRoot, eng, dnsChan)
 	if err != nil {
 		return nil, err
@@ -116,7 +117,7 @@ func (e *Engine) ReadCache() ingress.RouteLookupReader {
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
-	log.Printf("slave: start begin node_id=%s master=%s", engine.POD_NAME, e.Config.MasterAddress)
+	log.Printf("slave: start begin node_id=%s master=%s", e.NODE_ID, e.Config.MasterAddress)
 
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
@@ -156,15 +157,15 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	backoff := e.Config.RetryMinBackoff
 	for {
-		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", engine.POD_NAME, backoff)
-		err := e.Subscribe(ctx, engine.POD_NAME)
+		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", e.NODE_ID, backoff)
+		err := e.Subscribe(ctx, e.NODE_ID)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
-			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", engine.POD_NAME, err, ctx.Err())
+			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.NODE_ID, err, ctx.Err())
 			return err
 		}
 		e.ready.Store(false)
-		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", engine.POD_NAME, err, backoff)
+		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", e.NODE_ID, err, backoff)
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

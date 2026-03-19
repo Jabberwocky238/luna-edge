@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/engine"
 	slave "github.com/jabberwocky238/luna-edge/engine/slave"
 )
 
@@ -52,14 +52,14 @@ func main() {
 		cfg.DNSForwardServers = splitCSV(envOr("LUNA_DNS_FORWARD_SERVERS", "1.1.1.1:53"))
 	}
 
-	engine, err := slave.New(&cfg)
+	engine, err := slave.New(engine.POD_NAME, &cfg)
 	if err != nil {
 		log.Fatalf("create slave: %v", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	log.Printf("slave started: node=%s master=%s", enginepkg.POD_NAME, cfg.MasterAddress)
+	log.Printf("slave started: node=%s master=%s", engine.NODE_ID, cfg.MasterAddress)
 	if err := engine.Start(ctx); err != nil && ctx.Err() == nil {
 		log.Fatalf("run slave: %v", err)
 	}
