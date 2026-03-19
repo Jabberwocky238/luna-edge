@@ -427,9 +427,10 @@ func (tc *engineTestCluster) UpsertDomainBase(t *testing.T, hostname string) {
 	}
 	backend := &metadata.ServiceBackendRef{
 		ID:               "backend:" + hostname,
+		Type:             metadata.ServiceBackendTypeSVC,
 		ServiceNamespace: "default",
 		ServiceName:      "svc-" + hostname,
-		ServicePort:      8443,
+		Port:             8443,
 	}
 	route := &metadata.HTTPRoute{
 		ID:               "route:" + hostname,
@@ -528,8 +529,8 @@ func (tc *engineTestCluster) AssertAllSlavesHaveRoute(hostname, service string, 
 		if len(entry.HTTPRoutes) != 1 || entry.HTTPRoutes[0].BackendRef == nil {
 			return fmt.Errorf("slave %d route projection invalid", i)
 		}
-		if entry.HTTPRoutes[0].BackendRef.ServiceName != service || entry.HTTPRoutes[0].BackendRef.ServicePort != port {
-			return fmt.Errorf("slave %d route backend=%s:%d want=%s:%d", i, entry.HTTPRoutes[0].BackendRef.ServiceName, entry.HTTPRoutes[0].BackendRef.ServicePort, service, port)
+		if entry.HTTPRoutes[0].BackendRef.ServiceName != service || entry.HTTPRoutes[0].BackendRef.Port != port {
+			return fmt.Errorf("slave %d route backend=%s:%d want=%s:%d", i, entry.HTTPRoutes[0].BackendRef.ServiceName, entry.HTTPRoutes[0].BackendRef.Port, service, port)
 		}
 	}
 	return nil

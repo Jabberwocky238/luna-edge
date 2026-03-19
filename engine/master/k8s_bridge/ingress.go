@@ -248,9 +248,10 @@ func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMater
 					backendID := fmt.Sprintf("k8s:backend:ingress:%s:%s:%s:%d", ing.Namespace, ing.Name, host, idx)
 					item.backends = append(item.backends, metadata.ServiceBackendRef{
 						ID:               backendID,
+						Type:             metadata.ServiceBackendTypeSVC,
 						ServiceNamespace: ing.Namespace,
 						ServiceName:      path.Backend.Service.Name,
-						ServicePort:      ingressServicePort(path.Backend.Service.Port),
+						Port:             ingressServicePort(path.Backend.Service.Port),
 					})
 					priority := int32(len(normalizePath(path.Path)))
 					if path.PathType != nil && *path.PathType == networkingv1.PathTypeExact {

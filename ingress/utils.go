@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -143,6 +144,16 @@ func deleteByNamespaceName(obj interface{}, deleter func(namespace, name string)
 
 func buildServiceAddress(name, namespace string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", name, namespace)
+}
+
+func backendAddress(ref *metadata.ServiceBackendRef) string {
+	if ref == nil {
+		return ""
+	}
+	if ref.Type == metadata.ServiceBackendTypeExternal {
+		return strings.TrimSpace(ref.ArbitraryEndpoint)
+	}
+	return buildServiceAddress(ref.ServiceName, ref.ServiceNamespace)
 }
 
 func freeAddr(t *testing.T) string {

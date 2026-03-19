@@ -21,29 +21,33 @@ func NewGormRepository(db *gorm.DB) Repository {
 // GetDomainEntryProjectionByDomain 按域名聚合查询 DomainEntryProjection。
 func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error) {
 	type domainEntryProjectionRow struct {
-		DomainID               string                  `gorm:"column:domain_id"`
-		DomainHost             string                  `gorm:"column:domain_hostname"`
-		BackendType            metadata.BackendType    `gorm:"column:backend_type"`
-		CertID                 *string                 `gorm:"column:cert_id"`
-		CertDomainID           *string                 `gorm:"column:cert_domain_endpoint_id"`
-		CertRevision           *uint64                 `gorm:"column:cert_revision"`
-		CertProvider           *string                 `gorm:"column:cert_provider"`
-		CertType               *metadata.ChallengeType `gorm:"column:cert_challenge_type"`
-		CertBucket             *string                 `gorm:"column:cert_artifact_bucket"`
-		CertPrefix             *string                 `gorm:"column:cert_artifact_prefix"`
-		CertSHA256Crt          *string                 `gorm:"column:cert_sha256_crt"`
-		CertSHA256Key          *string                 `gorm:"column:cert_sha256_key"`
-		RouteID                *string                 `gorm:"column:route_id"`
-		RoutePath              *string                 `gorm:"column:route_path"`
-		RoutePriority          *int32                  `gorm:"column:route_priority"`
-		RouteBackendRefID      *string                 `gorm:"column:route_backend_ref_id"`
-		RouteServiceNamespace  *string                 `gorm:"column:route_service_namespace"`
-		RouteServiceName       *string                 `gorm:"column:route_service_name"`
-		RouteServicePort       *uint32                 `gorm:"column:route_service_port"`
-		BindedBackendRefID     *string                 `gorm:"column:binded_backend_ref_id"`
-		BindedServiceNamespace *string                 `gorm:"column:binded_service_namespace"`
-		BindedServiceName      *string                 `gorm:"column:binded_service_name"`
-		BindedServicePort      *uint32                 `gorm:"column:binded_service_port"`
+		DomainID                 string                      `gorm:"column:domain_id"`
+		DomainHost               string                      `gorm:"column:domain_hostname"`
+		BackendType              metadata.BackendType        `gorm:"column:backend_type"`
+		CertID                   *string                     `gorm:"column:cert_id"`
+		CertDomainID             *string                     `gorm:"column:cert_domain_endpoint_id"`
+		CertRevision             *uint64                     `gorm:"column:cert_revision"`
+		CertProvider             *string                     `gorm:"column:cert_provider"`
+		CertType                 *metadata.ChallengeType     `gorm:"column:cert_challenge_type"`
+		CertBucket               *string                     `gorm:"column:cert_artifact_bucket"`
+		CertPrefix               *string                     `gorm:"column:cert_artifact_prefix"`
+		CertSHA256Crt            *string                     `gorm:"column:cert_sha256_crt"`
+		CertSHA256Key            *string                     `gorm:"column:cert_sha256_key"`
+		RouteID                  *string                     `gorm:"column:route_id"`
+		RoutePath                *string                     `gorm:"column:route_path"`
+		RoutePriority            *int32                      `gorm:"column:route_priority"`
+		RouteBackendRefID        *string                     `gorm:"column:route_backend_ref_id"`
+		RouteBackendType         *metadata.ServiceBackendType `gorm:"column:route_backend_type"`
+		RouteArbitraryEndpoint   *string                     `gorm:"column:route_arbitrary_endpoint"`
+		RouteServiceNamespace    *string                     `gorm:"column:route_service_namespace"`
+		RouteServiceName         *string                     `gorm:"column:route_service_name"`
+		RoutePort                *uint32                     `gorm:"column:route_port"`
+		BindedBackendRefID       *string                     `gorm:"column:binded_backend_ref_id"`
+		BindedBackendType        *metadata.ServiceBackendType `gorm:"column:binded_backend_type"`
+		BindedArbitraryEndpoint  *string                     `gorm:"column:binded_arbitrary_endpoint"`
+		BindedServiceNamespace   *string                     `gorm:"column:binded_service_namespace"`
+		BindedServiceName        *string                     `gorm:"column:binded_service_name"`
+		BindedPort               *uint32                     `gorm:"column:binded_port"`
 	}
 
 	var rows []domainEntryProjectionRow
@@ -65,13 +69,17 @@ SELECT
 	hr.path AS route_path,
 	hr.priority AS route_priority,
 	route_sbr.id AS route_backend_ref_id,
+	route_sbr.type AS route_backend_type,
+	route_sbr.arbitrary_endpoint AS route_arbitrary_endpoint,
 	route_sbr.service_namespace AS route_service_namespace,
 	route_sbr.service_name AS route_service_name,
-	route_sbr.service_port AS route_service_port,
+	route_sbr.service_port AS route_port,
 	binded_sbr.id AS binded_backend_ref_id,
+	binded_sbr.type AS binded_backend_type,
+	binded_sbr.arbitrary_endpoint AS binded_arbitrary_endpoint,
 	binded_sbr.service_namespace AS binded_service_namespace,
 	binded_sbr.service_name AS binded_service_name,
-	binded_sbr.service_port AS binded_service_port
+	binded_sbr.service_port AS binded_port
 FROM domain_endpoints AS de
 LEFT JOIN certificate_revisions AS cr
 	ON cr.domain_endpoint_id = de.id
@@ -131,10 +139,12 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 	if projection.BackendType == metadata.BackendTypeL4TLSPassthrough || projection.BackendType == metadata.BackendTypeL4TLSTermination {
 		if first.BindedBackendRefID != nil && *first.BindedBackendRefID != "" {
 			projection.BindedBackendRef = &metadata.ServiceBackendRef{
-				ID:               *first.BindedBackendRefID,
-				ServiceNamespace: derefString(first.BindedServiceNamespace),
-				ServiceName:      derefString(first.BindedServiceName),
-				ServicePort:      derefUint32(first.BindedServicePort),
+				ID:                *first.BindedBackendRefID,
+				Type:              derefServiceBackendType(first.BindedBackendType),
+				ArbitraryEndpoint: derefString(first.BindedArbitraryEndpoint),
+				ServiceNamespace:  derefString(first.BindedServiceNamespace),
+				ServiceName:       derefString(first.BindedServiceName),
+				Port:              derefUint32(first.BindedPort),
 			}
 		}
 		return projection, nil
@@ -157,10 +167,12 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 		}
 		if row.RouteBackendRefID != nil && *row.RouteBackendRefID != "" {
 			route.BackendRef = &metadata.ServiceBackendRef{
-				ID:               *row.RouteBackendRefID,
-				ServiceNamespace: derefString(row.RouteServiceNamespace),
-				ServiceName:      derefString(row.RouteServiceName),
-				ServicePort:      derefUint32(row.RouteServicePort),
+				ID:                *row.RouteBackendRefID,
+				Type:              derefServiceBackendType(row.RouteBackendType),
+				ArbitraryEndpoint: derefString(row.RouteArbitraryEndpoint),
+				ServiceNamespace:  derefString(row.RouteServiceNamespace),
+				ServiceName:       derefString(row.RouteServiceName),
+				Port:              derefUint32(row.RoutePort),
 			}
 		}
 		projection.HTTPRoutes = append(projection.HTTPRoutes, route)
@@ -200,6 +212,13 @@ func derefInt32(value *int32) int32 {
 func derefChallengeType(value *metadata.ChallengeType) metadata.ChallengeType {
 	if value == nil {
 		return ""
+	}
+	return *value
+}
+
+func derefServiceBackendType(value *metadata.ServiceBackendType) metadata.ServiceBackendType {
+	if value == nil || *value == "" {
+		return metadata.ServiceBackendTypeSVC
 	}
 	return *value
 }

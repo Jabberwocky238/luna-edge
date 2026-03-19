@@ -545,13 +545,15 @@ func (x *DNSRecord) GetDeleted() bool {
 }
 
 type ServiceBackendRef struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ServiceNamespace string                 `protobuf:"bytes,2,opt,name=service_namespace,json=serviceNamespace,proto3" json:"service_namespace,omitempty"`
-	ServiceName      string                 `protobuf:"bytes,3,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
-	ServicePort      uint32                 `protobuf:"varint,4,opt,name=service_port,json=servicePort,proto3" json:"service_port,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type              string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                                                    // "SVC" or "EXTERNAL"
+	ArbitraryEndpoint string                 `protobuf:"bytes,3,opt,name=arbitrary_endpoint,json=arbitraryEndpoint,proto3" json:"arbitrary_endpoint,omitempty"` // Only used if type is "EXTERNAL"
+	ServiceNamespace  string                 `protobuf:"bytes,4,opt,name=service_namespace,json=serviceNamespace,proto3" json:"service_namespace,omitempty"`
+	ServiceName       string                 `protobuf:"bytes,5,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`
+	Port              uint32                 `protobuf:"varint,6,opt,name=port,proto3" json:"port,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ServiceBackendRef) Reset() {
@@ -591,6 +593,20 @@ func (x *ServiceBackendRef) GetId() string {
 	return ""
 }
 
+func (x *ServiceBackendRef) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ServiceBackendRef) GetArbitraryEndpoint() string {
+	if x != nil {
+		return x.ArbitraryEndpoint
+	}
+	return ""
+}
+
 func (x *ServiceBackendRef) GetServiceNamespace() string {
 	if x != nil {
 		return x.ServiceNamespace
@@ -605,9 +621,9 @@ func (x *ServiceBackendRef) GetServiceName() string {
 	return ""
 }
 
-func (x *ServiceBackendRef) GetServicePort() uint32 {
+func (x *ServiceBackendRef) GetPort() uint32 {
 	if x != nil {
-		return x.ServicePort
+		return x.Port
 	}
 	return 0
 }
@@ -954,12 +970,14 @@ const file_replication_proto_rawDesc = "" +
 	"\vrouting_key\x18\a \x01(\tR\n" +
 	"routingKey\x12\x18\n" +
 	"\aenabled\x18\b \x01(\bR\aenabled\x12\x18\n" +
-	"\adeleted\x18\t \x01(\bR\adeleted\"\x96\x01\n" +
+	"\adeleted\x18\t \x01(\bR\adeleted\"\xca\x01\n" +
 	"\x11ServiceBackendRef\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
-	"\x11service_namespace\x18\x02 \x01(\tR\x10serviceNamespace\x12!\n" +
-	"\fservice_name\x18\x03 \x01(\tR\vserviceName\x12!\n" +
-	"\fservice_port\x18\x04 \x01(\rR\vservicePort\"\x9e\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12-\n" +
+	"\x12arbitrary_endpoint\x18\x03 \x01(\tR\x11arbitraryEndpoint\x12+\n" +
+	"\x11service_namespace\x18\x04 \x01(\tR\x10serviceNamespace\x12!\n" +
+	"\fservice_name\x18\x05 \x01(\tR\vserviceName\x12\x12\n" +
+	"\x04port\x18\x06 \x01(\rR\x04port\"\x9e\x01\n" +
 	"\x13HTTPRouteProjection\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1a\n" +

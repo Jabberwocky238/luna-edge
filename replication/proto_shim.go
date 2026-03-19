@@ -85,14 +85,28 @@ func serviceBackendRefToProto(in *metadata.ServiceBackendRef) *replpb.ServiceBac
 	if in == nil {
 		return nil
 	}
-	return &replpb.ServiceBackendRef{Id: in.ID, ServiceNamespace: in.ServiceNamespace, ServiceName: in.ServiceName, ServicePort: in.ServicePort}
+	return &replpb.ServiceBackendRef{
+		Id:                in.ID,
+		Type:              string(in.Type),
+		ArbitraryEndpoint: in.ArbitraryEndpoint,
+		ServiceNamespace:  in.ServiceNamespace,
+		ServiceName:       in.ServiceName,
+		Port:              in.Port,
+	}
 }
 
 func serviceBackendRefFromProto(in *replpb.ServiceBackendRef) *metadata.ServiceBackendRef {
 	if in == nil {
 		return nil
 	}
-	return &metadata.ServiceBackendRef{ID: in.GetId(), ServiceNamespace: in.GetServiceNamespace(), ServiceName: in.GetServiceName(), ServicePort: in.GetServicePort()}
+	return &metadata.ServiceBackendRef{
+		ID:                in.GetId(),
+		Type:              metadata.ServiceBackendType(in.GetType()),
+		ArbitraryEndpoint: in.GetArbitraryEndpoint(),
+		ServiceNamespace:  in.GetServiceNamespace(),
+		ServiceName:       in.GetServiceName(),
+		Port:              in.GetPort(),
+	}
 }
 
 func httpRouteProjectionToProto(in metadata.HTTPRouteProjection) *replpb.HTTPRouteProjection {

@@ -47,15 +47,17 @@ func TestGetDomainEntryProjectionByDomain(t *testing.T) {
 
 	backend1 := &metadata.ServiceBackendRef{
 		ID:               "backend-1",
+		Type:             metadata.ServiceBackendTypeSVC,
 		ServiceNamespace: "default",
 		ServiceName:      "svc-a",
-		ServicePort:      8080,
+		Port:             8080,
 	}
 	backend2 := &metadata.ServiceBackendRef{
 		ID:               "backend-2",
+		Type:             metadata.ServiceBackendTypeSVC,
 		ServiceNamespace: "edge",
 		ServiceName:      "svc-b",
-		ServicePort:      9090,
+		Port:             9090,
 	}
 	if err := db.WithContext(ctx).Create(backend1).Error; err != nil {
 		t.Fatalf("create backend1: %v", err)
@@ -132,9 +134,10 @@ func TestGetDomainEntryProjectionByDomain_L4UsesBindedBackendRef(t *testing.T) {
 
 	backend := &metadata.ServiceBackendRef{
 		ID:               "backend-l4",
+		Type:             metadata.ServiceBackendTypeSVC,
 		ServiceNamespace: "default",
 		ServiceName:      "svc-l4",
-		ServicePort:      443,
+		Port:             443,
 	}
 	if err := db.WithContext(ctx).Create(backend).Error; err != nil {
 		t.Fatalf("create backend: %v", err)
@@ -162,5 +165,62 @@ func TestGetDomainEntryProjectionByDomain_L4UsesBindedBackendRef(t *testing.T) {
 	}
 	if len(got.HTTPRoutes) != 0 {
 		t.Fatalf("expected no http routes for l4 domain, got: %d", len(got.HTTPRoutes))
+	}
+}
+
+func TestGetDomainEntryProjectionByDomain_ExternalBackend(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := metadata.AutoMigrate(db); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	repo := &GormRepository{db: db}
+	ctx := context.Background()
+
+	domain := &metadata.DomainEndpoint{
+		ID:          "domain-ext",
+		Hostname:    "external.example.com",
+		BackendType: metadata.BackendTypeL7HTTP,
+	}
+	if err := db.WithContext(ctx).Create(domain).Error; err != nil {
+		t.Fatalf("create domain: %v", err)
+	}
+
+	backend := &metadata.ServiceBackendRef{
+		ID:                "backend-ext",
+		Type:              metadata.ServiceBackendTypeExternal,
+		ArbitraryEndpoint: "127.0.0.1",
+		Port:              18080,
+	}
+	if err := db.WithContext(ctx).Create(backend).Error; err != nil {
+		t.Fatalf("create backend: %v", err)
+	}
+
+	route := &metadata.HTTPRoute{
+		ID:               "route-ext",
+		DomainEndpointID: domain.ID,
+		Path:             "/",
+		Priority:         1,
+		BackendRefID:     backend.ID,
+	}
+	if err := db.WithContext(ctx).Create(route).Error; err != nil {
+		t.Fatalf("create route: %v", err)
+	}
+
+	got, err := repo.GetDomainEntryProjectionByDomain(ctx, domain.Hostname)
+	if err != nil {
+		t.Fatalf("GetDomainEntryProjectionByDomain: %v", err)
+	}
+	if len(got.HTTPRoutes) != 1 || got.HTTPRoutes[0].BackendRef == nil {
+		t.Fatalf("unexpected routes: %+v", got.HTTPRoutes)
+	}
+	if got.HTTPRoutes[0].BackendRef.Type != metadata.ServiceBackendTypeExternal {
+		t.Fatalf("unexpected backend type: %+v", got.HTTPRoutes[0].BackendRef)
+	}
+	if got.HTTPRoutes[0].BackendRef.ArbitraryEndpoint != "127.0.0.1" || got.HTTPRoutes[0].BackendRef.Port != 18080 {
+		t.Fatalf("unexpected external backend: %+v", got.HTTPRoutes[0].BackendRef)
 	}
 }

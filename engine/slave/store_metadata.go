@@ -266,6 +266,9 @@ func serviceDNSName(ref *metadata.ServiceBackendRef) string {
 	if ref == nil {
 		return ""
 	}
+	if ref.Type == metadata.ServiceBackendTypeExternal {
+		return ref.ArbitraryEndpoint
+	}
 	if ref.ServiceNamespace == "" {
 		return ref.ServiceName
 	}

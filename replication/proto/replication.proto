@@ -61,9 +61,11 @@ message DNSRecord {
 
 message ServiceBackendRef {
   string id = 1;
-  string service_namespace = 2;
-  string service_name = 3;
-  uint32 service_port = 4;
+  string type = 2; // "SVC" or "EXTERNAL"
+  string arbitrary_endpoint = 3; // Only used if type is "EXTERNAL"
+  string service_namespace = 4;
+  string service_name = 5;
+  uint32 port = 6;
 }
 
 message HTTPRouteProjection {

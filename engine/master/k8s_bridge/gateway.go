@@ -319,9 +319,10 @@ func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domai
 						backendID := fmt.Sprintf("k8s:backend:gateway:%s:%s:%s:%d:%d", route.namespace, route.name, host, idx, ruleIdx)
 						item.backends = append(item.backends, metadata.ServiceBackendRef{
 							ID:               backendID,
+							Type:             metadata.ServiceBackendTypeSVC,
 							ServiceNamespace: rule.backend.namespace,
 							ServiceName:      rule.backend.name,
-							ServicePort:      rule.backend.port,
+							Port:             rule.backend.port,
 						})
 						priority := int32(len(normalizePath(rule.path)))
 						if rule.exact {
@@ -376,9 +377,10 @@ func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domai
 					}
 					item.backends = []metadata.ServiceBackendRef{{
 						ID:               backendID,
+						Type:             metadata.ServiceBackendTypeSVC,
 						ServiceNamespace: route.backend.namespace,
 						ServiceName:      route.backend.name,
-						ServicePort:      route.backend.port,
+						Port:             route.backend.port,
 					}}
 					item.routes = nil
 					out[host] = item
@@ -683,7 +685,12 @@ func managedDomainUnchanged(existing *metadata.DomainEndpoint, currentRoutes []m
 	}
 	for i := range item.backends {
 		current, ok := currentBackendMap[item.backends[i].ID]
-		if !ok || current.ServiceNamespace != item.backends[i].ServiceNamespace || current.ServiceName != item.backends[i].ServiceName || current.ServicePort != item.backends[i].ServicePort {
+		if !ok ||
+			current.Type != item.backends[i].Type ||
+			current.ArbitraryEndpoint != item.backends[i].ArbitraryEndpoint ||
+			current.ServiceNamespace != item.backends[i].ServiceNamespace ||
+			current.ServiceName != item.backends[i].ServiceName ||
+			current.Port != item.backends[i].Port {
 			return false
 		}
 	}
