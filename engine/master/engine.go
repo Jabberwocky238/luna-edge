@@ -93,7 +93,7 @@ func (e *Engine) Start(ctx context.Context) error {
 	}
 	defer func() {
 		if err := e.Factory.Close(); err != nil {
-			log.Printf("master: factory stop failed err=%v", err)
+			masterLogf("master: factory stop failed err=%v", err)
 		}
 	}()
 	e.Repo = e.Factory.Repository()
@@ -128,26 +128,26 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 		e.K8sBridge = bridge
 	}
-	log.Printf("master: start begin replication=%s manage=%s k8s_bridge=%v", e.Config.ReplicationListenAddr, e.Config.ManageListenAddr, e.K8sBridge != nil)
+	masterLogf("master: start begin replication=%s manage=%s k8s_bridge=%v", e.Config.ReplicationListenAddr, e.Config.ManageListenAddr, e.K8sBridge != nil)
 	if e.K8sBridge != nil {
-		log.Printf("master: k8s bridge load initial begin")
+		masterLogf("master: k8s bridge load initial begin")
 		if err := e.K8sBridge.LoadInitial(ctx); err != nil {
-			log.Printf("master: k8s bridge load initial failed err=%v", err)
+			masterLogf("master: k8s bridge load initial failed err=%v", err)
 			return err
 		}
-		log.Printf("master: k8s bridge load initial done")
+		masterLogf("master: k8s bridge load initial done")
 		e.K8sBridge.Listen(ctx)
-		log.Printf("master: k8s bridge listeners started")
+		masterLogf("master: k8s bridge listeners started")
 		defer func() {
 			if err := e.K8sBridge.Stop(); err != nil {
-				log.Printf("master: k8s bridge stop failed err=%v", err)
+				masterLogf("master: k8s bridge stop failed err=%v", err)
 			}
 		}()
 	}
 	if e.Certs != nil {
 		e.Certs.Start(ctx)
 		defer e.Certs.Stop()
-		log.Printf("master: cert reconciler started")
+		masterLogf("master: cert reconciler started")
 	}
 	if e.Config.ReplicationListenAddr != "" {
 		e.grpcServer = replication.NewGRPCServerEasy(
@@ -167,23 +167,23 @@ func (e *Engine) Start(ctx context.Context) error {
 			return err
 		}
 		e.httpServer = &http.Server{Addr: e.Config.ManageListenAddr, Handler: e.API.Handler()}
-		log.Printf("master: manage listener ready addr=%s", lis.Addr().String())
+		masterLogf("master: manage listener ready addr=%s", lis.Addr().String())
 		go func() { _ = e.httpServer.Serve(lis) }()
 		defer func() {
 			e.httpServer.Shutdown(ctx)
 		}()
 	}
-	log.Printf("master: start done")
+	masterLogf("master: start done")
 	<-ctx.Done()
-	log.Printf("master: context done err=%v", ctx.Err())
+	masterLogf("master: context done err=%v", ctx.Err())
 	return ctx.Err()
 }
 
 func (e *Engine) handleGetSnapshot(ctx context.Context, nodeID string, snapshotRecordID uint64, send func(*replication.Snapshot) error) error {
-	log.Printf("replication: get snapshot begin node_id=%s after_record_id=%d", nodeID, snapshotRecordID)
+	masterLogf("replication: get snapshot begin node_id=%s after_record_id=%d", nodeID, snapshotRecordID)
 	records, err := e.Repo.ListSnapshotRecordsAfter(ctx, snapshotRecordID)
 	if err != nil {
-		log.Printf("replication: get snapshot list records failed node_id=%s err=%v", nodeID, err)
+		masterLogf("replication: get snapshot list records failed node_id=%s err=%v", nodeID, err)
 		return err
 	}
 	chunk := &replication.Snapshot{NodeID: nodeID, CreatedAt: time.Now().UTC()}
@@ -196,10 +196,10 @@ func (e *Engine) handleGetSnapshot(ctx context.Context, nodeID string, snapshotR
 			return nil
 		}
 		if err := send(chunk); err != nil {
-			log.Printf("replication: send snapshot chunk failed node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d err=%v", nodeID, last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries), err)
+			masterLogf("replication: send snapshot chunk failed node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d err=%v", nodeID, last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries), err)
 			return err
 		}
-		log.Printf("replication: send snapshot chunk done node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d", nodeID, last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries))
+		masterLogf("replication: send snapshot chunk done node_id=%s last=%v snapshot_record_id=%d dns=%d domains=%d", nodeID, last, lastSeen, len(chunk.DNSRecords), len(chunk.DomainEntries))
 		chunk = &replication.Snapshot{NodeID: nodeID, CreatedAt: time.Now().UTC()}
 		count = 0
 		return nil
@@ -227,23 +227,23 @@ func (e *Engine) handleGetSnapshot(ctx context.Context, nodeID string, snapshotR
 			}
 		}
 	}
-	log.Printf("replication: get snapshot finished node_id=%s records=%d", nodeID, len(records))
+	masterLogf("replication: get snapshot finished node_id=%s records=%d", nodeID, len(records))
 	return sendChunk(true)
 }
 
 func (e *Engine) handleSubscribe(ctx context.Context, nodeID string, send func(*replication.ChangeNotification) error) error {
-	log.Printf("replication: subscribe begin node_id=%s", nodeID)
+	masterLogf("replication: subscribe begin node_id=%s", nodeID)
 	subID, ch := e.Hub.Subscribe(nodeID, 128)
 	defer e.Hub.Unsubscribe(nodeID, subID)
-	log.Printf("replication: subscribe registered node_id=%s sub_id=%d", nodeID, subID)
+	masterLogf("replication: subscribe registered node_id=%s sub_id=%d", nodeID, subID)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("replication: subscribe context done node_id=%s sub_id=%d err=%v", nodeID, subID, ctx.Err())
+			masterLogf("replication: subscribe context done node_id=%s sub_id=%d err=%v", nodeID, subID, ctx.Err())
 			return ctx.Err()
 		case notice, ok := <-ch:
 			if !ok {
-				log.Printf("replication: subscribe channel closed node_id=%s sub_id=%d", nodeID, subID)
+				masterLogf("replication: subscribe channel closed node_id=%s sub_id=%d", nodeID, subID)
 				return nil
 			}
 			if err := send(&replication.ChangeNotification{
@@ -253,10 +253,10 @@ func (e *Engine) handleSubscribe(ctx context.Context, nodeID string, send func(*
 				DNSRecord:        notice.DNSRecord,
 				DomainEntry:      notice.DomainEntry,
 			}); err != nil {
-				log.Printf("replication: subscribe send failed node_id=%s sub_id=%d snapshot_record_id=%d err=%v", nodeID, subID, notice.SnapshotRecordID, err)
+				masterLogf("replication: subscribe send failed node_id=%s sub_id=%d snapshot_record_id=%d err=%v", nodeID, subID, notice.SnapshotRecordID, err)
 				return err
 			}
-			log.Printf("replication: subscribe sent node_id=%s sub_id=%d snapshot_record_id=%d dns=%v domain=%v", nodeID, subID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
+			masterLogf("replication: subscribe sent node_id=%s sub_id=%d snapshot_record_id=%d dns=%v domain=%v", nodeID, subID, notice.SnapshotRecordID, notice.DNSRecord != nil, notice.DomainEntry != nil)
 		}
 	}
 }

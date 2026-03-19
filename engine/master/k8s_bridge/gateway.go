@@ -176,8 +176,8 @@ func (b *GatewayBridge) storeGateway(obj *unstructured.Unstructured) {
 		affected = gatewayHosts(state)
 	}
 	newHosts := b.collectHostsLocked()
+	_ = b.syncHostsLocked(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 	b.mu.Unlock()
-	_ = b.syncHosts(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteGateway(obj interface{}) {
@@ -185,8 +185,8 @@ func (b *GatewayBridge) deleteGateway(obj interface{}) {
 	oldHosts := b.collectHostsLocked()
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.gateways, namespace+"/"+name) })
 	newHosts := b.collectHostsLocked()
+	_ = b.syncHostsLocked(b.runtimeContext(), nil, diffStrings(oldHosts, newHosts))
 	b.mu.Unlock()
-	_ = b.syncHosts(b.runtimeContext(), nil, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) runtimeContext() context.Context {
@@ -230,7 +230,13 @@ func (b *GatewayBridge) collectHostsLocked() []string {
 }
 
 func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
-	next := b.materializeByHost(affectedHosts)
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.syncHostsLocked(ctx, affectedHosts, removedHosts)
+}
+
+func (b *GatewayBridge) syncHostsLocked(ctx context.Context, affectedHosts, removedHosts []string) error {
+	next := b.materializeByHostLocked(affectedHosts)
 	if err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts); err != nil {
 		return err
 	}
@@ -250,6 +256,10 @@ func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHos
 func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMaterialized {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
+	return b.materializeByHostLocked(hosts)
+}
+
+func (b *GatewayBridge) materializeByHostLocked(hosts []string) map[string]domainMaterialized {
 	hostSet := map[string]struct{}{}
 	for _, host := range hosts {
 		if normalized := normalizeHost(host); normalized != "" {

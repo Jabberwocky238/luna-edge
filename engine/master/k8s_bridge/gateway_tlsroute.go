@@ -44,16 +44,16 @@ func (b *GatewayBridge) storeTLSRoute(obj *unstructured.Unstructured) {
 		affected = normalizeHosts(state.hostnames)
 	}
 	newHosts := b.collectHostsLocked()
+	_ = b.syncHostsLocked(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 	b.mu.Unlock()
-	_ = b.syncHosts(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteTLSRoute(obj interface{}) {
 	b.mu.Lock()
 	oldHosts := routeHostsFromDeletedObject(obj)
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.tlsRoutes, namespace+"/"+name) })
+	_ = b.syncHostsLocked(b.runtimeContext(), oldHosts, nil)
 	b.mu.Unlock()
-	_ = b.syncHosts(b.runtimeContext(), oldHosts, nil)
 }
 
 func parseTLSRouteState(obj *unstructured.Unstructured) *tlsRouteState {

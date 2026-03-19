@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	replicationServerColorPrefix = "\033[1;31m[REPLICATION SERVER]\033[0m "
+	replicationServerColorPrefix = "\033[1;34m[REPLICATION SERVER]\033[0m "
 )
 
 func replicationServerLogf(format string, args ...any) {
