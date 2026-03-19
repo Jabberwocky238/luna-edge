@@ -11,8 +11,10 @@ lnctl --help
 
 lnctl --master http://127.0.0.1:8080 build create nginx-lnctl -d '{"Hostname":"nginx-lnctl.cluster-1.app238.com","DomainEndpoints":[{"Action":"create","Desired":{"hostname":"nginx-lnctl.cluster-1.app238.com","need_cert":true,"backend_type":"l7-http-both"}}],"ServiceBackendRefs":[{"Action":"create","Desired":{"id":"backend:nginx-lnctl.cluster-1.app238.com:root","type":"SVC","service_namespace":"luna-edge","service_name":"nginx-gateway","service_port":80}}],"HTTPRoutes":[{"Action":"create","Desired":{"id":"route:nginx-lnctl.cluster-1.app238.com:root","hostname":"nginx-lnctl.cluster-1.app238.com","path":"/","priority":1,"backend_ref_id":"backend:nginx-lnctl.cluster-1.app238.com:root"}}]}' 
 
-应用：
+lnctl --master http://127.0.0.1:8080 build create external-lnctl -d '{"Hostname":"external.cluster-1.app238.com","DomainEndpoints":[{"Action":"create","Desired":{"hostname":"external.cluster-1.app238.com","need_cert":true,"backend_type":"l7-http-both"}}],"ServiceBackendRefs":[{"Action":"create","Desired":{"id":"backend:external.cluster-1.app238.com:root","type":"EXTERNAL","arbitrary_endpoint":"nginx-ingress.cluster-1.app238.com","service_port":80}}],"HTTPRoutes":[{"Action":"create","Desired":{"id":"route:external.cluster-1.app238.com:root","hostname":"external.cluster-1.app238.com","path":"/","priority":1,"backend_ref_id":"backend:external.cluster-1.app238.com:root"}}]}'
 
+应用：
+lnctl --master http://127.0.0.1:8080 apply external-lnctl
 lnctl --master http://127.0.0.1:8080 apply nginx-lnctl
 
 查询结果：
