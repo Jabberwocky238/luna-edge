@@ -248,6 +248,8 @@ func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHos
 }
 
 func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMaterialized {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	hostSet := map[string]struct{}{}
 	for _, host := range hosts {
 		if normalized := normalizeHost(host); normalized != "" {
