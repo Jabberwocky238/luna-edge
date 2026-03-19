@@ -1,25 +1,39 @@
 # lnctl
 
-## 职责
+`lnctl` 是面向 luna-edge master manage API 的 Go 客户端库。
 
-控制面客户端库，封装对 master manage API 的资源操作。
+它的职责不是做通用数据库 CRUD，而是提供两类更贴近控制面的能力：
 
-## 架构
+- `Client`: 直接调用 master 的查询和 plan 提交接口
+- `Builder`: 根据期望状态构造 `Plan`，用于提交到 master 落库和广播
 
-- `client.go`: 资源客户端
-- `resources.go`: 当前支持的资源集合
-- 被 `cmd/lnctl` 直接复用
+## 当前能力
 
-## 当前资源模型
+- 查询域名投影：`QueryDomainEntryProjection`
+- 查询 DNS 记录：`QueryDNSRecords`
+- 提交 plan：`ApplyPlan`
+- 构造 plan：`NewBuilder(...).Build()`
 
-- `certificate_revisions`
-- `dns_records`
-- `domain_endpoints`
-- `http_routes`
-- `service_backend_refs`
-- `snapshot_records`
+## 典型使用方式
 
-## 存在的问题
+1. 用 `Client` 从 master 查询当前状态
+2. 用 `Builder` 根据“当前状态 + 目标状态”生成 `Plan`
+3. 再用 `Client.ApplyPlan(...)` 把 plan 提交给 master
 
-- 资源集合仍然需要人工同步
-- 目前偏底层，缺少组合型运维操作
+## 文件说明
+
+- `client.go`: master manage API 客户端
+- `builder.go`: plan 构造器和 diff 逻辑
+- `client_query_test.go`: client 查询和 apply 测试
+- `builder_test.go`: builder 构造和 diff 测试
+- `usage.md`: Go 代码调用示例
+
+## 相关接口
+
+当前对应的 master 接口包括：
+
+- `GET /manage/query/domain-entry-projection`
+- `GET /manage/query/dns-records`
+- `POST /manage/plan`
+
+如果你要看完整示例，直接看 [usage.md](/mnt/d/1-code/__trash__/luna-edge/lnctl/usage.md)。
