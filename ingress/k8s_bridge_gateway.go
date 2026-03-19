@@ -278,7 +278,6 @@ func (b *K8sBridge) newMaterializedRoute(kind RouteKind, namespace, routeName, h
 			BackendJSON:  string(raw),
 		},
 		route: &ResolvedRoute{
-			DomainID:     bindingID,
 			Hostname:     host,
 			RouteVersion: 1,
 			Protocol:     kind,

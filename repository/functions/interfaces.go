@@ -13,10 +13,10 @@ type SpecRepository interface {
 
 	ListServiceBindingsByHostname(ctx context.Context, hostname string) ([]metadata.ServiceBackendRef, error)
 	ListHTTPRoutesByHostname(ctx context.Context, hostname string) ([]metadata.HTTPRoute, error)
-	ReplaceDNSRecords(ctx context.Context, hostname string, records []metadata.DNSRecord) error
+
 	ListDNSRecordsByQuestion(ctx context.Context, fqdn, recordType string) ([]metadata.DNSRecord, error)
 	ListDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error)
-	GetCertificateRevision(ctx context.Context, hostname string, revision uint64) (*metadata.CertificateRevision, error)
+
 	GetLatestCertificateRevision(ctx context.Context, hostname string) (*metadata.CertificateRevision, error)
 	GetActiveCertificateForDomain(ctx context.Context, domain *metadata.DomainEndpoint) (*metadata.CertificateRevision, error)
 	ListCertificateRevisions(ctx context.Context, hostname string) ([]metadata.CertificateRevision, error)

@@ -3,15 +3,12 @@ package ingress
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -235,55 +232,4 @@ func writeTestCertificate(t *testing.T, certRoot, hostname string) *x509.CertPoo
 
 func metav1ObjectMeta(namespace, name string, generation int64) metav1.ObjectMeta {
 	return metav1.ObjectMeta{Namespace: namespace, Name: name, Generation: generation}
-}
-
-func waitForHTTPServer(t *testing.T, rawURL string) {
-	t.Helper()
-	client := &http.Client{Timeout: 200 * time.Millisecond}
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := client.Get(rawURL)
-		if err == nil {
-			_ = resp.Body.Close()
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("http server did not become ready: %s", rawURL)
-}
-
-func waitForTLSServer(t *testing.T, addr, serverName string, rootCA *x509.CertPool) {
-	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		conn, err := tls.Dial("tcp", addr, &tls.Config{ServerName: serverName, RootCAs: rootCA})
-		if err == nil {
-			_ = conn.Close()
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("tls server did not become ready: %s", addr)
-}
-
-func requireSocketSupport(t *testing.T) {
-	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Skipf("socket listen not available in this environment: %v", err)
-		return
-	}
-	_ = ln.Close()
-}
-
-func newLocalTestServer(t *testing.T, handler http.Handler) *httptest.Server {
-	t.Helper()
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen local test server: %v", err)
-	}
-	srv := httptest.NewUnstartedServer(handler)
-	srv.Listener = ln
-	srv.Start()
-	return srv
 }

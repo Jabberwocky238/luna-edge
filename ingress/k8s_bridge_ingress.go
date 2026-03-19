@@ -203,7 +203,6 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 						BackendJSON:  string(routeJSON),
 					},
 					route: &ResolvedRoute{
-						DomainID:     bindingID,
 						Hostname:     host,
 						RouteVersion: routeVersion,
 						Protocol:     RouteKindHTTP,

@@ -16,22 +16,12 @@ func (r *GormRepository) UpsertCertificateRevision(ctx context.Context, revision
 	return r.CertificateRevisions().UpsertResource(ctx, revision)
 }
 
-func (r *GormRepository) GetCertificateRevision(ctx context.Context, domainID string, revision uint64) (*metadata.CertificateRevision, error) {
-	cert := &metadata.CertificateRevision{}
-	if err := r.db.WithContext(ctx).
-		Where("deleted = ?", false).
-		First(cert, "domain_endpoint_id = ? AND revision = ?", domainID, revision).Error; err != nil {
-		return nil, err
-	}
-	return cert, nil
-}
-
-func (r *GormRepository) GetLatestCertificateRevision(ctx context.Context, domainID string) (*metadata.CertificateRevision, error) {
+func (r *GormRepository) GetLatestCertificateRevision(ctx context.Context, hostname string) (*metadata.CertificateRevision, error) {
 	cert := &metadata.CertificateRevision{}
 	if err := r.db.WithContext(ctx).
 		Where("deleted = ?", false).
 		Order("revision desc").
-		First(cert, "domain_endpoint_id = ?", domainID).Error; err != nil {
+		First(cert, "hostname = ?", hostname).Error; err != nil {
 		return nil, err
 	}
 	return cert, nil

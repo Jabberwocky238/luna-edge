@@ -63,7 +63,7 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 		DomainNeedCert          bool                         `gorm:"column:domain_need_cert"`
 		BackendType             metadata.BackendType         `gorm:"column:backend_type"`
 		CertID                  *string                      `gorm:"column:cert_id"`
-		CertDomainID            *string                      `gorm:"column:cert_domain_endpoint_id"`
+		CertHostname            *string                      `gorm:"column:cert_hostname"`
 		CertRevision            *uint64                      `gorm:"column:cert_revision"`
 		CertProvider            *string                      `gorm:"column:cert_provider"`
 		CertType                *metadata.ChallengeType      `gorm:"column:cert_challenge_type"`
@@ -91,12 +91,11 @@ func (r *GormRepository) GetDomainEntryProjectionByDomain(ctx context.Context, d
 	var rows []domainEntryProjectionRow
 	err := r.db.WithContext(ctx).Raw(`
 SELECT
-	de.id AS domain_id,
 	de.hostname AS domain_hostname,
 	de.need_cert AS domain_need_cert,
 	de.backend_type AS backend_type,
 	cr.id AS cert_id,
-	cr.domain_endpoint_id AS cert_domain_endpoint_id,
+	cr.hostname AS cert_hostname,
 	cr.revision AS cert_revision,
 	cr.provider AS cert_provider,
 	cr.challenge_type AS cert_challenge_type,
@@ -121,16 +120,16 @@ SELECT
 	binded_sbr.service_port AS binded_port
 FROM domain_endpoints AS de
 LEFT JOIN certificate_revisions AS cr
-	ON cr.domain_endpoint_id = de.id
+	ON cr.hostname = de.hostname
 	AND cr.deleted = FALSE
 	AND cr.revision = (
 		SELECT MAX(cr2.revision)
 		FROM certificate_revisions AS cr2
 		WHERE cr2.deleted = FALSE
-			AND cr2.domain_endpoint_id = de.id
+			AND cr2.hostname = de.hostname
 	)
 LEFT JOIN http_routes AS hr
-	ON hr.domain_endpoint_id = de.id
+	ON hr.hostname = de.hostname
 	AND hr.deleted = FALSE
 LEFT JOIN service_backend_refs AS route_sbr
 	ON route_sbr.id = hr.backend_ref_id
@@ -159,6 +158,7 @@ ORDER BY hr.priority DESC, LENGTH(hr.path) DESC, hr.id ASC
 	if first.CertID != nil && *first.CertID != "" {
 		projection.Cert = &metadata.CertificateRevision{
 			ID:             *first.CertID,
+			Hostname:       derefString(first.CertHostname),
 			Revision:       derefUint64(first.CertRevision),
 			Provider:       metadata.ACMEProvider(derefString(first.CertProvider)),
 			ChallengeType:  derefChallengeType(first.CertType),

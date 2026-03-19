@@ -86,7 +86,6 @@ type K8sResolvedBackend struct {
 
 // ResolvedRoute 表示 bridge 内部物化出的路由结果。
 type ResolvedRoute struct {
-	DomainID     string
 	Hostname     string
 	RouteVersion uint64
 	Protocol     RouteKind
