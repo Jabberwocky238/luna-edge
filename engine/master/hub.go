@@ -3,7 +3,6 @@ package master
 import (
 	"context"
 	"errors"
-	"log"
 	"sync"
 	"time"
 
@@ -85,10 +84,10 @@ func (h *Hub) Boardcast(notification *replication.ChangeNotification) {
 func (e *Engine) appendSnapshotRecord(ctx context.Context, syncType metadata.SnapshotSyncType, syncID string, action metadata.SnapshotAction) (uint64, error) {
 	record := &metadata.SnapshotRecord{SyncType: syncType, SyncID: syncID, Action: action}
 	if err := e.Repo.AppendSnapshotRecord(ctx, record); err != nil {
-		log.Printf("replication: append snapshot record failed type=%s sync_id=%s action=%s err=%v", syncType, syncID, action, err)
+		masterLogf("replication: append snapshot record failed type=%s sync_id=%s action=%s err=%v", syncType, syncID, action, err)
 		return 0, err
 	}
-	log.Printf("replication: append snapshot record done id=%d type=%s sync_id=%s action=%s", record.ID, syncType, syncID, action)
+	masterLogf("replication: append snapshot record done id=%d type=%s sync_id=%s action=%s", record.ID, syncType, syncID, action)
 	return record.ID, nil
 }
 

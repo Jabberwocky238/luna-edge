@@ -18,6 +18,14 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
+const (
+	masterColorPrefix = "\033[1;32m[MASTER]\033[0m "
+)
+
+func masterLogf(format string, args ...any) {
+	log.Printf(masterColorPrefix+format, args...)
+}
+
 type Config struct {
 	StorageDriver         connection.Driver
 	SQLitePath            string

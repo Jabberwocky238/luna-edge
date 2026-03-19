@@ -28,6 +28,8 @@ func (b *GatewayBridge) loadHTTPRoutes(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.httpRoutes = map[string]*httpRouteState{}
 	for i := range list.Items {
 		if state := parseHTTPRouteState(list.Items[i].DeepCopy()); state != nil {
@@ -41,19 +43,23 @@ func (b *GatewayBridge) storeHTTPRoute(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
 	}
-	oldHosts := b.collectHosts()
+	b.mu.Lock()
+	oldHosts := b.collectHostsLocked()
 	var affected []string
 	if state := parseHTTPRouteState(obj); state != nil {
 		b.httpRoutes[state.key] = state
 		affected = normalizeHosts(state.hostnames)
 	}
-	newHosts := b.collectHosts()
+	newHosts := b.collectHostsLocked()
+	b.mu.Unlock()
 	_ = b.syncHosts(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteHTTPRoute(obj interface{}) {
+	b.mu.Lock()
 	oldHosts := routeHostsFromDeletedObject(obj)
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.httpRoutes, namespace+"/"+name) })
+	b.mu.Unlock()
 	_ = b.syncHosts(b.runtimeContext(), oldHosts, nil)
 }
 

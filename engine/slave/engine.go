@@ -17,6 +17,14 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
+const (
+	slaveColorPrefix = "\033[1;33m[SLAVE]\033[0m "
+)
+
+func slaveLogf(format string, args ...any) {
+	log.Printf(slaveColorPrefix+format, args...)
+}
+
 // Config 定义 slave 模式核心配置。
 type Config struct {
 	CacheRoot     string
@@ -117,7 +125,7 @@ func (e *Engine) ReadCache() ingress.RouteLookupReader {
 
 // Start 启动复制订阅，并在失败时指数退避重试。
 func (e *Engine) Start(ctx context.Context) error {
-	log.Printf("slave: start begin node_id=%s master=%s", e.NODE_ID, e.Config.MasterAddress)
+	slaveLogf("slave: start begin node_id=%s master=%s", e.NODE_ID, e.Config.MasterAddress)
 
 	if e.DNS != nil {
 		if err := e.DNS.BindContext(ctx); err != nil {
@@ -157,18 +165,18 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	backoff := e.Config.RetryMinBackoff
 	for {
-		log.Printf("slave: subscribe attempt node_id=%s backoff=%s", e.NODE_ID, backoff)
+		slaveLogf("slave: subscribe attempt node_id=%s backoff=%s", e.NODE_ID, backoff)
 		err := e.Subscribe(ctx, e.NODE_ID)
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
-			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.NODE_ID, err, ctx.Err())
+			slaveLogf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.NODE_ID, err, ctx.Err())
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
 			return err
 		}
 		e.ready.Store(false)
-		log.Printf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", e.NODE_ID, err, backoff)
+		slaveLogf("slave: subscribe attempt failed node_id=%s err=%v next_backoff=%s", e.NODE_ID, err, backoff)
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():

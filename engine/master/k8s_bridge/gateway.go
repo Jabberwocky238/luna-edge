@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
@@ -36,6 +37,7 @@ type GatewayBridge struct {
 	stopCh        chan struct{}
 	ctx           context.Context
 	repo          repository.Repository
+	mu            sync.RWMutex
 	gateways      map[string]*gatewayState
 	httpRoutes    map[string]*httpRouteState
 	tlsRoutes     map[string]*tlsRouteState
@@ -151,6 +153,8 @@ func (b *GatewayBridge) loadGateways(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	b.gateways = map[string]*gatewayState{}
 	for i := range list.Items {
 		if state := parseGatewayState(list.Items[i].DeepCopy()); state != nil {
@@ -164,20 +168,25 @@ func (b *GatewayBridge) storeGateway(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
 	}
-	oldHosts := b.collectHosts()
+	b.mu.Lock()
+	oldHosts := b.collectHostsLocked()
 	var affected []string
 	if state := parseGatewayState(obj); state != nil {
 		b.gateways[state.key] = state
 		affected = gatewayHosts(state)
 	}
-	newHosts := b.collectHosts()
+	newHosts := b.collectHostsLocked()
+	b.mu.Unlock()
 	_ = b.syncHosts(b.runtimeContext(), affected, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) deleteGateway(obj interface{}) {
-	oldHosts := b.collectHosts()
+	b.mu.Lock()
+	oldHosts := b.collectHostsLocked()
 	deleteByNamespaceName(obj, func(namespace, name string) { delete(b.gateways, namespace+"/"+name) })
-	_ = b.syncHosts(b.runtimeContext(), nil, diffStrings(oldHosts, b.collectHosts()))
+	newHosts := b.collectHostsLocked()
+	b.mu.Unlock()
+	_ = b.syncHosts(b.runtimeContext(), nil, diffStrings(oldHosts, newHosts))
 }
 
 func (b *GatewayBridge) runtimeContext() context.Context {
@@ -188,6 +197,12 @@ func (b *GatewayBridge) runtimeContext() context.Context {
 }
 
 func (b *GatewayBridge) collectHosts() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.collectHostsLocked()
+}
+
+func (b *GatewayBridge) collectHostsLocked() []string {
 	set := map[string]struct{}{}
 	for _, gw := range b.gateways {
 		for _, listener := range gw.listeners {

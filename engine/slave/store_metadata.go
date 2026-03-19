@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -52,7 +51,7 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *replication.Sn
 	if snapshot == nil {
 		return nil
 	}
-	log.Printf("slave-store: apply snapshot begin snapshot_record_id=%d last=%v dns=%d domains=%d", snapshot.SnapshotRecordID, snapshot.Last, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
+	slaveLogf("slave-store: apply snapshot begin snapshot_record_id=%d last=%v dns=%d domains=%d", snapshot.SnapshotRecordID, snapshot.Last, len(snapshot.DNSRecords), len(snapshot.DomainEntries))
 	tx := s.db.WithContext(ctx).Begin()
 	err := tx.Error
 	if err != nil {
@@ -76,10 +75,10 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *replication.Sn
 
 	err = tx.Commit().Error
 	if err != nil {
-		log.Printf("slave-store: apply snapshot commit failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
+		slaveLogf("slave-store: apply snapshot commit failed snapshot_record_id=%d err=%v", snapshot.SnapshotRecordID, err)
 		return err
 	}
-	log.Printf("slave-store: apply snapshot done snapshot_record_id=%d", snapshot.SnapshotRecordID)
+	slaveLogf("slave-store: apply snapshot done snapshot_record_id=%d", snapshot.SnapshotRecordID)
 	return err
 }
 
@@ -90,10 +89,10 @@ func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *replication.
 	}
 	cursor, err := s.GetSnapshotRecordID(ctx)
 	if cursor >= changelog.SnapshotRecordID {
-		log.Printf("slave-store: skip changelog with old snapshot record ID snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
+		slaveLogf("slave-store: skip changelog with old snapshot record ID snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
 		return nil
 	} else if cursor+1 < changelog.SnapshotRecordID {
-		log.Printf("slave-store: snapshot record ID out of order snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
+		slaveLogf("slave-store: snapshot record ID out of order snapshot_record_id=%d current_cursor=%d", changelog.SnapshotRecordID, cursor)
 		return ErrSnapshotOutOfOrder
 	} else {
 		// changelog.SnapshotRecordID is exactly cursor+1, which is expected.
@@ -118,7 +117,7 @@ func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *replication.
 	}
 	err = tx.Commit().Error
 	if err != nil {
-		log.Printf("slave-store: apply changelog commit failed snapshot_record_id=%d err=%v", changelog.SnapshotRecordID, err)
+		slaveLogf("slave-store: apply changelog commit failed snapshot_record_id=%d err=%v", changelog.SnapshotRecordID, err)
 		return err
 	}
 	return nil
@@ -127,10 +126,10 @@ func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *replication.
 func (s *LocalStore) dealDNSRecords(_ context.Context, tx *gorm.DB, input *metadata.DNSRecord, SnapshotRecordID uint64) error {
 	if input.Deleted {
 		if execErr := tx.Delete(&dnsRecordCacheRow{}, "id = ?", input.ID).Error; execErr != nil {
-			log.Printf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, input.ID, execErr)
+			slaveLogf("slave-store: delete dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, input.ID, execErr)
 			return execErr
 		}
-		log.Printf("slave-store: delete dns row snapshot_record_id=%d dns_id=%s", SnapshotRecordID, input.ID)
+		slaveLogf("slave-store: delete dns row snapshot_record_id=%d dns_id=%s", SnapshotRecordID, input.ID)
 		return nil
 	}
 	payload, marshalErr := json.Marshal(input)
@@ -144,10 +143,10 @@ func (s *LocalStore) dealDNSRecords(_ context.Context, tx *gorm.DB, input *metad
 		DetailJSON: string(payload),
 	}
 	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-		log.Printf("slave-store: upsert dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
+		slaveLogf("slave-store: upsert dns row failed snapshot_record_id=%d dns_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
 		return execErr
 	}
-	log.Printf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", SnapshotRecordID, row.ID, row.FQDN)
+	slaveLogf("slave-store: upsert dns row snapshot_record_id=%d dns_id=%s fqdn=%s", SnapshotRecordID, row.ID, row.FQDN)
 	s.dnsChan <- []metadata.DNSRecord{*input}
 	return nil
 }
@@ -155,10 +154,10 @@ func (s *LocalStore) dealDNSRecords(_ context.Context, tx *gorm.DB, input *metad
 func (s *LocalStore) dealDomainEntries(ctx context.Context, tx *gorm.DB, input *metadata.DomainEntryProjection, SnapshotRecordID uint64) error {
 	if input.Deleted {
 		if execErr := tx.Delete(&domainEntryCacheRow{}, "hostname = ?", input.Hostname).Error; execErr != nil {
-			log.Printf("slave-store: delete domain row failed snapshot_record_id=%d hostname=%s err=%v", SnapshotRecordID, input.Hostname, execErr)
+			slaveLogf("slave-store: delete domain row failed snapshot_record_id=%d hostname=%s err=%v", SnapshotRecordID, input.Hostname, execErr)
 			return execErr
 		}
-		log.Printf("slave-store: delete domain row snapshot_record_id=%d hostname=%s", SnapshotRecordID, input.Hostname)
+		slaveLogf("slave-store: delete domain row snapshot_record_id=%d hostname=%s", SnapshotRecordID, input.Hostname)
 		return nil
 	}
 	payload, marshalErr := json.Marshal(input)
@@ -201,10 +200,10 @@ func (s *LocalStore) dealDomainEntries(ctx context.Context, tx *gorm.DB, input *
 		DetailJSON:   string(payload),
 	}
 	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-		log.Printf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
+		slaveLogf("slave-store: upsert domain row failed snapshot_record_id=%d domain_id=%s err=%v", SnapshotRecordID, row.ID, execErr)
 		return execErr
 	}
-	log.Printf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
+	slaveLogf("slave-store: upsert domain row snapshot_record_id=%d domain_id=%s hostname=%s cert_revision=%d", SnapshotRecordID, row.ID, row.Hostname, row.CertRevision)
 	return nil
 }
 
@@ -215,10 +214,10 @@ func (s *LocalStore) updateSnapshotRecordID(ctx context.Context, tx *gorm.DB, sn
 		AffectedTableID:  tableID,
 	}
 	if execErr := tx.Clauses(clause.OnConflict{UpdateAll: true}).Create(row).Error; execErr != nil {
-		log.Printf("slave-store: update snapshot record ID failed snapshot_record_id=%d err=%v", snapshotRecordID, execErr)
+		slaveLogf("slave-store: update snapshot record ID failed snapshot_record_id=%d err=%v", snapshotRecordID, execErr)
 		return execErr
 	}
-	log.Printf("slave-store: update snapshot record ID snapshot_record_id=%d", snapshotRecordID)
+	slaveLogf("slave-store: update snapshot record ID snapshot_record_id=%d", snapshotRecordID)
 	return nil
 }
 

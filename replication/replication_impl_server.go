@@ -62,6 +62,7 @@ func NewGRPCServer(injectServer replpb.ReplicationServiceServer, getSnapshotHand
 		server.grpcServer.GracefulStop()
 		return nil
 	}
+
 	return server
 }
 
