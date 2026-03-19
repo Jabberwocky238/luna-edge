@@ -99,24 +99,14 @@ func (b *Bridge) Listen(ctx context.Context) {
 }
 
 func (b *Bridge) Stop() error {
-	if b == nil {
-		return nil
-	}
-	var firstErr error
 	if b.DNS != nil {
-		if err := b.DNS.Stop(); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		b.DNS.Stop()
 	}
 	if b.Ingress != nil {
-		if err := b.Ingress.Stop(); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		b.Ingress.Stop()
 	}
 	if b.Gateway != nil {
-		if err := b.Gateway.Stop(); err != nil && firstErr == nil {
-			firstErr = err
-		}
+		b.Gateway.Stop()
 	}
-	return firstErr
+	return nil
 }
