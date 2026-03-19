@@ -152,6 +152,7 @@ spec:
       sectionName: websecure
   hostnames:
     - nginx-gateway.cluster-1.app238.com
+    # - nginx-lnctl.cluster-1.app238.com
   rules:
     - matches:
         - path:

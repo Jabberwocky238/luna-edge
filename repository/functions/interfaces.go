@@ -9,7 +9,9 @@ import (
 type SpecRepository interface {
 	GetDomainEndpointByID(ctx context.Context, id string) (*metadata.DomainEndpoint, error)
 	GetDomainEndpointByHostname(ctx context.Context, hostname string) (*metadata.DomainEndpoint, error)
+
 	GetDomainEntryProjectionByDomain(ctx context.Context, domain string) (*metadata.DomainEntryProjection, error)
+
 	ListServiceBindingsByDomainID(ctx context.Context, domainID string) ([]metadata.ServiceBackendRef, error)
 	ListHTTPRoutesByDomainID(ctx context.Context, domainID string) ([]metadata.HTTPRoute, error)
 	ReplaceDNSRecords(ctx context.Context, domainID string, records []metadata.DNSRecord) error
@@ -35,6 +37,10 @@ type GenericRepository[M any] interface {
 
 type Repository interface {
 	SpecRepository
+	Begin(ctx context.Context) (Repository, error)
+	Commit(ctx context.Context) error
+	Rollback(ctx context.Context) error
+
 	DomainEndpoints() GenericRepository[*metadata.DomainEndpoint]
 	ServiceBindingRefs() GenericRepository[*metadata.ServiceBackendRef]
 	HTTPRoutes() GenericRepository[*metadata.HTTPRoute]

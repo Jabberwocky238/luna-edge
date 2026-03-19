@@ -2,6 +2,7 @@ package functions
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 
@@ -11,13 +12,33 @@ import (
 
 // GormRepository 是基于 GORM 的统一仓储实现。
 type GormRepository struct {
+	tx                         bool
 	db                         *gorm.DB
 	certificateDesiredNotifier func(context.Context, string)
 }
 
 // NewGormRepository 创建一个基于 GORM 的仓储实现。
 func NewGormRepository(db *gorm.DB) Repository {
-	return &GormRepository{db: db}
+	return &GormRepository{db: db, tx: false}
+}
+
+func (r *GormRepository) Begin(ctx context.Context) (Repository, error) {
+	tx := r.db.WithContext(ctx).Begin()
+	return &GormRepository{db: tx, tx: true}, nil
+}
+
+func (r *GormRepository) Commit(ctx context.Context) error {
+	if !r.tx {
+		return errors.New("THIS GormRepository IS NOT IN A TX")
+	}
+	return r.db.WithContext(ctx).Commit().Error
+}
+
+func (r *GormRepository) Rollback(ctx context.Context) error {
+	if !r.tx {
+		return errors.New("THIS GormRepository IS NOT IN A TX")
+	}
+	return r.db.WithContext(ctx).Rollback().Error
 }
 
 func (r *GormRepository) SetCertificateDesiredNotifier(fn func(context.Context, string)) {
