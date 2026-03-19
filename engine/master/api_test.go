@@ -1,4 +1,4 @@
-package manage
+package master
 
 import (
 	"io"
@@ -40,4 +40,3 @@ func TestAPIHTTP01Challenge(t *testing.T) {
 		t.Fatalf("expected 404 after cleanup, got %d", rec.Result().StatusCode)
 	}
 }
-

@@ -1,20 +1,18 @@
-package manage
+package master
 
 import (
 	"net/http"
 	"strings"
-	"sync"
 )
 
 // API 暴露 repository manage REST API。
 type API struct {
-	wrapper *Wrapper
-	http01  *http01Registry
+	http01 HTTP01Registry
 }
 
 // NewAPI 创建 API。
-func NewAPI(wrapper *Wrapper) *API {
-	return &API{wrapper: wrapper, http01: newHTTP01Registry()}
+func NewAPI(http01 HTTP01Registry) *API {
+	return &API{http01: http01}
 }
 
 // Handler 返回聚合后的 http handler。
@@ -76,30 +74,6 @@ func (a *API) handleHTTP01Challenge(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type http01Registry struct {
-	mu    sync.RWMutex
-	items map[string]string
-}
-
-func newHTTP01Registry() *http01Registry {
-	return &http01Registry{items: map[string]string{}}
-}
-
-func (r *http01Registry) Set(token, keyAuthorization string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.items[token] = keyAuthorization
-}
-
-func (r *http01Registry) Get(token string) (string, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	value, ok := r.items[token]
-	return value, ok
-}
-
-func (r *http01Registry) Delete(token string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.items, token)
+func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }

@@ -6,10 +6,10 @@ import (
 	"io"
 	"log"
 
-	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/replication"
 )
 
-func (s *Engine) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {
+func (s *Engine) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error) {
 	if s == nil || s.grpcClient == nil {
 		return nil, nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jabberwocky238/luna-edge/repository"
+	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
@@ -19,12 +20,14 @@ type Config struct {
 // Bridge 聚合 master 侧所有 Kubernetes 监听桥。
 // 当前先接入 DNS，Ingress/Gateway 预留到同一生命周期入口。
 type Bridge struct {
-	DNS     *DNSBridge
-	Ingress *IngressBridge
-	Gateway *GatewayBridge
+	DNS            *DNSBridge
+	Ingress        *IngressBridge
+	Gateway        *GatewayBridge
+	OnDnsChange    func(ctx context.Context, dnsID string) error
+	OnDomainChange func(ctx context.Context, fqdn string) error
 }
 
-func New(cfg Config, repo repository.Repository) (*Bridge, error) {
+func New(cfg Config, repo repository.Repository, onDnsChange func(ctx context.Context, records []metadata.DNSRecord) error, onDomainChange func(ctx context.Context, fqdn string) error) (*Bridge, error) {
 	bridge := &Bridge{}
 	if cfg.Enabled {
 		var dnsBridge *DNSBridge
@@ -32,19 +35,19 @@ func New(cfg Config, repo repository.Repository) (*Bridge, error) {
 		var gatewayBridge *GatewayBridge
 		var err error
 		if cfg.DynamicClient != nil {
-			dnsBridge = NewDNSBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo)
-			ingressBridge = NewIngressBridgeWithClient(cfg.Namespace, cfg.IngressClass, cfg.KubeClient, repo)
-			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo)
+			dnsBridge = NewDNSBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, onDnsChange)
+			ingressBridge = NewIngressBridgeWithClient(cfg.Namespace, cfg.IngressClass, cfg.KubeClient, repo, onDomainChange)
+			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, onDomainChange)
 		} else {
-			dnsBridge, err = NewDNSBridge(cfg.Namespace, repo)
+			dnsBridge, err = NewDNSBridge(cfg.Namespace, repo, onDnsChange)
 			if err != nil {
 				return nil, err
 			}
-			ingressBridge, err = NewIngressBridge(cfg.Namespace, cfg.IngressClass, repo)
+			ingressBridge, err = NewIngressBridge(cfg.Namespace, cfg.IngressClass, repo, onDomainChange)
 			if err != nil {
 				return nil, err
 			}
-			gatewayBridge, err = NewGatewayBridge(cfg.Namespace, repo)
+			gatewayBridge, err = NewGatewayBridge(cfg.Namespace, repo, onDomainChange)
 			if err != nil {
 				return nil, err
 			}

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -118,12 +118,12 @@ func buildMinioTransport(secure, insecureSkipVerify bool) http.RoundTripper {
 	return cloned
 }
 
-func (p *S3CertificateBundleProvider) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*enginepkg.CertificateBundle, error) {
+func (p *S3CertificateBundleProvider) FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error) {
 	location, err := p.certificateLocation(hostname, revision)
 	if err != nil {
 		return nil, err
 	}
-	bundle := &enginepkg.CertificateBundle{
+	bundle := &replication.CertificateBundle{
 		Hostname: hostname,
 		Revision: revision,
 	}
@@ -142,14 +142,14 @@ func (p *S3CertificateBundleProvider) FetchCertificateBundle(ctx context.Context
 	return bundle, nil
 }
 
-func (p *S3CertificateBundleProvider) PutCertificateBundle(ctx context.Context, hostname string, revision uint64, bundle *enginepkg.CertificateBundle) error {
+func (p *S3CertificateBundleProvider) PutCertificateBundle(ctx context.Context, bundle *replication.CertificateBundle) error {
 	if p == nil {
 		return fmt.Errorf("s3 provider is nil")
 	}
 	if bundle == nil {
 		return fmt.Errorf("certificate bundle is nil")
 	}
-	location, err := p.certificateLocation(hostname, revision)
+	location, err := p.certificateLocation(bundle.Hostname, bundle.Revision)
 	if err != nil {
 		return err
 	}
@@ -172,8 +172,8 @@ func (p *S3CertificateBundleProvider) PutCertificateBundle(ctx context.Context, 
 	metadataJSON := bundle.MetadataJSON
 	if len(metadataJSON) == 0 {
 		metadataJSON, err = json.Marshal(map[string]any{
-			"hostname": hostname,
-			"revision": revision,
+			"hostname": bundle.Hostname,
+			"revision": bundle.Revision,
 		})
 		if err != nil {
 			return err

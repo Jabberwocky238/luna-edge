@@ -13,6 +13,7 @@ import (
 	"github.com/jabberwocky238/luna-edge/dns"
 	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/ingress"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
@@ -47,7 +48,7 @@ type Config struct {
 type Engine struct {
 	Config     *Config
 	Cache      *LocalStore
-	grpcClient *engine.GRPCClient
+	grpcClient *replication.GRPCClient
 	ready      atomic.Bool
 
 	// 核心组件
@@ -143,7 +144,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 		defer e.Cache.Close()
 	}
-	e.grpcClient = engine.NewGRPCClientEasy(e.Config.MasterAddress)
+	e.grpcClient = replication.NewGRPCClientEasy(e.Config.MasterAddress)
 	if e.grpcClient == nil {
 		return errors.New("failed to dial gRPC to master at " + e.Config.MasterAddress)
 	}

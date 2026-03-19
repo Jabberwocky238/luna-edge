@@ -6,15 +6,76 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-acme/lego/v4/certificate"
+	"github.com/go-acme/lego/v4/challenge"
 	"github.com/go-acme/lego/v4/challenge/dns01"
 	"github.com/go-acme/lego/v4/lego"
-	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"github.com/jabberwocky238/luna-edge/utils"
 )
 
-func NewService(cfg Config, repo repository.Repository, publish publisher, bundles bundleStore, issuer IssuerFactory, http01 http01ChallengeStore) *Service {
+const (
+	zeroSSLDirectoryURL = "https://acme.zerossl.com/v2/DV90"
+)
+
+type Config struct {
+	DefaultProvider       metadata.ACMEProvider
+	DefaultEmail          string
+	DefaultEABKID         string
+	DefaultEABHMACKey     string
+	DefaultArtifactBucket string
+	ArtifactPrefix        string
+	DNS01TTL              uint32
+	HTTP01Priority        int32
+	DNS01Timeout          time.Duration
+	DNS01Interval         time.Duration
+}
+
+type IssueRequest struct {
+	DomainID      string
+	Provider      metadata.ACMEProvider
+	ChallengeType metadata.ChallengeType
+	Email         string
+	EABKID        string
+	EABHMACKey    string
+}
+
+type Service struct {
+	cfg      Config
+	repo     repository.Repository
+	notifier notifyHandler
+	bundles  bundleStore
+	issuers  IssuerFactory
+	http01   *http01Registry
+	now      func() time.Time
+	idSuffix func() string
+}
+
+type notifyHandler = func(ctx context.Context, hostname string) error
+
+type bundleStore interface {
+	PutCertificateBundle(ctx context.Context, bundle *replication.CertificateBundle) error
+}
+
+type IssuerFactory interface {
+	New(config IssuerConfig, challengeType metadata.ChallengeType, provider challenge.Provider) (CertificateIssuer, error)
+}
+
+type CertificateIssuer interface {
+	Obtain(ctx context.Context, domains []string) (*certificate.Resource, error)
+}
+
+type IssuerConfig struct {
+	Provider   metadata.ACMEProvider
+	Email      string
+	Directory  string
+	EABKID     string
+	EABHMACKey string
+}
+
+func NewService(cfg Config, repo repository.Repository, notifier notifyHandler, bundles bundleStore, issuer IssuerFactory, http01 *http01Registry) *Service {
 	if cfg.DefaultProvider == "" {
 		cfg.DefaultProvider = metadata.ProviderLetsEncrypt
 	}
@@ -33,7 +94,7 @@ func NewService(cfg Config, repo repository.Repository, publish publisher, bundl
 	return &Service{
 		cfg:      cfg,
 		repo:     repo,
-		publish:  publish,
+		notifier: notifier,
 		bundles:  bundles,
 		issuers:  issuer,
 		http01:   http01,
@@ -68,26 +129,6 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		utils.CertLogf("acme: next revision failed domain_id=%s err=%v", domain.ID, err)
 		return nil, err
 	}
-	certID := "certrev-" + s.idSuffix()
-	cert := &metadata.CertificateRevision{
-		ID:               certID,
-		DomainEndpointID: domain.ID,
-		Revision:         revisionNumber,
-		Provider:         issuerCfg.Provider,
-		ChallengeType:    req.ChallengeType,
-		ArtifactBucket:   s.cfg.DefaultArtifactBucket,
-		ArtifactPrefix:   certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
-	}
-	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
-		utils.CertLogf("acme: persist placeholder cert failed hostname=%s cert_id=%s revision=%d err=%v", domain.Hostname, certID, revisionNumber, err)
-		return nil, err
-	}
-	utils.CertLogf("acme: placeholder cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, certID, revisionNumber)
-	if err := s.publishChange(ctx, domain.Hostname); err != nil {
-		utils.CertLogf("acme: publish placeholder cert failed hostname=%s cert_id=%s err=%v", domain.Hostname, certID, err)
-		return nil, err
-	}
-
 	solver := &masterChallengeProvider{
 		service:       s,
 		domain:        domain,
@@ -109,17 +150,25 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 		return nil, err
 	}
 	utils.CertLogf("acme: obtain certificate succeeded hostname=%s provider=%s challenge=%s", domain.Hostname, issuerCfg.Provider, req.ChallengeType)
-	bundle, notBefore, notAfter, crtHash, keyHash, err := buildBundle(resource, revisionNumber)
+	certBundle, certRevision, err := buildBundleAndRevision(resource, revisionNumber)
 	if err != nil {
 		utils.CertLogf("acme: build bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
 		return nil, err
 	}
-	utils.CertLogf("acme: bundle built hostname=%s revision=%d not_before=%s not_after=%s", domain.Hostname, revisionNumber, notBefore.UTC().Format(time.RFC3339), notAfter.UTC().Format(time.RFC3339))
-
-	cert.NotBefore = notBefore
-	cert.NotAfter = notAfter
-	cert.SHA256Crt = crtHash
-	cert.SHA256Key = keyHash
+	utils.CertLogf("acme: bundle built hostname=%s revision=%d not_before=%s not_after=%s", domain.Hostname, revisionNumber, certRevision.NotBefore.UTC().Format(time.RFC3339), certRevision.NotAfter.UTC().Format(time.RFC3339))
+	cert := &metadata.CertificateRevision{
+		ID:               "certrev-" + s.idSuffix(),
+		DomainEndpointID: domain.ID,
+		Revision:         revisionNumber,
+		Provider:         issuerCfg.Provider,
+		ChallengeType:    req.ChallengeType,
+		ArtifactBucket:   s.cfg.DefaultArtifactBucket,
+		ArtifactPrefix:   certificateArtifactPrefix(s.cfg.ArtifactPrefix, domain.Hostname, revisionNumber),
+		NotBefore:        certRevision.NotBefore,
+		NotAfter:         certRevision.NotAfter,
+		SHA256Crt:        certRevision.SHA256Crt,
+		SHA256Key:        certRevision.SHA256Key,
+	}
 	if err := s.repo.CertificateRevisions().UpsertResource(ctx, cert); err != nil {
 		utils.CertLogf("acme: persist final cert failed hostname=%s cert_id=%s revision=%d err=%v", domain.Hostname, cert.ID, cert.Revision, err)
 		return nil, err
@@ -127,22 +176,16 @@ func (s *Service) IssueCertificate(ctx context.Context, req IssueRequest) (*meta
 	utils.CertLogf("acme: final cert persisted hostname=%s cert_id=%s revision=%d", domain.Hostname, cert.ID, cert.Revision)
 
 	if s.bundles != nil {
-		if err := s.bundles.PutCertificateBundle(ctx, domain.Hostname, revisionNumber, bundle); err != nil {
+		if err := s.bundles.PutCertificateBundle(ctx, certBundle); err != nil {
 			utils.CertLogf("acme: store bundle failed hostname=%s revision=%d err=%v", domain.Hostname, revisionNumber, err)
 			return nil, err
 		}
 		utils.CertLogf("acme: bundle stored hostname=%s revision=%d", domain.Hostname, revisionNumber)
 	}
-	if err := s.publishChange(ctx, domain.Hostname); err != nil {
+	if err := s.notifier(ctx, domain.Hostname); err != nil {
 		utils.CertLogf("acme: publish final cert change failed hostname=%s cert_revision_id=%s err=%v", domain.Hostname, cert.ID, err)
 		return nil, err
 	}
-	utils.CertLogf("acme: publish final cert change done hostname=%s cert_revision_id=%s", domain.Hostname, cert.ID)
-	if err := s.publishChange(ctx, domain.Hostname); err != nil {
-		utils.CertLogf("acme: publish post-issue extra change failed hostname=%s cert_revision_id=%s err=%v", domain.Hostname, cert.ID, err)
-		return nil, err
-	}
-	utils.CertLogf("acme: publish post-issue extra change done hostname=%s cert_revision_id=%s", domain.Hostname, cert.ID)
 	utils.CertLogf("acme: issue completed hostname=%s provider=%s challenge=%s cert_revision_id=%s revision=%d", domain.Hostname, issuerCfg.Provider, req.ChallengeType, cert.ID, cert.Revision)
 	return cert, nil
 }
@@ -192,29 +235,4 @@ func (s *Service) nextRevision(ctx context.Context, domainID string) (uint64, er
 		return 1, nil
 	}
 	return cert.Revision + 1, nil
-}
-
-func (s *Service) publishChange(ctx context.Context, hostname string) error {
-	if s == nil || s.publish == nil || s.repo == nil {
-		return nil
-	}
-	entry, err := s.repo.GetDomainEntryProjectionByDomain(ctx, hostname)
-	if err != nil {
-		utils.CertLogf("acme: publish change load projection failed hostname=%s err=%v", hostname, err)
-		return err
-	}
-	if entry == nil {
-		utils.CertLogf("acme: publish change projection missing hostname=%s", hostname)
-		return nil
-	}
-	if entry.Cert != nil {
-		utils.CertLogf("acme: publish change projection hostname=%s domain_id=%s cert_id=%s revision=%d", entry.Hostname, entry.ID, entry.Cert.ID, entry.Cert.Revision)
-	} else {
-		utils.CertLogf("acme: publish change projection hostname=%s domain_id=%s cert=nil", entry.Hostname, entry.ID)
-	}
-	return s.publish.PublishChangeLog(ctx, &engine.ChangeNotification{
-		NodeID:      engine.POD_NAME,
-		CreatedAt:   time.Now().UTC(),
-		DomainEntry: entry,
-	})
 }

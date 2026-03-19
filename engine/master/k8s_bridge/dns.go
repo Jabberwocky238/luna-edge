@@ -35,13 +35,10 @@ type DNSBridge struct {
 	stopCh        chan struct{}
 	ctx           context.Context
 	repo          repository.Repository
+	OnUpdate      func(ctx context.Context, records []metadata.DNSRecord) error
 
 	mu      sync.RWMutex
 	records map[string]*dnsDomainRecordState
-}
-
-type batchRepository interface {
-	Batch(ctx context.Context, fn func(repo repository.Repository) error) error
 }
 
 type dnsDomainRecordState struct {
@@ -49,7 +46,7 @@ type dnsDomainRecordState struct {
 	records []metadata.DNSRecord
 }
 
-func NewDNSBridge(namespace string, repo repository.Repository) (*DNSBridge, error) {
+func NewDNSBridge(namespace string, repo repository.Repository, OnUpdate func(ctx context.Context, records []metadata.DNSRecord) error) (*DNSBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -65,10 +62,10 @@ func NewDNSBridge(namespace string, repo repository.Repository) (*DNSBridge, err
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic k8s client: %w", err)
 	}
-	return NewDNSBridgeWithClient(namespace, client, repo), nil
+	return NewDNSBridgeWithClient(namespace, client, repo, OnUpdate), nil
 }
 
-func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository) *DNSBridge {
+func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository, OnUpdate func(ctx context.Context, records []metadata.DNSRecord) error) *DNSBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -81,6 +78,7 @@ func NewDNSBridgeWithClient(namespace string, dynamicClient dynamic.Interface, r
 		stopCh:        make(chan struct{}),
 		repo:          repo,
 		records:       make(map[string]*dnsDomainRecordState),
+		OnUpdate:      OnUpdate,
 	}
 	bridge.ensureInformer()
 	return bridge
@@ -189,12 +187,10 @@ func (b *DNSBridge) syncRecords(ctx context.Context, records []metadata.DNSRecor
 	if b == nil || b.repo == nil {
 		return nil
 	}
-	if batcher, ok := b.repo.(batchRepository); ok {
-		return batcher.Batch(ctx, func(repo repository.Repository) error {
-			return syncDNSRecords(ctx, repo, records)
-		})
+	if err := syncDNSRecords(ctx, b.repo, records); err != nil {
+		return err
 	}
-	return syncDNSRecords(ctx, b.repo, records)
+	return b.OnUpdate(ctx, records)
 }
 
 func syncDNSRecords(ctx context.Context, repo repository.Repository, records []metadata.DNSRecord) error {

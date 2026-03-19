@@ -1,7 +1,6 @@
-package engine
+package replication
 
 import (
-	"context"
 	"time"
 
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
@@ -38,15 +37,4 @@ type NoticeStream interface {
 
 type SnapshotStream interface {
 	Recv() (*Snapshot, error)
-}
-
-type Client interface {
-	GetSnapshot(ctx context.Context, nodeID string, snapshotRecordID uint64) (SnapshotStream, error)
-	Subscribe(ctx context.Context, nodeID string) (NoticeStream, error)
-	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*CertificateBundle, error)
-	Close() error
-}
-
-type Publisher interface {
-	PublishChangeLog(ctx context.Context, changelog *ChangeNotification) error
 }

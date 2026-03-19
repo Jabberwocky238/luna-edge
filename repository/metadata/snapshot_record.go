@@ -2,6 +2,7 @@ package metadata
 
 import "time"
 
+// DNSRecord / DomainEntryProjection
 type SnapshotSyncType string
 
 const (

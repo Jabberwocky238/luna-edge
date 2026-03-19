@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jabberwocky238/luna-edge/engine"
 	"github.com/jabberwocky238/luna-edge/ingress"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/utils"
 )
 
-func (s *LocalStore) PutCertificateBundle(ctx context.Context, bundle *engine.CertificateBundle) error {
+func (s *LocalStore) PutCertificateBundle(ctx context.Context, bundle *replication.CertificateBundle) error {
 	if bundle == nil {
 		return errors.New("bundle is nil")
 	}
@@ -50,7 +50,7 @@ func (s *LocalStore) CheckCertificateBundle(ctx context.Context, hostname string
 	return true, nil
 }
 
-func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error) {
+func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error) {
 	if s == nil || strings.TrimSpace(hostname) == "" {
 		return nil, fmt.Errorf("hostname is required")
 	}
@@ -67,7 +67,7 @@ func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, re
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	bundle := &engine.CertificateBundle{
+	bundle := &replication.CertificateBundle{
 		Hostname:     hostname,
 		Revision:     revision,
 		TLSCrt:       crt,
@@ -91,7 +91,7 @@ func (s *LocalStore) GetCertificateBundle(_ context.Context, hostname string, re
 	return bundle, nil
 }
 
-func writeCertificateBundle(certRoot string, bundle *engine.CertificateBundle) error {
+func writeCertificateBundle(certRoot string, bundle *replication.CertificateBundle) error {
 	if bundle == nil {
 		return fmt.Errorf("certificate bundle is nil")
 	}

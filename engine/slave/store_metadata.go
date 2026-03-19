@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"github.com/jabberwocky238/luna-edge/utils"
 	"gorm.io/gorm"
@@ -48,7 +48,7 @@ func (s *LocalStore) initSchema() error {
 	return s.db.AutoMigrate(&dnsRecordCacheRow{}, &domainEntryCacheRow{}, &syncStateRow{})
 }
 
-func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapshot) error {
+func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *replication.Snapshot) error {
 	if snapshot == nil {
 		return nil
 	}
@@ -83,7 +83,7 @@ func (s *LocalStore) ApplySnapshot(ctx context.Context, snapshot *engine.Snapsho
 	return err
 }
 
-func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *engine.ChangeNotification) error {
+func (s *LocalStore) ApplyChangelog(ctx context.Context, changelog *replication.ChangeNotification) error {
 	var err error
 	if changelog == nil {
 		return nil

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -19,7 +19,7 @@ const (
 )
 
 type BundleFetcher interface {
-	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*engine.CertificateBundle, error)
+	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error)
 }
 
 type LocalStore struct {

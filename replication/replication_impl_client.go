@@ -1,4 +1,4 @@
-package engine
+package replication
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type GRPCClient struct {
 func NewGRPCClientEasy(masterAddress string) *GRPCClient {
 	conn, err := grpc.NewClient(masterAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("failed to connect to master: %v", err)
+		return nil
 	}
 	return &GRPCClient{client: replpb.NewReplicationServiceClient(conn), closer: func() error { return conn.Close() }}
 }

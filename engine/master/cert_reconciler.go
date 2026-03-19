@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jabberwocky238/luna-edge/engine/master/acme"
+	"github.com/jabberwocky238/luna-edge/replication"
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
@@ -21,12 +22,21 @@ type certificateIssuer interface {
 	IssueCertificate(ctx context.Context, req acme.IssueRequest) (*metadata.CertificateRevision, error)
 }
 
+type CertificateBundleProvider interface {
+	FetchCertificateBundle(ctx context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error)
+	PutCertificateBundle(ctx context.Context, bundle *replication.CertificateBundle) error
+}
+
 type CertReconciler struct {
-	repo        repository.Repository
-	issuer      certificateIssuer
-	provider    metadata.ACMEProvider
-	interval    time.Duration
-	renewBefore time.Duration
+	repo           repository.Repository
+	issuer         certificateIssuer
+	BundleProvider CertificateBundleProvider
+	interval       time.Duration
+	renewBefore    time.Duration
+
+	acme           *acme.Service
+	http01Registry HTTP01Registry
+	issueProvider  *metadata.ACMEProvider
 
 	notifyCh chan string
 	doneCh   chan struct{}
@@ -36,23 +46,28 @@ type CertReconciler struct {
 	now      func() time.Time
 }
 
-func NewCertReconciler(repo repository.Repository, issuer certificateIssuer, provider metadata.ACMEProvider, interval, renewBefore time.Duration) *CertReconciler {
+func NewCertReconciler(repo repository.Repository, acmeCfg acme.Config, interval, renewBefore time.Duration, OnDomainUpdate func(ctx context.Context, fqdn string) error, provider CertificateBundleProvider) *CertReconciler {
 	if interval <= 0 {
 		interval = defaultCertReconcileInterval
 	}
 	if renewBefore <= 0 {
 		renewBefore = defaultCertRenewBefore
 	}
+	http01 := acme.NewHTTP01Registry()
+	acme := acme.NewService(acmeCfg, repo, OnDomainUpdate, provider, acme.LegoIssuerFactory{}, http01)
 	return &CertReconciler{
-		repo:        repo,
-		issuer:      issuer,
-		provider:    provider,
-		interval:    interval,
-		renewBefore: renewBefore,
-		notifyCh:    make(chan string, 128),
-		doneCh:      make(chan struct{}),
-		inFlight:    map[string]struct{}{},
-		now:         func() time.Time { return time.Now().UTC() },
+		repo:           repo,
+		issuer:         acme,
+		issueProvider:  &acmeCfg.DefaultProvider,
+		http01Registry: http01,
+		BundleProvider: provider,
+		interval:       interval,
+		renewBefore:    renewBefore,
+		acme:           acme,
+		notifyCh:       make(chan string, 128),
+		doneCh:         make(chan struct{}),
+		inFlight:       map[string]struct{}{},
+		now:            func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -156,7 +171,7 @@ func (r *CertReconciler) reconcileDomain(ctx context.Context, domain *metadata.D
 	_, err := r.issuer.IssueCertificate(ctx, acme.IssueRequest{
 		DomainID:      domain.ID,
 		ChallengeType: challengeTypeForDomain(domain),
-		Provider:      r.provider,
+		Provider:      *r.issueProvider,
 	})
 	return err
 }

@@ -32,6 +32,7 @@ type GatewayBridge struct {
 	namespace     string
 	dynamicClient dynamic.Interface
 	factory       dynamicinformer.DynamicSharedInformerFactory
+	OnUpdate      func(ctx context.Context, fqdn string) error
 	stopCh        chan struct{}
 	ctx           context.Context
 	repo          repository.Repository
@@ -40,7 +41,7 @@ type GatewayBridge struct {
 	tlsRoutes     map[string]*tlsRouteState
 }
 
-func NewGatewayBridge(namespace string, repo repository.Repository) (*GatewayBridge, error) {
+func NewGatewayBridge(namespace string, repo repository.Repository, OnUpdate func(ctx context.Context, fqdn string) error) (*GatewayBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -55,10 +56,10 @@ func NewGatewayBridge(namespace string, repo repository.Repository) (*GatewayBri
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic k8s client: %w", err)
 	}
-	return NewGatewayBridgeWithClient(namespace, client, repo), nil
+	return NewGatewayBridgeWithClient(namespace, client, repo, OnUpdate), nil
 }
 
-func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository) *GatewayBridge {
+func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interface, repo repository.Repository, OnUpdate func(ctx context.Context, fqdn string) error) *GatewayBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -68,6 +69,7 @@ func NewGatewayBridgeWithClient(namespace string, dynamicClient dynamic.Interfac
 	bridge := &GatewayBridge{
 		namespace:     namespace,
 		dynamicClient: dynamicClient,
+		OnUpdate:      OnUpdate,
 		stopCh:        make(chan struct{}),
 		repo:          repo,
 		gateways:      map[string]*gatewayState{},
@@ -214,7 +216,20 @@ func (b *GatewayBridge) collectHosts() []string {
 
 func (b *GatewayBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHost(affectedHosts)
-	return syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
+	if err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts); err != nil {
+		return err
+	}
+	for _, item := range removedHosts {
+		if err := b.OnUpdate(ctx, item); err != nil {
+			return err
+		}
+	}
+	for _, item := range affectedHosts {
+		if err := b.OnUpdate(ctx, item); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *GatewayBridge) materializeByHost(hosts []string) map[string]domainMaterialized {
@@ -471,12 +486,10 @@ func syncDomainSet(ctx context.Context, repo repository.Repository, next map[str
 	if repo == nil {
 		return nil
 	}
-	if batcher, ok := repo.(batchRepository); ok {
-		return batcher.Batch(ctx, func(repo repository.Repository) error {
-			return syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts)
-		})
+	if err := syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts); err != nil {
+		return err
 	}
-	return syncDomainSetOnce(ctx, repo, next, affectedHosts, removedHosts)
+	return nil
 }
 
 func syncDomainSetOnce(ctx context.Context, repo repository.Repository, next map[string]domainMaterialized, affectedHosts []string, removedHosts []string) error {

@@ -24,6 +24,7 @@ type IngressBridge struct {
 	ingressClass string
 	client       kubernetes.Interface
 	factory      informers.SharedInformerFactory
+	OnUpdate     func(ctx context.Context, fqdn string) error
 	stopCh       chan struct{}
 	ctx          context.Context
 	repo         repository.Repository
@@ -31,7 +32,7 @@ type IngressBridge struct {
 	ingresses map[string]*networkingv1.Ingress
 }
 
-func NewIngressBridge(namespace, ingressClass string, repo repository.Repository) (*IngressBridge, error) {
+func NewIngressBridge(namespace, ingressClass string, repo repository.Repository, onDomainChange func(ctx context.Context, fqdn string) error) (*IngressBridge, error) {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -46,10 +47,10 @@ func NewIngressBridge(namespace, ingressClass string, repo repository.Repository
 	if err != nil {
 		return nil, fmt.Errorf("create k8s client: %w", err)
 	}
-	return NewIngressBridgeWithClient(namespace, ingressClass, client, repo), nil
+	return NewIngressBridgeWithClient(namespace, ingressClass, client, repo, onDomainChange), nil
 }
 
-func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernetes.Interface, repo repository.Repository) *IngressBridge {
+func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernetes.Interface, repo repository.Repository, onDomainChange func(ctx context.Context, fqdn string) error) *IngressBridge {
 	if namespace == "" {
 		namespace = enginepkg.POD_NAMESPACE
 	}
@@ -63,6 +64,7 @@ func NewIngressBridgeWithClient(namespace, ingressClass string, client kubernete
 		stopCh:       make(chan struct{}),
 		repo:         repo,
 		ingresses:    map[string]*networkingv1.Ingress{},
+		OnUpdate:     onDomainChange,
 	}
 	bridge.ensureInformer()
 	return bridge
@@ -188,7 +190,20 @@ func (b *IngressBridge) runtimeContext() context.Context {
 
 func (b *IngressBridge) syncHosts(ctx context.Context, affectedHosts, removedHosts []string) error {
 	next := b.materializeByHost(affectedHosts)
-	return syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts)
+	if err := syncDomainSet(ctx, b.repo, next, affectedHosts, removedHosts); err != nil {
+		return err
+	}
+	for _, host := range affectedHosts {
+		if err := b.OnUpdate(ctx, host); err != nil {
+			return err
+		}
+	}
+	for _, host := range removedHosts {
+		if err := b.OnUpdate(ctx, host); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *IngressBridge) materializeByHost(hosts []string) map[string]domainMaterialized {
