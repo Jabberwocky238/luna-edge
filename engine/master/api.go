@@ -8,10 +8,14 @@ import (
 // API 暴露 repository manage REST API。
 type API struct {
 	http01 HTTP01Registry
+	manage http.Handler
 }
 
 // NewAPI 创建 API。
 func NewAPI(http01 HTTP01Registry) *API {
+	if http01 == nil {
+		http01 = newMemoryHTTP01Registry()
+	}
 	return &API{http01: http01}
 }
 
@@ -20,8 +24,15 @@ func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", a.handleHealthz)
 	mux.HandleFunc("/.well-known/acme-challenge/", a.handleHTTP01Challenge)
-	mux.HandleFunc("/manage/", a.handleResource)
+	mux.Handle("/manage/", a.manageHandler())
 	return mux
+}
+
+func (a *API) SetManageHandler(handler http.Handler) {
+	if a == nil {
+		return
+	}
+	a.manage = handler
 }
 
 func (a *API) SetHTTP01Challenge(token, keyAuthorization string) {
@@ -76,4 +87,11 @@ func (a *API) handleHTTP01Challenge(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) handleResource(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+func (a *API) manageHandler() http.Handler {
+	if a == nil || a.manage == nil {
+		return http.HandlerFunc(a.handleResource)
+	}
+	return a.manage
 }

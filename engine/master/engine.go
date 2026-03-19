@@ -108,6 +108,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		return e.BoardcastDomainEndpointProjection(ctx, fqdn)
 	}, e.Bundles)
 	e.API = NewAPI(e.Certs.http01Registry)
+	e.API.SetManageHandler(newManageAPI(e))
 	if e.Config.K8sBridgeEnabled && e.K8sBridge == nil {
 		bridge, err := masterk8s.New(masterk8s.Config{
 			Namespace:    e.Config.K8sNamespace,

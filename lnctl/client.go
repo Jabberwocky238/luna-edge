@@ -16,23 +16,6 @@ type Client struct {
 	http    *http.Client
 }
 
-type ResourceClient[T any] struct {
-	client   *Client
-	resource string
-	idOf     func(T) string
-}
-
-type AnyResourceClient interface {
-	ListAny() (any, error)
-	GetAny(id string) (any, error)
-	PutJSON(body []byte) (any, error)
-	Delete(id string) error
-}
-
-type managedResourceAdapter[T any] struct {
-	resourceClient ResourceClient[T]
-}
-
 func NewClient(baseURL string) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -40,97 +23,64 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-func (c *Client) DomainEndpoints() ResourceClient[metadata.DomainEndpoint] {
-	return newResourceClient(c, "domain_endpoints", func(model metadata.DomainEndpoint) string { return model.ID })
-}
-
-func (c *Client) ServiceBackendRefs() ResourceClient[metadata.ServiceBackendRef] {
-	return newResourceClient(c, "service_backend_refs", func(model metadata.ServiceBackendRef) string { return model.ID })
-}
-
-func (c *Client) HTTPRoutes() ResourceClient[metadata.HTTPRoute] {
-	return newResourceClient(c, "http_routes", func(model metadata.HTTPRoute) string { return model.ID })
-}
-
-func (c *Client) DNSRecords() ResourceClient[metadata.DNSRecord] {
-	return newResourceClient(c, "dns_records", func(model metadata.DNSRecord) string { return model.ID })
-}
-
-func (c *Client) CertificateRevisions() ResourceClient[metadata.CertificateRevision] {
-	return newResourceClient(c, "certificate_revisions", func(model metadata.CertificateRevision) string { return model.ID })
-}
-
-func (c *Client) SnapshotRecords() ResourceClient[metadata.SnapshotRecord] {
-	return newResourceClient(c, "snapshot_records", func(model metadata.SnapshotRecord) string { return fmt.Sprintf("%d", model.ID) })
-}
-
-func (c *Client) ManageResource(resource string) (AnyResourceClient, error) {
-	switch resource {
-	case "domain_endpoints":
-		return managedResourceAdapter[metadata.DomainEndpoint]{resourceClient: c.DomainEndpoints()}, nil
-	case "service_backend_refs":
-		return managedResourceAdapter[metadata.ServiceBackendRef]{resourceClient: c.ServiceBackendRefs()}, nil
-	case "http_routes":
-		return managedResourceAdapter[metadata.HTTPRoute]{resourceClient: c.HTTPRoutes()}, nil
-	case "dns_records":
-		return managedResourceAdapter[metadata.DNSRecord]{resourceClient: c.DNSRecords()}, nil
-	case "certificate_revisions":
-		return managedResourceAdapter[metadata.CertificateRevision]{resourceClient: c.CertificateRevisions()}, nil
-	case "snapshot_records":
-		return managedResourceAdapter[metadata.SnapshotRecord]{resourceClient: c.SnapshotRecords()}, nil
-	default:
-		return nil, fmt.Errorf("unsupported resource %q", resource)
+func (c *Client) QueryDomainEntryProjection(hostname string) (*metadata.DomainEntryProjection, error) {
+	hostname = strings.TrimSpace(hostname)
+	if hostname == "" {
+		return nil, fmt.Errorf("hostname is required")
 	}
-}
-
-func newResourceClient[T any](client *Client, resource string, idOf func(T) string) ResourceClient[T] {
-	return ResourceClient[T]{client: client, resource: resource, idOf: idOf}
-}
-
-func (c ResourceClient[T]) List() ([]T, error) {
-	return listResource[T](c.client, c.resource)
-}
-
-func (c ResourceClient[T]) Get(id string) (*T, error) {
-	return getResource[T](c.client, c.resource, id)
-}
-
-func (c ResourceClient[T]) Put(model T) (*T, error) {
-	return putResource(c.client, c.resource, c.idOf(model), model)
-}
-
-func (c ResourceClient[T]) Delete(id string) error {
-	return deleteResource(c.client, c.resource, id)
-}
-
-func (a managedResourceAdapter[T]) ListAny() (any, error) {
-	return a.resourceClient.List()
-}
-
-func (a managedResourceAdapter[T]) GetAny(id string) (any, error) {
-	return a.resourceClient.Get(id)
-}
-
-func (a managedResourceAdapter[T]) PutJSON(body []byte) (any, error) {
-	var model T
-	if err := json.Unmarshal(body, &model); err != nil {
-		return nil, fmt.Errorf("decode request body: %w", err)
-	}
-	return a.resourceClient.Put(model)
-}
-
-func (a managedResourceAdapter[T]) Delete(id string) error {
-	return a.resourceClient.Delete(id)
-}
-
-func rawRequest(c *Client, method, resource, id string, body []byte) ([]byte, error) {
-	if err := validateResource(resource); err != nil {
+	body, err := rawQuery(c, "/manage/query/domain-entry-projection?hostname="+hostname)
+	if err != nil {
 		return nil, err
 	}
-	url := c.baseURL + "/manage/" + strings.Trim(resource, "/")
-	if id != "" {
-		url += "/" + strings.TrimSpace(id)
+	var out metadata.DomainEntryProjection
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode domain entry projection response: %w", err)
 	}
+	return &out, nil
+}
+
+func (c *Client) QueryDNSRecords(fqdn, recordType string) ([]metadata.DNSRecord, error) {
+	fqdn = strings.TrimSpace(fqdn)
+	recordType = strings.TrimSpace(recordType)
+	if fqdn == "" || recordType == "" {
+		return nil, fmt.Errorf("fqdn and recordType are required")
+	}
+	body, err := rawQuery(c, "/manage/query/dns-records?fqdn="+fqdn+"&record_type="+recordType)
+	if err != nil {
+		return nil, err
+	}
+	var out []metadata.DNSRecord
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode dns records response: %w", err)
+	}
+	return out, nil
+}
+
+func (c *Client) ApplyPlan(plan *Plan) (*Plan, error) {
+	if plan == nil {
+		return nil, fmt.Errorf("plan is required")
+	}
+	body, err := json.Marshal(plan)
+	if err != nil {
+		return nil, fmt.Errorf("marshal plan request: %w", err)
+	}
+	respBody, err := rawAbsoluteRequest(c, http.MethodPost, "/manage/plan", body)
+	if err != nil {
+		return nil, err
+	}
+	var out Plan
+	if err := json.Unmarshal(respBody, &out); err != nil {
+		return nil, fmt.Errorf("decode plan response: %w", err)
+	}
+	return &out, nil
+}
+
+func rawQuery(c *Client, path string) ([]byte, error) {
+	return rawAbsoluteRequest(c, http.MethodGet, path, nil)
+}
+
+func rawAbsoluteRequest(c *Client, method, path string, body []byte) ([]byte, error) {
+	url := c.baseURL + path
 	req, err := http.NewRequest(method, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
@@ -152,80 +102,4 @@ func rawRequest(c *Client, method, resource, id string, body []byte) ([]byte, er
 		return nil, fmt.Errorf("master returned %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
 	}
 	return respBody, nil
-}
-
-func listResource[T any](c *Client, resource string) ([]T, error) {
-	body, err := rawRequest(c, http.MethodGet, resource, "", nil)
-	if err != nil {
-		return nil, err
-	}
-	var out []T
-	if len(bytes.TrimSpace(body)) == 0 {
-		return out, nil
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("decode %s list response: %w", resource, err)
-	}
-	return out, nil
-}
-
-func getResource[T any](c *Client, resource, id string) (*T, error) {
-	if err := validateRequiredID(resource, id); err != nil {
-		return nil, err
-	}
-	body, err := rawRequest(c, http.MethodGet, resource, id, nil)
-	if err != nil {
-		return nil, err
-	}
-	var out T
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("decode %s response: %w", resource, err)
-	}
-	return &out, nil
-}
-
-func putResource[T any](c *Client, resource, id string, model T) (*T, error) {
-	if err := validateRequiredID(resource, id); err != nil {
-		return nil, err
-	}
-	body, err := json.Marshal(model)
-	if err != nil {
-		return nil, fmt.Errorf("marshal %s request: %w", resource, err)
-	}
-	respBody, err := rawRequest(c, http.MethodPut, resource, id, body)
-	if err != nil {
-		return nil, err
-	}
-	var out T
-	if err := json.Unmarshal(respBody, &out); err != nil {
-		return nil, fmt.Errorf("decode %s response: %w", resource, err)
-	}
-	return &out, nil
-}
-
-func deleteResource(c *Client, resource, id string) error {
-	if err := validateRequiredID(resource, id); err != nil {
-		return err
-	}
-	_, err := rawRequest(c, http.MethodDelete, resource, id, nil)
-	return err
-}
-
-func validateResource(resource string) error {
-	resource = strings.TrimSpace(resource)
-	if resource == "" {
-		return fmt.Errorf("resource is required")
-	}
-	if !isSupportedResource(resource) {
-		return fmt.Errorf("unsupported resource %q", resource)
-	}
-	return nil
-}
-
-func validateRequiredID(resource, id string) error {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return fmt.Errorf("%s id is required", resource)
-	}
-	return nil
 }
