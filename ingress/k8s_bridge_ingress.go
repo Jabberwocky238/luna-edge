@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -52,6 +53,24 @@ func (b *K8sBridge) loadInitialIngresses(ctx context.Context) error {
 	return nil
 }
 
+func (b *K8sBridge) loadInitialServices(ctx context.Context) error {
+	if b.client == nil {
+		return nil
+	}
+	list, err := b.client.CoreV1().Services(b.namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list services: %w", err)
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for i := range list.Items {
+		svc := list.Items[i]
+		b.services[svc.Namespace+"/"+svc.Name] = &k8sServiceState{resource: svc.DeepCopy()}
+	}
+	return nil
+}
+
 // ListIngresses 返回当前缓存中的标准 Ingress 快照。
 func (b *K8sBridge) ListIngresses() []*networkingv1.Ingress {
 	b.mu.RLock()
@@ -81,10 +100,30 @@ func (b *K8sBridge) storeIngress(obj interface{}) {
 	b.mu.Unlock()
 }
 
+func (b *K8sBridge) storeService(obj interface{}) {
+	svc, ok := obj.(*corev1.Service)
+	if !ok || svc == nil {
+		return
+	}
+	b.mu.Lock()
+	b.services[svc.Namespace+"/"+svc.Name] = &k8sServiceState{resource: svc.DeepCopy()}
+	b.rebuildRoutesLocked()
+	b.mu.Unlock()
+}
+
 func (b *K8sBridge) deleteIngress(obj interface{}) {
 	deleteByNamespaceName(obj, func(namespace, name string) {
 		b.mu.Lock()
 		delete(b.ingresses, namespace+"/"+name)
+		b.rebuildRoutesLocked()
+		b.mu.Unlock()
+	})
+}
+
+func (b *K8sBridge) deleteService(obj interface{}) {
+	deleteByNamespaceName(obj, func(namespace, name string) {
+		b.mu.Lock()
+		delete(b.services, namespace+"/"+name)
 		b.rebuildRoutesLocked()
 		b.mu.Unlock()
 	})
@@ -128,6 +167,10 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 				if service.Port.Name != "" && servicePort == 0 {
 					servicePort = 80
 				}
+				serviceAddress := buildServiceAddress(service.Name, ing.Namespace)
+				if resolved, ok := b.resolveIngressBackendServiceAddressLocked(ing.Namespace, service.Name); ok {
+					serviceAddress = resolved
+				}
 
 				bindingID := fmt.Sprintf("k8s:ingress:%s:%s:%s:%d", ing.Namespace, ing.Name, host, idx)
 				routeVersion := uint64(ing.Generation)
@@ -153,7 +196,7 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 						ServiceID:    fmt.Sprintf("%s/%s", ing.Namespace, service.Name),
 						Namespace:    ing.Namespace,
 						Name:         service.Name,
-						Address:      buildServiceAddress(service.Name, ing.Namespace),
+						Address:      serviceAddress,
 						Port:         servicePort,
 						Protocol:     RouteKindHTTP,
 						RouteVersion: routeVersion,
@@ -174,4 +217,19 @@ func (b *K8sBridge) rebuildIngressRoutesLocked() {
 			}
 		}
 	}
+}
+
+func (b *K8sBridge) resolveIngressBackendServiceAddressLocked(namespace, name string) (string, bool) {
+	state := b.services[namespace+"/"+name]
+	if state == nil || state.resource == nil {
+		return "", false
+	}
+	if state.resource.Spec.Type != corev1.ServiceTypeExternalName {
+		return "", false
+	}
+	address := normalizeHost(state.resource.Spec.ExternalName)
+	if address == "" {
+		return "", false
+	}
+	return address, true
 }

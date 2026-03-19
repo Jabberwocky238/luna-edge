@@ -116,6 +116,17 @@ func initBridgeHandlers(bridge *K8sBridge) {
 				bridge.deleteIngress(obj)
 			},
 		})
+		bridge.ingressFactory.Core().V1().Services().Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				bridge.storeService(obj)
+			},
+			UpdateFunc: func(_, newObj interface{}) {
+				bridge.storeService(newObj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				bridge.deleteService(obj)
+			},
+		})
 	}
 
 	bridge.ensureGatewayInformers()

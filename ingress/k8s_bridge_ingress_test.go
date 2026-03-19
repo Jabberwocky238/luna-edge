@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -255,6 +256,118 @@ func TestK8sBridgeFiltersByIngressClassName(t *testing.T) {
 	}
 	if len(bridge.ListIngresses()) != 1 {
 		t.Fatalf("expected only one ingress in memory, got %d", len(bridge.ListIngresses()))
+	}
+}
+
+func TestK8sBridgeMaterializesIngressExternalNameService(t *testing.T) {
+	pathType := networkingv1.PathTypePrefix
+	className := "luna-edge"
+	svc := &corev1.Service{
+		ObjectMeta: metav1ObjectMeta("default", "my-external-api", 1),
+		Spec: corev1.ServiceSpec{
+			Type:         corev1.ServiceTypeExternalName,
+			ExternalName: "api.external-provider.com",
+		},
+	}
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "api-ingress",
+			Generation: 1,
+			Annotations: map[string]string{
+				"nginx.ingress.kubernetes.io/upstream-vhost": "api.external-provider.com",
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			Rules: []networkingv1.IngressRule{{
+				Host: "my-k8s-app.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/external-api",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "my-external-api",
+									Port: networkingv1.ServiceBackendPort{Number: 80},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	client := fake.NewSimpleClientset(svc, ing)
+	bridge := NewK8sBridgeWithClient("default", "luna-edge", client)
+	if err := bridge.LoadInitial(context.Background()); err != nil {
+		t.Fatalf("load initial: %v", err)
+	}
+
+	binding, route, ok := bridge.ResolveRequest("my-k8s-app.com", "/external-api/v1")
+	if !ok {
+		t.Fatal("expected external name ingress to resolve")
+	}
+	if binding.Name != "my-external-api" || binding.Address != "api.external-provider.com" || binding.Port != 80 {
+		t.Fatalf("unexpected external name binding: %#v", binding)
+	}
+	if route.Hostname != "my-k8s-app.com" {
+		t.Fatalf("unexpected route: %#v", route)
+	}
+}
+
+func TestK8sBridgeRebuildsWhenExternalNameServiceChanges(t *testing.T) {
+	pathType := networkingv1.PathTypePrefix
+	className := "luna-edge"
+	svc := &corev1.Service{
+		ObjectMeta: metav1ObjectMeta("default", "my-external-api", 1),
+		Spec: corev1.ServiceSpec{
+			Type:         corev1.ServiceTypeExternalName,
+			ExternalName: "api.external-provider.com",
+		},
+	}
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1ObjectMeta("default", "api-ingress", 1),
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			Rules: []networkingv1.IngressRule{{
+				Host: "my-k8s-app.com",
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     "/external-api",
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: "my-external-api",
+									Port: networkingv1.ServiceBackendPort{Number: 80},
+								},
+							},
+						}},
+					},
+				},
+			}},
+		},
+	}
+
+	client := fake.NewSimpleClientset(svc, ing)
+	bridge := NewK8sBridgeWithClient("default", "luna-edge", client)
+	if err := bridge.LoadInitial(context.Background()); err != nil {
+		t.Fatalf("load initial: %v", err)
+	}
+
+	updated := svc.DeepCopy()
+	updated.Spec.ExternalName = "api2.external-provider.com"
+	bridge.storeService(updated)
+
+	binding, _, ok := bridge.ResolveRequest("my-k8s-app.com", "/external-api")
+	if !ok {
+		t.Fatal("expected external name ingress to resolve after service update")
+	}
+	if binding.Address != "api2.external-provider.com" {
+		t.Fatalf("unexpected updated external name binding: %#v", binding)
 	}
 }
 

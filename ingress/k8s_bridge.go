@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
 	dynamicinformer "k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
@@ -29,6 +30,7 @@ type K8sBridge struct {
 	mu sync.RWMutex
 
 	ingresses map[string]*k8sIngressState
+	services  map[string]*k8sServiceState
 	gateways  map[string]*k8sGatewayState
 
 	httpRoutes map[string]*k8sHTTPRouteState
@@ -43,6 +45,10 @@ type K8sBridge struct {
 	tlsResolved   map[string][]k8sMaterializedRoute
 	tcpResolved   map[uint32][]k8sMaterializedRoute
 	udpResolved   map[uint32][]k8sMaterializedRoute
+}
+
+type k8sServiceState struct {
+	resource *corev1.Service
 }
 
 type k8sMaterializedRoute struct {
@@ -111,6 +117,7 @@ func NewK8sBridgeWithClients(namespace, ingressClass string, client kubernetes.I
 		dynamicClient: dynamicClient,
 		stopCh:        make(chan struct{}),
 		ingresses:     make(map[string]*k8sIngressState),
+		services:      make(map[string]*k8sServiceState),
 		gateways:      make(map[string]*k8sGatewayState),
 		httpRoutes:    make(map[string]*k8sHTTPRouteState),
 		grpcRoutes:    make(map[string]*k8sGRPCRouteState),
@@ -131,6 +138,9 @@ func NewK8sBridgeWithClients(namespace, ingressClass string, client kubernetes.I
 // LoadInitial 全量加载当前命名空间已有的 Ingress 与 Gateway API 资源。
 func (b *K8sBridge) LoadInitial(ctx context.Context) error {
 	if err := b.loadInitialIngresses(ctx); err != nil {
+		return err
+	}
+	if err := b.loadInitialServices(ctx); err != nil {
 		return err
 	}
 	if err := b.loadInitialGateways(ctx); err != nil {
