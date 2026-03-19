@@ -12,7 +12,7 @@ import (
 )
 
 type app struct {
-	client *lnctlkit.Client
+	client lnctlkit.ClientInterface
 	store  *planStore
 	stdin  *os.File
 	stdout *os.File

@@ -11,12 +11,18 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 )
 
+type ClientInterface interface {
+	QueryDomainEntryProjection(hostname string) (*metadata.DomainEntryProjection, error)
+	QueryDNSRecords(fqdn, recordType string) ([]metadata.DNSRecord, error)
+	ApplyPlan(plan *Plan) (*Plan, error)
+}
+
 type Client struct {
 	baseURL string
 	http    *http.Client
 }
 
-func NewClient(baseURL string) *Client {
+func NewClient(baseURL string) ClientInterface {
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		http:    http.DefaultClient,
