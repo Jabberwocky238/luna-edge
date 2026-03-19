@@ -222,7 +222,7 @@ func newFakeK8sBridge(t *testing.T, repo repository.Repository, masterEngine *ma
 		return masterEngine.BoardcastDomainEndpointProjection(ctx, fqdn)
 	}
 	ingressBridge := masterk8s.NewIngressBridgeWithClient("default", "luna-edge", kubeClient, repo, onDomainChange)
-	gatewayBridge := masterk8s.NewGatewayBridgeWithClient("default", dynamicClient, repo, onDomainChange)
+	gatewayBridge := masterk8s.NewGatewayBridgeWithClient("default", dynamicClient, kubeClient, repo, onDomainChange)
 	return &masterk8s.Bridge{
 		Ingress:        ingressBridge,
 		Gateway:        gatewayBridge,

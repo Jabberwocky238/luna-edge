@@ -37,7 +37,7 @@ func New(cfg Config, repo repository.Repository, onDnsChange func(ctx context.Co
 		if cfg.DynamicClient != nil {
 			dnsBridge = NewDNSBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, onDnsChange)
 			ingressBridge = NewIngressBridgeWithClient(cfg.Namespace, cfg.IngressClass, cfg.KubeClient, repo, onDomainChange)
-			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, repo, onDomainChange)
+			gatewayBridge = NewGatewayBridgeWithClient(cfg.Namespace, cfg.DynamicClient, cfg.KubeClient, repo, onDomainChange)
 		} else {
 			dnsBridge, err = NewDNSBridge(cfg.Namespace, repo, onDnsChange)
 			if err != nil {
