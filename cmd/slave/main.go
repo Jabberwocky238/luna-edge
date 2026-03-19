@@ -17,7 +17,6 @@ import (
 
 func main() {
 	var cfg slave.Config
-	var cacheRoot string
 	flag.StringVar(&cfg.MasterAddress, "master-address", envOr("LUNA_MASTER_ADDRESS", "luna-master.luna-edge.svc.cluster.local:50051"), "master replication address")
 	flag.StringVar(&cfg.MasterManageURL, "master-manage-url", envOr("LUNA_MASTER_MANAGE_URL", "http://luna-master.luna-edge.svc.cluster.local:8080"), "master manage http base url")
 	flag.DurationVar(&cfg.RetryMinBackoff, "retry-min-backoff", envDuration("LUNA_RETRY_MIN_BACKOFF", time.Second), "minimum retry backoff")
@@ -39,12 +38,9 @@ func main() {
 	flag.IntVar(&cfg.IngressLRUSize, "ingress-lru-size", envInt("LUNA_INGRESS_LRU_SIZE", 4096), "ingress tls cert LRU size")
 
 	flag.StringVar(&cfg.HealthListenAddr, "health-listen", envOr("LUNA_HEALTH_LISTEN", ":50050"), "health HTTP listen address")
-	flag.StringVar(&cacheRoot, "cache-root", envOr("LUNA_CACHE_ROOT", ""), "slave cache root")
+	flag.StringVar(&cfg.CacheRoot, "cache-root", envOr("LUNA_CACHE_ROOT", "/var/lib/luna"), "slave cache root")
 
 	flag.Parse()
-	if strings.TrimSpace(cacheRoot) == "" {
-		log.Fatal("cache root is required, set --cache-root or LUNA_CACHE_ROOT")
-	}
 	cfg.IngressHTTPAddr = ":80"
 	cfg.IngressTLSAddr = ":443"
 	cfg.IngressK8sEnabled = true
