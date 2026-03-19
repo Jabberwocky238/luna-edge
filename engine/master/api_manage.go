@@ -19,6 +19,13 @@ type manageAPI struct {
 	engine *Engine
 }
 
+type planBroadcasts struct {
+	deletedDomainEntries []metadata.DomainEntryProjection
+	deletedDNSRecords    []metadata.DNSRecord
+	domainHosts          map[string]struct{}
+	dnsRecordIDs         map[string]struct{}
+}
+
 func newManageAPI(engine *Engine) http.Handler {
 	api := &manageAPI{engine: engine}
 	mux := http.NewServeMux()
@@ -121,20 +128,33 @@ func (a *manageAPI) applyPlan(ctx context.Context, plan *lnctl.Plan) error {
 	if plan == nil {
 		return nil
 	}
-	var deletedDomainEntries []metadata.DomainEntryProjection
-	var deletedDNSRecords []metadata.DNSRecord
+	txRepo, err := a.engine.Repo.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = txRepo.Rollback(ctx)
+		}
+	}()
+
+	broadcasts := planBroadcasts{
+		domainHosts:  map[string]struct{}{},
+		dnsRecordIDs: map[string]struct{}{},
+	}
 
 	for _, change := range plan.HTTPRoutes {
 		switch change.Action {
 		case lnctl.PlanActionCreate, lnctl.PlanActionUpdate:
 			if change.Desired != nil {
-				if err := a.engine.Repo.HTTPRoutes().UpsertResource(ctx, change.Desired); err != nil {
+				if err := txRepo.HTTPRoutes().UpsertResource(ctx, change.Desired); err != nil {
 					return err
 				}
 			}
 		case lnctl.PlanActionDelete:
 			if change.Current != nil {
-				if err := a.engine.Repo.HTTPRoutes().DeleteResourceByField(ctx, &metadata.HTTPRoute{}, "id", change.Current.ID); err != nil {
+				if err := txRepo.HTTPRoutes().DeleteResourceByField(ctx, &metadata.HTTPRoute{}, "id", change.Current.ID); err != nil {
 					return err
 				}
 			}
@@ -145,13 +165,13 @@ func (a *manageAPI) applyPlan(ctx context.Context, plan *lnctl.Plan) error {
 		switch change.Action {
 		case lnctl.PlanActionCreate, lnctl.PlanActionUpdate:
 			if change.Desired != nil {
-				if err := a.engine.Repo.ServiceBindingRefs().UpsertResource(ctx, change.Desired); err != nil {
+				if err := txRepo.ServiceBindingRefs().UpsertResource(ctx, change.Desired); err != nil {
 					return err
 				}
 			}
 		case lnctl.PlanActionDelete:
 			if change.Current != nil {
-				if err := a.engine.Repo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", change.Current.ID); err != nil {
+				if err := txRepo.ServiceBindingRefs().DeleteResourceByField(ctx, &metadata.ServiceBackendRef{}, "id", change.Current.ID); err != nil {
 					return err
 				}
 			}
@@ -162,16 +182,19 @@ func (a *manageAPI) applyPlan(ctx context.Context, plan *lnctl.Plan) error {
 		switch change.Action {
 		case lnctl.PlanActionCreate, lnctl.PlanActionUpdate:
 			if change.Desired != nil {
-				if err := a.engine.Repo.DomainEndpoints().UpsertResource(ctx, change.Desired); err != nil {
+				if err := txRepo.DomainEndpoints().UpsertResource(ctx, change.Desired); err != nil {
 					return err
+				}
+				if hostname := strings.TrimSpace(change.Desired.Hostname); hostname != "" {
+					broadcasts.domainHosts[hostname] = struct{}{}
 				}
 			}
 		case lnctl.PlanActionDelete:
 			if change.Current != nil {
-				if current, err := a.engine.Repo.GetDomainEntryProjectionByDomain(ctx, change.Current.Hostname); err == nil && current != nil {
-					deletedDomainEntries = append(deletedDomainEntries, *current)
+				if current, err := txRepo.GetDomainEntryProjectionByDomain(ctx, change.Current.Hostname); err == nil && current != nil {
+					broadcasts.deletedDomainEntries = append(broadcasts.deletedDomainEntries, *current)
 				}
-				if err := a.engine.Repo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", change.Current.ID); err != nil {
+				if err := txRepo.DomainEndpoints().DeleteResourceByField(ctx, &metadata.DomainEndpoint{}, "id", change.Current.ID); err != nil {
 					return err
 				}
 			}
@@ -182,46 +205,62 @@ func (a *manageAPI) applyPlan(ctx context.Context, plan *lnctl.Plan) error {
 		switch change.Action {
 		case lnctl.PlanActionCreate, lnctl.PlanActionUpdate:
 			if change.Desired != nil {
-				if err := a.engine.Repo.DNSRecords().UpsertResource(ctx, change.Desired); err != nil {
+				if err := txRepo.DNSRecords().UpsertResource(ctx, change.Desired); err != nil {
 					return err
+				}
+				if id := strings.TrimSpace(change.Desired.ID); id != "" {
+					broadcasts.dnsRecordIDs[id] = struct{}{}
 				}
 			}
 		case lnctl.PlanActionDelete:
 			if change.Current != nil {
-				deletedDNSRecords = append(deletedDNSRecords, *change.Current)
-				if err := a.engine.Repo.DNSRecords().DeleteResourceByField(ctx, &metadata.DNSRecord{}, "id", change.Current.ID); err != nil {
+				broadcasts.deletedDNSRecords = append(broadcasts.deletedDNSRecords, *change.Current)
+				if err := txRepo.DNSRecords().DeleteResourceByField(ctx, &metadata.DNSRecord{}, "id", change.Current.ID); err != nil {
 					return err
 				}
 			}
 		}
 	}
 
-	for _, entry := range deletedDomainEntries {
+	if hostname := strings.TrimSpace(plan.Hostname); hostname != "" {
+		broadcasts.domainHosts[hostname] = struct{}{}
+	}
+
+	if err := txRepo.Commit(ctx); err != nil {
+		return err
+	}
+	committed = true
+
+	for _, entry := range broadcasts.deletedDomainEntries {
 		entry.Deleted = true
 		if err := a.broadcastDeletedDomainEntry(ctx, entry.Hostname, &entry); err != nil {
 			return err
 		}
 	}
-	for _, record := range deletedDNSRecords {
+	for _, record := range broadcasts.deletedDNSRecords {
 		record.Deleted = true
 		if err := a.broadcastDeletedDNSRecord(ctx, &record); err != nil {
 			return err
 		}
 	}
 
-	if strings.TrimSpace(plan.Hostname) != "" {
-		if err := a.engine.BoardcastDomainEndpointProjection(ctx, plan.Hostname); err != nil {
+	for hostname := range broadcasts.domainHosts {
+		if a.engine.Certs != nil {
+			domain, err := a.engine.Repo.GetDomainEndpointByHostname(ctx, hostname)
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			if err == nil && domain != nil && domain.NeedCert {
+				a.engine.Certs.Notify(hostname)
+			}
+		}
+		if err := a.engine.BoardcastDomainEndpointProjection(ctx, hostname); err != nil {
 			return err
 		}
 	}
-	for _, change := range plan.DNSRecords {
-		if change.Action == lnctl.PlanActionDelete {
-			continue
-		}
-		if change.Desired != nil {
-			if err := a.engine.BoardcastDNSRecord(ctx, change.Desired.ID); err != nil {
-				return err
-			}
+	for recordID := range broadcasts.dnsRecordIDs {
+		if err := a.engine.BoardcastDNSRecord(ctx, recordID); err != nil {
+			return err
 		}
 	}
 	return nil

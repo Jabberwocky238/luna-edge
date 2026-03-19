@@ -88,12 +88,6 @@ func (r *CertReconciler) Stop() {
 	<-r.doneCh
 }
 
-// wrapper interface
-func (r *CertReconciler) NotifyCertificateDesired(_ context.Context, fqdn string) error {
-	r.Notify(fqdn)
-	return nil
-}
-
 func (r *CertReconciler) Notify(fqdn string) {
 	if r == nil {
 		return
