@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	enginepkg "github.com/jabberwocky238/luna-edge/engine"
+	"github.com/jabberwocky238/luna-edge/ingress"
 	masterpkg "github.com/jabberwocky238/luna-edge/engine/master"
 	masterk8s "github.com/jabberwocky238/luna-edge/engine/master/k8s_bridge"
 	slavepkg "github.com/jabberwocky238/luna-edge/engine/slave"
@@ -22,6 +22,8 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository"
 	"github.com/jabberwocky238/luna-edge/repository/connection"
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -514,7 +516,7 @@ func (tc *engineTestCluster) RequireEventually(t *testing.T, check func() error)
 
 func (tc *engineTestCluster) AssertAllSlavesHaveRoute(hostname, service string, port uint32) error {
 	for i := range tc.slaves {
-		store, err := tc.openStore(i)
+		store, err := tc.openInspector(i)
 		if err != nil {
 			return err
 		}
@@ -535,7 +537,7 @@ func (tc *engineTestCluster) AssertAllSlavesHaveRoute(hostname, service string, 
 
 func (tc *engineTestCluster) AssertAllSlavesHaveCertificate(hostname string, revision uint64) error {
 	for i := range tc.slaves {
-		store, err := tc.openStore(i)
+		store, err := tc.openInspector(i)
 		if err != nil {
 			return err
 		}
@@ -562,7 +564,7 @@ func (tc *engineTestCluster) AssertAllSlavesHaveCertificate(hostname string, rev
 
 func (tc *engineTestCluster) AssertAllSlavesHaveDNSRecord(hostname, wantValues string) error {
 	for i := range tc.slaves {
-		store, err := tc.openStore(i)
+		store, err := tc.openInspector(i)
 		if err != nil {
 			return err
 		}
@@ -581,54 +583,87 @@ func (tc *engineTestCluster) AssertAllSlavesHaveDNSRecord(hostname, wantValues s
 	return nil
 }
 
-func (tc *engineTestCluster) openStore(idx int) (*slavepkg.LocalStore, error) {
-	srcRoot := tc.slaves[idx].cacheRoot
-	inspectRoot, err := os.MkdirTemp(tc.root, fmt.Sprintf("inspect-slave-%d-", idx))
-	if err != nil {
-		return nil, err
-	}
-	if err := copyDir(srcRoot, inspectRoot); err != nil {
-		return nil, err
-	}
-	store, err := slavepkg.NewLocalStore(inspectRoot, nil, make(chan []metadata.DNSRecord, 1))
-	if err != nil {
-		return nil, err
-	}
-	if err := store.Start(); err != nil {
-		return nil, err
-	}
-	return store, nil
+type slaveInspector struct {
+	db       *gorm.DB
+	certRoot string
 }
 
-func copyDir(srcRoot, dstRoot string) error {
-	return filepath.Walk(srcRoot, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(srcRoot, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dstRoot, rel)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode())
-		}
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-		srcFile, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer srcFile.Close()
-		dstFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-		_, err = io.Copy(dstFile, srcFile)
+type domainEntryCacheInspectRow struct {
+	Hostname   string `gorm:"column:hostname"`
+	DetailJSON string `gorm:"column:detail_json"`
+}
+
+func (domainEntryCacheInspectRow) TableName() string { return "domain_entries_cache" }
+
+type dnsRecordCacheInspectRow struct {
+	FQDN       string `gorm:"column:fqdn"`
+	DetailJSON string `gorm:"column:detail_json"`
+}
+
+func (dnsRecordCacheInspectRow) TableName() string { return "dns_records_cache" }
+
+func (tc *engineTestCluster) openInspector(idx int) (*slaveInspector, error) {
+	cacheRoot := tc.slaves[idx].cacheRoot
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:%s?mode=ro&_query_only=1", filepath.Join(cacheRoot, slavepkg.DefaultMetadataDBName))), &gorm.Config{})
+	if err != nil {
+		return nil, err
+	}
+	return &slaveInspector{
+		db:       db,
+		certRoot: filepath.Join(cacheRoot, slavepkg.DefaultCertificatesDir),
+	}, nil
+}
+
+func (s *slaveInspector) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	sqlDB, err := s.db.DB()
+	if err != nil {
 		return err
-	})
+	}
+	return sqlDB.Close()
+}
+
+func (s *slaveInspector) GetDomainEntryByHostname(ctx context.Context, hostname string) (*metadata.DomainEntryProjection, error) {
+	var row domainEntryCacheInspectRow
+	if err := s.db.WithContext(ctx).First(&row, "hostname = ?", hostname).Error; err != nil {
+		return nil, err
+	}
+	var entry metadata.DomainEntryProjection
+	if err := json.Unmarshal([]byte(row.DetailJSON), &entry); err != nil {
+		return nil, err
+	}
+	return &entry, nil
+}
+
+func (s *slaveInspector) GetDNSRecordsByHostname(ctx context.Context, hostname string) ([]metadata.DNSRecord, error) {
+	var rows []dnsRecordCacheInspectRow
+	if err := s.db.WithContext(ctx).Order("fqdn asc").Find(&rows, "fqdn = ?", hostname).Error; err != nil {
+		return nil, err
+	}
+	out := make([]metadata.DNSRecord, 0, len(rows))
+	for i := range rows {
+		var record metadata.DNSRecord
+		if err := json.Unmarshal([]byte(rows[i].DetailJSON), &record); err != nil {
+			return nil, err
+		}
+		out = append(out, record)
+	}
+	return out, nil
+}
+
+func (s *slaveInspector) CheckCertificateBundle(_ context.Context, hostname string, revision uint64) (bool, error) {
+	dir := filepath.Join(s.certRoot, ingress.CertificateDirectoryName(hostname))
+	for _, name := range []string{"tls.crt", "tls.key", "metadata.json"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
+		}
+	}
+	return true, nil
 }
 
 func (m *memoryBundleProvider) FetchCertificateBundle(_ context.Context, hostname string, revision uint64) (*replication.CertificateBundle, error) {

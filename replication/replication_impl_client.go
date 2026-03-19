@@ -2,6 +2,7 @@ package replication
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -97,7 +98,7 @@ type grpcNoticeStream struct {
 func (s grpcNoticeStream) Recv() (*ChangeNotification, error) {
 	msg, err := s.stream.Recv()
 	if err != nil {
-		if err != io.EOF {
+		if err != io.EOF && !errors.Is(err, context.Canceled) {
 			log.Printf("replication-client: recv change notice failed err=%v", err)
 		}
 		return nil, err

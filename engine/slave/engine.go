@@ -162,6 +162,9 @@ func (e *Engine) Start(ctx context.Context) error {
 		if err == nil || ctx.Err() != nil {
 			e.ready.Store(false)
 			log.Printf("slave: subscribe loop finished node_id=%s err=%v ctx_err=%v", e.NODE_ID, err, ctx.Err())
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			return err
 		}
 		e.ready.Store(false)

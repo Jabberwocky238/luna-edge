@@ -242,7 +242,7 @@ func (s *LocalStore) GetDNSRecordsByHostname(ctx context.Context, hostname strin
 
 func (s *LocalStore) GetSnapshotRecordID(ctx context.Context) (uint64, error) {
 	var row syncStateRow
-	if err := s.db.WithContext(ctx).Order("created_at desc").First(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Order("snapshot_record_id desc, created_at desc").First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return 0, nil
 		}

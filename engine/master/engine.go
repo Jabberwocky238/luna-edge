@@ -142,20 +142,16 @@ func (e *Engine) Start(ctx context.Context) error {
 		log.Printf("master: cert reconciler started")
 	}
 	if e.Config.ReplicationListenAddr != "" {
-		e.grpcServer = replication.NewGRPCServer(
+		e.grpcServer = replication.NewGRPCServerEasy(
 			e.Config.ReplicationListenAddr,
 			e.handleGetSnapshot,
 			e.handleSubscribe,
 			e.handleFetchCertificateBundle,
 		)
-		if err := e.grpcServer.Start(); err != nil {
-			return err
+		if e.grpcServer == nil {
+			return fmt.Errorf("failed to create replication gRPC server")
 		}
-		defer func() {
-			if err := e.grpcServer.Close(); err != nil {
-				log.Printf("master: replication server close failed err=%v", err)
-			}
-		}()
+		defer e.grpcServer.Close()
 	}
 	if e.Config.ManageListenAddr != "" {
 		lis, err := net.Listen("tcp", e.Config.ManageListenAddr)
@@ -211,13 +207,10 @@ func (e *Engine) handleGetSnapshot(ctx context.Context, nodeID string, snapshotR
 				count++
 			}
 		case metadata.SnapshotSyncTypeDomainEntryProjection:
-			domain, err := e.Repo.GetDomainEndpointByID(ctx, record.SyncID)
-			if err == nil && domain != nil {
-				item, projErr := e.Repo.GetDomainEntryProjectionByDomain(ctx, domain.Hostname)
-				if projErr == nil && item != nil {
-					chunk.DomainEntries = append(chunk.DomainEntries, *item)
-					count++
-				}
+			item, err := e.Repo.GetDomainEntryProjectionByDomain(ctx, record.SyncID)
+			if err == nil && item != nil {
+				chunk.DomainEntries = append(chunk.DomainEntries, *item)
+				count++
 			}
 		}
 		if count >= 1000 {

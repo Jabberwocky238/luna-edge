@@ -61,6 +61,14 @@ func (s *Engine) Subscribe(ctx context.Context, nodeID string) error {
 	if err != nil {
 		return err
 	}
+	if err := s.CatchUpSnapshots(ctx, nodeID, cursor); err != nil {
+		log.Printf("slave: initial catch-up failed node_id=%s cursor=%d err=%v", nodeID, cursor, err)
+		return err
+	}
+	cursor, err = s.Cache.GetSnapshotRecordID(ctx)
+	if err != nil {
+		return err
+	}
 	for {
 		notice, recvErr := stream.Recv()
 		if recvErr != nil {

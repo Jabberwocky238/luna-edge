@@ -2,7 +2,9 @@ package replication
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 
@@ -25,7 +27,7 @@ type GRPCServer struct {
 	closer                        func() error
 }
 
-func NewGRPCServer(listenAddr string, getSnapshotHandler GetSnapshotHandler, subscribeHandler SubscribeHandler, fetchCertificateBundleHandler FetchCertificateBundleHandler, opts ...grpc.ServerOption) *GRPCServer {
+func NewGRPCServerEasy(listenAddr string, getSnapshotHandler GetSnapshotHandler, subscribeHandler SubscribeHandler, fetchCertificateBundleHandler FetchCertificateBundleHandler, opts ...grpc.ServerOption) *GRPCServer {
 	server := &GRPCServer{
 		listenAddr:                    listenAddr,
 		getSnapshotHandler:            getSnapshotHandler,
@@ -33,25 +35,34 @@ func NewGRPCServer(listenAddr string, getSnapshotHandler GetSnapshotHandler, sub
 		fetchCertificateBundleHandler: fetchCertificateBundleHandler,
 		grpcServer:                    grpc.NewServer(opts...),
 	}
-	if err := server.Start(); err != nil {
+	lis, err := net.Listen("tcp", server.listenAddr)
+	if err != nil {
+		return nil
+	}
+	replpb.RegisterReplicationServiceServer(server.grpcServer, server)
+	log.Printf("replication-server: listener ready addr=%s", lis.Addr().String())
+	go func() { _ = server.grpcServer.Serve(lis) }()
+	server.closer = func() error {
+		server.grpcServer.GracefulStop()
 		return nil
 	}
 	return server
 }
 
-func (s *GRPCServer) Start() error {
-	lis, err := net.Listen("tcp", s.listenAddr)
-	if err != nil {
-		return err
+func NewGRPCServer(injectServer replpb.ReplicationServiceServer, getSnapshotHandler GetSnapshotHandler, subscribeHandler SubscribeHandler, fetchCertificateBundleHandler FetchCertificateBundleHandler, opts ...grpc.ServerOption) *GRPCServer {
+	server := &GRPCServer{
+		listenAddr:                    "",
+		getSnapshotHandler:            getSnapshotHandler,
+		subscribeHandler:              subscribeHandler,
+		fetchCertificateBundleHandler: fetchCertificateBundleHandler,
+		grpcServer:                    grpc.NewServer(opts...),
 	}
-	replpb.RegisterReplicationServiceServer(s.grpcServer, s)
-	log.Printf("replication-server: listener ready addr=%s", lis.Addr().String())
-	go func() { _ = s.grpcServer.Serve(lis) }()
-	s.closer = func() error {
-		s.grpcServer.GracefulStop()
-		return lis.Close()
+	replpb.RegisterReplicationServiceServer(server.grpcServer, injectServer)
+	server.closer = func() error {
+		server.grpcServer.GracefulStop()
+		return nil
 	}
-	return nil
+	return server
 }
 
 func (s *GRPCServer) GetSnapshot(req *replpb.SnapshotRequest, stream grpc.ServerStreamingServer[replpb.Snapshot]) error {
@@ -98,6 +109,10 @@ func (s *GRPCServer) Subscribe(req *replpb.SubscriptionRequest, stream grpc.Serv
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
+			log.Printf("replication-server: subscribe closed node_id=%s err=%v", nodeID, err)
+			return nil
+		}
 		log.Printf("replication-server: subscribe failed node_id=%s err=%v", nodeID, err)
 		return err
 	}
