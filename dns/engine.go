@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -11,6 +12,12 @@ import (
 	"github.com/jabberwocky238/luna-edge/repository/metadata"
 	mdns "github.com/miekg/dns"
 )
+
+const dnsColorPrefix = "\033[1;36m[DNS]\033[0m "
+
+func dnsLogf(format string, args ...any) {
+	log.Printf(dnsColorPrefix+format, args...)
+}
 
 // Engine 负责连接 repository 和 DNS 操作层。
 //
@@ -134,11 +141,19 @@ func (e *Engine) Listen(listenAddr string) error {
 		Handler: handler,
 	}
 
+	dnsLogf("starting dns listeners addr=%q udp=%t tcp=%t k8s_bridge=%t forward_enabled=%t forward_servers=%v", listenAddr, true, true, e.k8sBridge != nil, e.forwarder != nil && e.forwarder.config.Enabled, forwardServers(e.forwarder))
+
 	go func() {
-		_ = e.udpServer.ListenAndServe()
+		dnsLogf("udp listener serving addr=%q", listenAddr)
+		if err := e.udpServer.ListenAndServe(); err != nil {
+			dnsLogf("udp listener stopped addr=%q err=%v", listenAddr, err)
+		}
 	}()
 	go func() {
-		_ = e.tcpServer.ListenAndServe()
+		dnsLogf("tcp listener serving addr=%q", listenAddr)
+		if err := e.tcpServer.ListenAndServe(); err != nil {
+			dnsLogf("tcp listener stopped addr=%q err=%v", listenAddr, err)
+		}
 	}()
 	if e.k8sBridge != nil {
 		e.k8sBridge.Listen(e.runtimeContext())
@@ -151,6 +166,8 @@ func (e *Engine) Listen(listenAddr string) error {
 func (e *Engine) Stop() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	dnsLogf("stopping dns listeners")
 
 	var errs []string
 	if e.udpServer != nil {
@@ -213,9 +230,12 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	resp.SetReply(req)
 
 	if len(req.Question) == 0 {
+		dnsLogf("received dns request without question proto=%s remote=%q", dnsNetworkOf(w), dnsRemoteAddr(w))
 		_ = w.WriteMsg(resp)
 		return
 	}
+
+	dnsLogf("received dns query id=%d proto=%s remote=%q questions=%s", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), dnsQuestionsSummary(req.Question))
 
 	for _, q := range req.Question {
 		result, err := e.Lookup(e.runtimeContext(), DNSQuestion{
@@ -223,19 +243,23 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 			RecordType: metadata.DNSRecordType(mdns.TypeToString[q.Qtype]),
 		})
 		if err != nil {
+			dnsLogf("lookup failed id=%d proto=%s remote=%q question=%s/%s err=%v", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), normalizeFQDN(q.Name), mdns.TypeToString[q.Qtype], err)
 			resp.Rcode = mdns.RcodeServerFailure
 			_ = w.WriteMsg(resp)
 			return
 		}
 		if !result.Found {
+			dnsLogf("lookup miss id=%d proto=%s remote=%q question=%s/%s", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), normalizeFQDN(q.Name), mdns.TypeToString[q.Qtype])
 			continue
 		}
 		if e.geoDriver != nil {
 			e.geoDriver.ApplyGeoSort(w.RemoteAddr(), result.Records)
 		}
+		dnsLogf("lookup hit id=%d proto=%s remote=%q question=%s/%s answers=%d", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), normalizeFQDN(q.Name), mdns.TypeToString[q.Qtype], len(result.Records))
 		for _, record := range result.Records {
 			rr, err := toRR(record)
 			if err != nil {
+				dnsLogf("record rendering failed id=%d proto=%s remote=%q record=%s/%s err=%v", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), record.FQDN, record.RecordType, err)
 				resp.Rcode = mdns.RcodeServerFailure
 				_ = w.WriteMsg(resp)
 				return
@@ -246,6 +270,7 @@ func (e *Engine) serveDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	if len(resp.Answer) == 0 {
 		resp.Rcode = mdns.RcodeNameError
 	}
+	dnsLogf("sending dns response id=%d proto=%s remote=%q rcode=%s answers=%d", req.Id, dnsNetworkOf(w), dnsRemoteAddr(w), mdns.RcodeToString[resp.Rcode], len(resp.Answer))
 	_ = w.WriteMsg(resp)
 }
 
@@ -361,6 +386,46 @@ func splitValues(values string) []string {
 			continue
 		}
 		out = append(out, part)
+	}
+	return out
+}
+
+func dnsNetworkOf(w mdns.ResponseWriter) string {
+	if w == nil || w.RemoteAddr() == nil {
+		return "unknown"
+	}
+	return w.RemoteAddr().Network()
+}
+
+func dnsRemoteAddr(w mdns.ResponseWriter) string {
+	if w == nil || w.RemoteAddr() == nil {
+		return ""
+	}
+	return w.RemoteAddr().String()
+}
+
+func dnsQuestionsSummary(questions []mdns.Question) string {
+	if len(questions) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(questions))
+	for _, q := range questions {
+		parts = append(parts, normalizeFQDN(q.Name)+"/"+mdns.TypeToString[q.Qtype])
+	}
+	return strings.Join(parts, ",")
+}
+
+func forwardServers(f *Forwarder) []string {
+	if f == nil {
+		return nil
+	}
+	out := make([]string, 0, len(f.config.Servers))
+	for _, server := range f.config.Servers {
+		server = strings.TrimSpace(server)
+		if server == "" {
+			continue
+		}
+		out = append(out, server)
 	}
 	return out
 }
