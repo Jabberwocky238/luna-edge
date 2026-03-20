@@ -37,41 +37,29 @@ type BackendBinding struct {
 	DomainEntryID string
 }
 
-// EngineOptions 定义主 ingress 引擎的初始化参数。
+// EngineOptions 定义 ingress 引擎的初始化参数。
 type EngineOptions struct {
-	// HTTPListenAddr 是 HTTP 监听地址，例如 :80。
-	HTTPListenAddr string
-	// TLSListenAddr 是 HTTPS/TLS 监听地址，例如 :443。
-	TLSListenAddr string
-	// K8sEnabled 表示是否启用 Kubernetes Ingress bridge。
-	K8sEnabled bool
-	// K8sNamespace 是需要监听的命名空间；为空时自动从环境推断。
-	K8sNamespace string
-	// K8sIngressClass 是当前 bridge 负责的 IngressClass 名称。
-	K8sIngressClass string
-	// LRUSize 是 ingress 运行时 LRU 缓冲大小；<=0 时默认 4096。
-	LRUSize int
-	// MasterHTTP01ProxyURL 是 HTTP-01 challenge 请求转发到 master 的基础 URL。
+	HTTPListenAddr       string
+	TLSListenAddr        string
+	K8sEnabled           bool
+	K8sNamespace         string
+	K8sIngressClass      string
+	LRUSize              int
 	MasterHTTP01ProxyURL string
 }
 
 // ProxyTarget 表示一个可转发的上游目标。
 type ProxyTarget struct {
-	// Hostname 是当前请求匹配的域名。
-	Hostname string
-	// Port 是当前入口监听端口。
-	Port uint32
-	// UpstreamURL 是反向代理目标地址。
+	Hostname    string
+	Port        uint32
 	UpstreamURL string
-	// Protocol 是入口协议，例如 http。
-	Protocol string
+	Protocol    string
+	PathPrefix  string
 }
 
 // RouteResult 表示一次 ingress 路由匹配结果。
 type RouteResult struct {
-	// Found 表示是否匹配到可用上游。
-	Found bool
-	// Target 是匹配到的上游目标。
+	Found  bool
 	Target ProxyTarget
 }
 

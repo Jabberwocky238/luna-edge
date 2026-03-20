@@ -6,8 +6,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,18 +87,23 @@ func (e *TLSEngine) serveLoop() {
 
 func (e *TLSEngine) serveConn(conn net.Conn) {
 	buffered := newPeekConn(conn)
+	clientIP := ingressRemoteIP(conn.RemoteAddr())
 	serverName, err := buffered.PeekServerName()
 	if err != nil {
+		log.Printf("[INGRESS] tls handshake rejected client_ip=%q remote_addr=%q err=%v", clientIP, conn.RemoteAddr().String(), err)
 		_ = conn.Close()
 		return
 	}
 	serverName = normalizeHost(serverName)
 	if serverName == "" {
+		log.Printf("[INGRESS] tls handshake rejected client_ip=%q remote_addr=%q err=missing_sni", clientIP, conn.RemoteAddr().String())
 		_ = conn.Close()
 		return
 	}
+	log.Printf("[INGRESS] tls client hello sni=%q client_ip=%q remote_addr=%q", serverName, clientIP, conn.RemoteAddr().String())
 
 	if passthrough, ok := e.resolveTLSPassthroughBackend(serverName); ok {
+		log.Printf("[INGRESS] tls passthrough sni=%q client_ip=%q remote_addr=%q upstream=%q", serverName, clientIP, conn.RemoteAddr().String(), net.JoinHostPort(passthrough.Binding.Address, fmt.Sprintf("%d", passthrough.Binding.Port)))
 		_ = proxyStream(buffered, passthrough.Binding.Address, passthrough.Binding.Port)
 		return
 	}
@@ -128,6 +135,7 @@ func (e *TLSEngine) serveConn(conn net.Conn) {
 	srv := &http.Server{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			r.Header.Set("X-Forwarded-Host", r.Host)
+			r.Header.Set("X-Luna-SNI", serverName)
 			r.Host = serverName
 			r.Header.Set("Host", serverName)
 			r.Header.Set("X-Forwarded-Proto", "https")
@@ -139,6 +147,17 @@ func (e *TLSEngine) serveConn(conn net.Conn) {
 		IdleTimeout:       e.server.IdleTimeout,
 	}
 	_ = srv.Serve(&singleConnListener{conn: tlsConn})
+}
+
+func ingressRemoteIP(addr net.Addr) string {
+	if addr == nil {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(addr.String()))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(addr.String())
 }
 
 func (e *TLSEngine) resolveTLSPassthroughBackend(serverName string) (*K8sResolvedBackend, bool) {

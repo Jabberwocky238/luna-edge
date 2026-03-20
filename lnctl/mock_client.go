@@ -13,7 +13,7 @@ import (
 )
 
 type MockClient struct {
-	db      *gorm.DB
+	db *gorm.DB
 }
 
 type MockClientInput struct {
@@ -56,78 +56,6 @@ func (c *MockClient) Close() error {
 		return err
 	}
 	return sqlDB.Close()
-}
-
-func (c *MockClient) Inputs() ([]MockClientInput, error) {
-	if err := c.ensureReady(); err != nil {
-		return nil, err
-	}
-	var out []MockClientInput
-	if err := c.db.Order("id asc").Find(&out).Error; err != nil {
-		return nil, fmt.Errorf("query mock inputs: %w", err)
-	}
-	return out, nil
-}
-
-func (c *MockClient) SeedDomainEntryProjection(entry *metadata.DomainEntryProjection) error {
-	if err := c.ensureReady(); err != nil {
-		return err
-	}
-	if entry == nil {
-		return fmt.Errorf("entry is required")
-	}
-	return c.db.Transaction(func(tx *gorm.DB) error {
-		endpoint := metadata.DomainEndpoint{
-			Shared: metadata.Shared{
-				Deleted: entry.Deleted,
-			},
-			Hostname:    entry.Hostname,
-			NeedCert:    entry.NeedCert,
-			BackendType: entry.BackendType,
-		}
-		if entry.BindedBackendRef != nil {
-			if err := tx.Save(entry.BindedBackendRef).Error; err != nil {
-				return fmt.Errorf("save binded backend ref: %w", err)
-			}
-			endpoint.BindedServiceID = entry.BindedBackendRef.ID
-		}
-		if err := tx.Save(&endpoint).Error; err != nil {
-			return fmt.Errorf("save domain endpoint: %w", err)
-		}
-		for _, route := range entry.HTTPRoutes {
-			if route.BackendRef != nil {
-				if err := tx.Save(route.BackendRef).Error; err != nil {
-					return fmt.Errorf("save route backend ref: %w", err)
-				}
-			}
-			item := metadata.HTTPRoute{
-				Shared:   metadata.Shared{},
-				ID:       route.ID,
-				Hostname: entry.Hostname,
-				Path:     route.Path,
-				Priority: route.Priority,
-			}
-			if route.BackendRef != nil {
-				item.BackendRefID = route.BackendRef.ID
-			}
-			if err := tx.Save(&item).Error; err != nil {
-				return fmt.Errorf("save http route: %w", err)
-			}
-		}
-		return nil
-	})
-}
-
-func (c *MockClient) SeedDNSRecords(records ...metadata.DNSRecord) error {
-	if err := c.ensureReady(); err != nil {
-		return err
-	}
-	for i := range records {
-		if err := c.db.Save(&records[i]).Error; err != nil {
-			return fmt.Errorf("save dns record %q: %w", records[i].ID, err)
-		}
-	}
-	return nil
 }
 
 func (c *MockClient) QueryDomainEntryProjection(hostname string) (*metadata.DomainEntryProjection, error) {

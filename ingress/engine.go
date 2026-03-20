@@ -243,6 +243,7 @@ func (e *Engine) resultFromBinding(hostname string, binding *BackendBinding) (*R
 			Hostname:    hostname,
 			UpstreamURL: upstreamURL,
 			Protocol:    string(binding.Protocol),
+			PathPrefix:  normalizeProxyPathPrefix(binding.Path),
 		},
 	}
 	e.memory.Put(binding)
@@ -366,4 +367,12 @@ func httpRouteMatches(path, requestPath string) bool {
 		requestPath = "/"
 	}
 	return strings.HasPrefix(requestPath, path)
+}
+
+func normalizeProxyPathPrefix(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" || !strings.HasPrefix(path, "/") {
+		return "/"
+	}
+	return path
 }

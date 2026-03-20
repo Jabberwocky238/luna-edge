@@ -3,6 +3,7 @@ package ingress
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -74,6 +75,8 @@ func (e *Engine) NewHTTPHandler() http.Handler {
 }
 
 func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	logIngressHTTPRequest(r)
+
 	if strings.HasPrefix(r.URL.Path, acmeHTTP01Prefix) && strings.TrimSpace(e.opts.MasterHTTP01ProxyURL) != "" {
 		e.serveACMEHTTP01Proxy(w, r)
 		return
@@ -107,12 +110,83 @@ func (e *Engine) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
+		req.URL.Path, req.URL.RawPath = rewriteUpstreamPath(result.Target.PathPrefix, r.URL.Path, r.URL.RawPath)
+		req.URL.RawQuery = r.URL.RawQuery
 		req.Host = targetURL.Host
 	}
 	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, proxyErr error) {
 		http.Error(rw, proxyErr.Error(), http.StatusBadGateway)
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+func rewriteUpstreamPath(prefix, requestPath, rawPath string) (string, string) {
+	prefix = normalizeProxyPathPrefix(prefix)
+	if requestPath == "" {
+		requestPath = "/"
+	}
+	trimmedPath := trimMatchedPrefix(prefix, requestPath)
+	trimmedRawPath := rawPath
+	if rawPath != "" {
+		trimmedRawPath = trimMatchedPrefix(prefix, rawPath)
+	}
+	return trimmedPath, trimmedRawPath
+}
+
+func trimMatchedPrefix(prefix, path string) string {
+	if path == "" {
+		return "/"
+	}
+	if prefix == "/" || prefix == "" {
+		return path
+	}
+	trimmed := strings.TrimPrefix(path, prefix)
+	if trimmed == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		return "/" + trimmed
+	}
+	return trimmed
+}
+
+func logIngressHTTPRequest(r *http.Request) {
+	if r == nil {
+		return
+	}
+	var sni string
+	if r.Header != nil {
+		sni = strings.TrimSpace(r.Header.Get("X-Luna-SNI"))
+	}
+	if sni == "" && r.TLS != nil {
+		sni = normalizeHost(r.TLS.ServerName)
+	}
+	clientIP := ingressClientIP(r)
+	requestURI := ""
+	if r.URL != nil {
+		requestURI = r.URL.RequestURI()
+	}
+	log.Printf("[INGRESS] http request method=%s path=%q host=%q sni=%q client_ip=%q remote_addr=%q", r.Method, requestURI, r.Host, sni, clientIP, r.RemoteAddr)
+}
+
+func ingressClientIP(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		parts := strings.Split(forwardedFor, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err == nil {
+		return host
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func (e *Engine) serveACMEHTTP01Proxy(w http.ResponseWriter, r *http.Request) {
