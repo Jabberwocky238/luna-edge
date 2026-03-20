@@ -37,6 +37,9 @@ mode_file_for_component() {
     default:master)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-master.yaml"
       ;;
+    default:panel)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-panel.yaml"
+      ;;
     default:slave)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-slave.yaml"
       ;;
@@ -57,6 +60,9 @@ mode_file_for_component() {
       ;;
     cilium:slave)
       printf '%s\n' "${SCRIPT_DIR}/luna-edge-slave-cilium-clustermesh.yaml"
+      ;;
+    cilium:panel)
+      printf '%s\n' "${SCRIPT_DIR}/luna-edge-panel.yaml"
       ;;
     *)
       echo "unsupported mode/component: ${mode} ${component}" >&2
@@ -99,8 +105,8 @@ set_mode() {
 usage() {
   cat <<'EOF'
 Usage:
-  ./run.sh up <crd|ns|master|slave|ngi|ngg>
-  ./run.sh down <crd|ns|master|slave|ngi|ngg>
+  ./run.sh up <crd|ns|master|slave|ngi|ngg|panel>
+  ./run.sh down <crd|ns|master|slave|ngi|ngg|panel>
   ./run.sh mode <default|cilium>
 EOF
 }
